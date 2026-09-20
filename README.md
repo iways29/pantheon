@@ -23,20 +23,43 @@ Copy `.env.example` to `.env` and fill it in. Secrets are server-side only and
 `.env` is never committed.
 
 ```bash
-# API — http://localhost:8000
-cd api
-uv sync --group dev
-uv run fastapi dev app/main.py --port 8000
-
-# Web — http://localhost:3000
-cd web
-pnpm install
-pnpm dev
+make install     # API and web dependencies
+make api-dev     # http://localhost:8000
+make web-dev     # http://localhost:3000
+make check       # everything CI runs
 ```
+
+`make help` lists every target.
+
+## Database
+
+The supported path is the Supabase CLI, which runs Postgres, Auth and Realtime
+locally and matches production most closely. It requires Docker.
+
+```bash
+supabase start      # bring up the local stack
+supabase db reset   # re-apply every migration from scratch
+```
+
+Set `major_version` in `supabase/config.toml` to match your hosted project
+before relying on it — run `SHOW server_version;` there to check. The CLI
+default may not match.
+
+Where Docker is unavailable, `scripts/local_db.sh` applies the same migrations
+to a plain PostgreSQL server with pgvector. It is a testing convenience with no
+Auth, Realtime or Storage:
+
+```bash
+make db-reset    # drop, recreate, re-apply all migrations
+make db-psql     # interactive shell
+```
+
+Migrations are additive and versioned in `supabase/migrations/`. Never edit a
+migration that has been applied; add a new one.
 
 ## Checks
 
-These are what CI runs.
+`make check` runs all of these, and they are what CI runs.
 
 ```bash
 cd api && uv run ruff check . && uv run ruff format --check . && uv run pytest -q

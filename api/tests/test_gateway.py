@@ -19,6 +19,7 @@ from app.gateway import (
     SENSITIVE_PROVIDER_PREFERENCES,
     AgentDisabled,
     BudgetExceeded,
+    DepartmentDisabled,
     Gateway,
     KillSwitchEngaged,
     ModelResponse,
@@ -70,23 +71,58 @@ class RecordingTransport:
         )
 
 
-def make_agent(
+def make_department(
     db: psycopg.Connection,
     org_id: UUID,
     *,
-    name: str = "worker",
-    tier: str = "cheap",
+    name: str = "research",
     budget: str = "1.0000",
     enabled: bool = True,
 ) -> UUID:
     with as_service_role(db) as connection, connection.cursor() as cursor:
         cursor.execute(
             """
-            insert into public.agents (org_id, name, role, model_tier, daily_budget_usd, enabled)
-            values (%s, %s, 'worker', %s, %s, %s)
+            insert into public.departments (org_id, name, daily_budget_usd, enabled)
+            values (%s, %s, %s, %s)
             returning id
             """,
-            (str(org_id), name, tier, budget, enabled),
+            (str(org_id), name, budget, enabled),
+        )
+        row = cursor.fetchone()
+    assert row is not None
+    return row["id"]
+
+
+def make_agent(
+    db: psycopg.Connection,
+    org_id: UUID,
+    *,
+    name: str = "worker",
+    tier: str = "cheap",
+    department_budget: str = "1.0000",
+    department_id: UUID | None = None,
+    agent_budget: str | None = None,
+    enabled: bool = True,
+    department_enabled: bool = True,
+) -> UUID:
+    if department_id is None:
+        department_id = make_department(
+            db,
+            org_id,
+            name=f"dept-for-{name}",
+            budget=department_budget,
+            enabled=department_enabled,
+        )
+
+    with as_service_role(db) as connection, connection.cursor() as cursor:
+        cursor.execute(
+            """
+            insert into public.agents
+                (org_id, department_id, name, role, model_tier, daily_budget_usd, enabled)
+            values (%s, %s, %s, 'worker', %s, %s, %s)
+            returning id
+            """,
+            (str(org_id), str(department_id), name, tier, agent_budget, enabled),
         )
         row = cursor.fetchone()
     assert row is not None
@@ -149,7 +185,7 @@ def test_turning_the_kill_switch_off_again_permits_calls(
 def test_an_agent_over_budget_is_blocked(
     db: psycopg.Connection, tenants: Tenants, transport: RecordingTransport
 ) -> None:
-    agent_id = make_agent(db, tenants.org_a, budget="0.0030")
+    agent_id = make_agent(db, tenants.org_a, department_budget="0.0030")
     transport.cost_usd = 0.002
 
     with acting_as(db, user_id=str(tenants.user_a)) as connection:
@@ -164,16 +200,17 @@ def test_an_agent_over_budget_is_blocked(
                 agent_id=agent_id, messages=[{"role": "user", "content": "three"}]
             )
 
+    assert caught.value.scope == "department"
     assert caught.value.spent_usd == pytest.approx(0.004)
     assert caught.value.limit_usd == pytest.approx(0.003)
     assert len(transport.calls) == 2
 
 
-def test_an_unfunded_agent_cannot_spend(
+def test_an_unfunded_department_cannot_spend(
     db: psycopg.Connection, tenants: Tenants, transport: RecordingTransport
 ) -> None:
     """A budget of zero means nothing approved yet, not unlimited."""
-    agent_id = make_agent(db, tenants.org_a, budget="0")
+    agent_id = make_agent(db, tenants.org_a, department_budget="0")
 
     with pytest.raises(BudgetExceeded):
         with acting_as(db, user_id=str(tenants.user_a)) as connection:
@@ -374,3 +411,156 @@ def test_a_blocked_call_is_also_on_the_audit_trail(
 
     assert [row["type"] for row in rows] == ["model_call_blocked"]
     assert rows[0]["payload"]["code"] == "kill_switch_engaged"
+
+
+# --- Departments hold the budget; agents share it --------------------------
+
+
+def test_one_department_budget_is_shared_across_its_agents(
+    db: psycopg.Connection, tenants: Tenants, transport: RecordingTransport
+) -> None:
+    """The point of a department budget: one agent's spend limits its siblings."""
+    department_id = make_department(db, tenants.org_a, budget="0.0030")
+    first = make_agent(db, tenants.org_a, name="first", department_id=department_id)
+    second = make_agent(db, tenants.org_a, name="second", department_id=department_id)
+    transport.cost_usd = 0.002
+
+    with acting_as(db, user_id=str(tenants.user_a)) as connection:
+        Gateway(connection, transport, TIERS).complete(
+            agent_id=first, messages=[{"role": "user", "content": "hi"}]
+        )
+        Gateway(connection, transport, TIERS).complete(
+            agent_id=second, messages=[{"role": "user", "content": "hi"}]
+        )
+
+    # $0.004 spent between them, against a $0.003 department budget.
+    with pytest.raises(BudgetExceeded) as caught:
+        with acting_as(db, user_id=str(tenants.user_a)) as connection:
+            Gateway(connection, transport, TIERS).complete(
+                agent_id=second, messages=[{"role": "user", "content": "again"}]
+            )
+
+    assert caught.value.scope == "department"
+    assert caught.value.subject_id == str(department_id)
+    assert len(transport.calls) == 2
+
+
+def test_department_spend_aggregates_across_agents(
+    db: psycopg.Connection, tenants: Tenants, transport: RecordingTransport
+) -> None:
+    department_id = make_department(db, tenants.org_a, budget="1.0000")
+    first = make_agent(db, tenants.org_a, name="first", department_id=department_id)
+    second = make_agent(db, tenants.org_a, name="second", department_id=department_id)
+
+    with acting_as(db, user_id=str(tenants.user_a)) as connection:
+        gateway = Gateway(connection, transport, TIERS)
+        gateway.complete(agent_id=first, messages=[{"role": "user", "content": "hi"}])
+        gateway.complete(agent_id=second, messages=[{"role": "user", "content": "hi"}])
+
+        # Per-agent tracking still works alongside the department total.
+        assert gateway.spent_today_usd(first) == Decimal("0.002000")
+        assert gateway.spent_today_usd(second) == Decimal("0.002000")
+        assert gateway.department_spent_today_usd(department_id) == Decimal("0.004000")
+
+
+def test_a_disabled_department_blocks_its_agents(
+    db: psycopg.Connection, tenants: Tenants, transport: RecordingTransport
+) -> None:
+    agent_id = make_agent(db, tenants.org_a, department_enabled=False)
+
+    with pytest.raises(DepartmentDisabled):
+        with acting_as(db, user_id=str(tenants.user_a)) as connection:
+            Gateway(connection, transport, TIERS).complete(
+                agent_id=agent_id, messages=[{"role": "user", "content": "hi"}]
+            )
+
+    assert transport.calls == []
+
+
+# --- The per-agent sub-cap narrows a department budget, never widens it ----
+
+
+def test_no_sub_cap_means_the_department_budget_alone_governs(
+    db: psycopg.Connection, tenants: Tenants, transport: RecordingTransport
+) -> None:
+    agent_id = make_agent(db, tenants.org_a, department_budget="1.0000", agent_budget=None)
+
+    with acting_as(db, user_id=str(tenants.user_a)) as connection:
+        gateway = Gateway(connection, transport, TIERS)
+        for _ in range(3):
+            gateway.complete(agent_id=agent_id, messages=[{"role": "user", "content": "hi"}])
+
+    assert len(transport.calls) == 3
+
+
+def test_a_sub_cap_stops_one_agent_inside_a_funded_department(
+    db: psycopg.Connection, tenants: Tenants, transport: RecordingTransport
+) -> None:
+    """Throttling a noisy worker without touching the rest of its team."""
+    department_id = make_department(db, tenants.org_a, budget="1.0000")
+    noisy = make_agent(
+        db, tenants.org_a, name="noisy", department_id=department_id, agent_budget="0.0030"
+    )
+    quiet = make_agent(db, tenants.org_a, name="quiet", department_id=department_id)
+    transport.cost_usd = 0.002
+
+    with acting_as(db, user_id=str(tenants.user_a)) as connection:
+        gateway = Gateway(connection, transport, TIERS)
+        gateway.complete(agent_id=noisy, messages=[{"role": "user", "content": "one"}])
+        gateway.complete(agent_id=noisy, messages=[{"role": "user", "content": "two"}])
+
+    with pytest.raises(BudgetExceeded) as caught:
+        with acting_as(db, user_id=str(tenants.user_a)) as connection:
+            Gateway(connection, transport, TIERS).complete(
+                agent_id=noisy, messages=[{"role": "user", "content": "three"}]
+            )
+
+    assert caught.value.scope == "agent"
+    assert caught.value.subject_id == str(noisy)
+
+    # Its colleague is unaffected: the department still has room.
+    with acting_as(db, user_id=str(tenants.user_a)) as connection:
+        Gateway(connection, transport, TIERS).complete(
+            agent_id=quiet, messages=[{"role": "user", "content": "hi"}]
+        )
+
+    assert len(transport.calls) == 3
+
+
+def test_a_sub_cap_cannot_outlive_its_department_budget(
+    db: psycopg.Connection, tenants: Tenants, transport: RecordingTransport
+) -> None:
+    """A generous sub-cap does not buy an agent past an exhausted department."""
+    agent_id = make_agent(db, tenants.org_a, department_budget="0.0030", agent_budget="100.0000")
+    transport.cost_usd = 0.002
+
+    with acting_as(db, user_id=str(tenants.user_a)) as connection:
+        gateway = Gateway(connection, transport, TIERS)
+        gateway.complete(agent_id=agent_id, messages=[{"role": "user", "content": "one"}])
+        gateway.complete(agent_id=agent_id, messages=[{"role": "user", "content": "two"}])
+
+    with pytest.raises(BudgetExceeded) as caught:
+        with acting_as(db, user_id=str(tenants.user_a)) as connection:
+            Gateway(connection, transport, TIERS).complete(
+                agent_id=agent_id, messages=[{"role": "user", "content": "three"}]
+            )
+
+    assert caught.value.scope == "department"
+
+
+def test_an_agent_cannot_join_another_orgs_department(
+    db: psycopg.Connection, tenants: Tenants
+) -> None:
+    """The composite foreign key, not application code, refuses this."""
+    foreign_department = make_department(db, tenants.org_b, name="theirs")
+
+    with pytest.raises(psycopg.errors.ForeignKeyViolation):
+        with as_service_role(db) as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                insert into public.agents
+                    (org_id, department_id, name, role, model_tier)
+                values (%s, %s, 'sneaky', 'worker', 'cheap')
+                """,
+                (str(tenants.org_a), str(foreign_department)),
+            )

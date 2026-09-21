@@ -41,26 +41,53 @@ class AgentNotFound(GatewayError):
         self.agent_id = agent_id
 
 
+class DepartmentDisabled(GatewayError):
+    code = "department_disabled"
+
+    def __init__(self, department_id: str) -> None:
+        super().__init__(f"Department {department_id} is disabled")
+        self.department_id = department_id
+
+
 class BudgetExceeded(GatewayError):
-    """The agent has spent its daily allowance.
+    """A daily allowance is spent.
+
+    `scope` says which one: the department budget that governs the whole team,
+    or an optional per-agent sub-cap inside it. A caller that wants to raise
+    the right limit needs to know which was hit.
 
     A budget of zero is not "unlimited", it is "nothing approved yet". Cost
-    control is the first priority in CLAUDE.md, so an agent nobody has funded
+    control is the first priority in CLAUDE.md, so an unfunded department
     cannot spend.
     """
 
     code = "budget_exceeded"
 
-    def __init__(self, agent_id: str, spent_usd: float, limit_usd: float) -> None:
+    def __init__(
+        self,
+        *,
+        scope: str,
+        subject_id: str,
+        spent_usd: float,
+        limit_usd: float,
+    ) -> None:
         super().__init__(
-            f"Agent {agent_id} has spent ${spent_usd:.6f} of its ${limit_usd:.4f} daily budget"
+            f"{scope.capitalize()} {subject_id} has spent ${spent_usd:.6f} "
+            f"of its ${limit_usd:.4f} daily budget"
         )
-        self.agent_id = agent_id
+        self.scope = scope
+        self.subject_id = subject_id
         self.spent_usd = spent_usd
         self.limit_usd = limit_usd
 
     def detail(self) -> dict[str, Any]:
-        return {**super().detail(), "spent_usd": self.spent_usd, "limit_usd": self.limit_usd}
+        return {
+            **super().detail(),
+            "scope": self.scope,
+            "subject_id": self.subject_id,
+            "spent_usd": self.spent_usd,
+            "limit_usd": self.limit_usd,
+        }
 
 
 class TierNotConfigured(GatewayError):

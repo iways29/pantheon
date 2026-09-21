@@ -22,6 +22,7 @@ from app.gateway.errors import (
     AgentDisabled,
     AgentNotFound,
     BudgetExceeded,
+    DepartmentDisabled,
     GatewayError,
     KillSwitchEngaged,
 )
@@ -31,12 +32,19 @@ from app.gateway.transport import SENSITIVE_PROVIDER_PREFERENCES, ModelResponse,
 
 @dataclass(frozen=True)
 class AgentRecord:
+    """An agent and the department whose budget governs it."""
+
     id: UUID
     org_id: UUID
     name: str
     model_tier: str
-    daily_budget_usd: Decimal
     enabled: bool
+    department_id: UUID
+    department_name: str
+    department_budget_usd: Decimal
+    department_enabled: bool
+    #: Optional sub-cap. None means only the department budget applies.
+    daily_budget_usd: Decimal | None
 
 
 class Gateway:
@@ -134,13 +142,40 @@ class Gateway:
             row = cursor.fetchone()
         return Decimal(row["spent"]) if row else Decimal(0)
 
+    def department_spent_today_usd(self, department_id: UUID | str) -> Decimal:
+        """What a whole department has spent since midnight UTC.
+
+        Joined through agents rather than denormalised onto model_calls: the
+        department an agent belongs to can change, and the ledger should
+        reflect where the agent sits now rather than a copy taken at the time.
+        """
+        with self._connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select coalesce(sum(mc.cost_usd), 0) as spent
+                from public.model_calls mc
+                join public.agents a on a.id = mc.agent_id
+                where a.department_id = %s
+                  and mc.created_at >= date_trunc('day', now() at time zone 'utc')
+                """,
+                (str(department_id),),
+            )
+            row = cursor.fetchone()
+        return Decimal(row["spent"]) if row else Decimal(0)
+
     def _load_agent(self, agent_id: UUID | str) -> AgentRecord:
         with self._connection.cursor() as cursor:
             cursor.execute(
                 """
-                select id, org_id, name, model_tier, daily_budget_usd, enabled
-                from public.agents
-                where id = %s
+                select a.id, a.org_id, a.name, a.model_tier, a.enabled,
+                       a.daily_budget_usd,
+                       d.id as department_id,
+                       d.name as department_name,
+                       d.daily_budget_usd as department_budget_usd,
+                       d.enabled as department_enabled
+                from public.agents a
+                join public.departments d on d.id = a.department_id
+                where a.id = %s
                 """,
                 (str(agent_id),),
             )
@@ -151,18 +186,32 @@ class Gateway:
             # RLS hides it, and so does this.
             raise AgentNotFound(str(agent_id))
 
+        sub_cap = row["daily_budget_usd"]
         return AgentRecord(
             id=row["id"],
             org_id=row["org_id"],
             name=row["name"],
             model_tier=row["model_tier"],
-            daily_budget_usd=Decimal(row["daily_budget_usd"]),
             enabled=row["enabled"],
+            department_id=row["department_id"],
+            department_name=row["department_name"],
+            department_budget_usd=Decimal(row["department_budget_usd"]),
+            department_enabled=row["department_enabled"],
+            daily_budget_usd=None if sub_cap is None else Decimal(sub_cap),
         )
 
     def _check_permitted(self, agent: AgentRecord) -> None:
+        """Every gate, cheapest and broadest first.
+
+        The org kill switch outranks the department switch, which outranks the
+        agent's own. Budgets come last because they cost a query, and the
+        department budget is checked before the agent sub-cap: the department
+        is the real limit, the sub-cap only narrows it.
+        """
         if not agent.enabled:
             raise AgentDisabled(str(agent.id))
+        if not agent.department_enabled:
+            raise DepartmentDisabled(str(agent.department_id))
 
         with self._connection.cursor() as cursor:
             cursor.execute("select public.kill_switch_on(%s) as engaged", (str(agent.org_id),))
@@ -170,9 +219,24 @@ class Gateway:
         if row and row["engaged"]:
             raise KillSwitchEngaged(str(agent.org_id))
 
-        spent = self.spent_today_usd(agent.id)
-        if spent >= agent.daily_budget_usd:
-            raise BudgetExceeded(str(agent.id), float(spent), float(agent.daily_budget_usd))
+        department_spent = self.department_spent_today_usd(agent.department_id)
+        if department_spent >= agent.department_budget_usd:
+            raise BudgetExceeded(
+                scope="department",
+                subject_id=str(agent.department_id),
+                spent_usd=float(department_spent),
+                limit_usd=float(agent.department_budget_usd),
+            )
+
+        if agent.daily_budget_usd is not None:
+            agent_spent = self.spent_today_usd(agent.id)
+            if agent_spent >= agent.daily_budget_usd:
+                raise BudgetExceeded(
+                    scope="agent",
+                    subject_id=str(agent.id),
+                    spent_usd=float(agent_spent),
+                    limit_usd=float(agent.daily_budget_usd),
+                )
 
     def _record_call(
         self,

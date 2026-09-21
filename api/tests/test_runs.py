@@ -412,7 +412,8 @@ def test_a_traced_run_nests_each_call_under_the_step_that_made_it(dsn: str, live
         tracer=LangfuseTracer(langfuse, public_key="pk-lf-runs"),
     )
     run_id = new_run(dsn, live)
-    advance_run(traced, run_id, deadline_seconds=60)
+    result = advance_run(traced, run_id, deadline_seconds=60)
+    assert (result.status, result.stop_reason, result.error) == ("succeeded", "completed", None)
 
     spans = exporter.get_finished_spans()
     names = {span.context.span_id: span.name for span in spans}

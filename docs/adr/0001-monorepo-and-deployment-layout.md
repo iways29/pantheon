@@ -128,13 +128,16 @@ call to the API, since that request is external and arrives without a Vercel
 session. It has to be disabled on `pantheon-api`. The real gate is the
 Supabase token plus the owner check, not Vercel's auth wall.
 
-## Open, for the owner to confirm
+## Decisions and open items
 
-- **Function region does not match the database region.** Functions run in
-  `iad1` (Virginia); the Supabase project is in `us-west-2` (Oregon). Every
-  query crosses the country. The build plan's prerequisites call for keeping
-  them close. Moving the Supabase project is cheap while it holds no data and
-  expensive afterwards, so this is worth settling early.
+- **Function and database regions differ. Accepted for phase 1.** Functions
+  run in `iad1` (Virginia); the Supabase project is in `us-west-2` (Oregon),
+  so each query makes a cross-country round trip of roughly 60-80ms. The build
+  plan's prerequisites ask for the regions to be close, and moving the project
+  was cheap while it held no data. The owner weighed that against the cost of
+  recreating it and chose to keep `us-west-2`. At phase-1 volume the cost is
+  small; revisit if it shows up in per-run latency once agents issue many
+  sequential queries per run, from Step 3 onward.
 - `CLAUDE.md` states function duration limits of "default 300s, Pro max 800s,
   1800s beta". A `maxDuration` of 1800 does appear in Vercel's Python examples,
   but the per-plan table could not be read from this environment, and **Hobby

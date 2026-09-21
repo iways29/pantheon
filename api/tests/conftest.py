@@ -27,3 +27,13 @@ def client(settings: Settings) -> Iterator[TestClient]:
     app.dependency_overrides[get_settings] = lambda: settings
     yield TestClient(app)
     app.dependency_overrides.clear()
+
+
+# Database fixtures live alongside, so tests that need Postgres can request
+# them by name without every test paying for a connection.
+from tests.conftest_db import (  # noqa: E402, F401
+    Tenants,
+    db,
+    dsn,
+    tenants,
+)

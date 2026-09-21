@@ -12,8 +12,38 @@ jobs:
     defaults:
       run:
         working-directory: api
+
+    # The RLS and brain tests run against real PostgreSQL with pgvector.
+    # Nothing else reproduces row-level security, and a stub would let the
+    # isolation guarantee rot unnoticed.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://pantheon:pantheon@localhost:5432/pantheon_test
+      # Turns a missing database into a failure rather than a silent skip.
+      REQUIRE_DATABASE: "1"
+
     steps:
       - uses: actions/checkout@v5
+
+      - name: Create database and apply migrations
+        working-directory: .
+        env:
+          PGPASSWORD: postgres
+          PSQL_SUPER: psql -h localhost -U postgres
+          DB_NAME: pantheon_test
+        run: ./scripts/local_db.sh reset
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7

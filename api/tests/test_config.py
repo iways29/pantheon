@@ -40,3 +40,16 @@ def test_blank_environment_does_not_win(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setenv("ENVIRONMENT", "")
 
     assert Settings().environment == "production"
+
+
+def test_model_tiers_defaults_to_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No guessed catalogue ships: an unconfigured gateway refuses loudly."""
+    monkeypatch.delenv("MODEL_TIERS", raising=False)
+
+    assert Settings().model_tiers == ""
+
+
+def test_model_tiers_is_read_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MODEL_TIERS", '{"cheap":"vendor/small"}')
+
+    assert Settings().model_tiers == '{"cheap":"vendor/small"}'

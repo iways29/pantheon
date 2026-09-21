@@ -108,15 +108,35 @@ confirmed.
 - Two sets of environment variables to keep in step. `.env.example` is the
   single source of truth for their names.
 
-## Unverified, for the owner to confirm
+## Confirmed in production (2026-09-21)
 
+Step 0 deployed and its acceptance criteria were met against live services,
+which settles two things this ADR had left open.
+
+- **Supabase issues asymmetric JWTs, and the JWKS path is the one in use.**
+  `SUPABASE_JWT_SECRET` is deliberately unset; the API verifies tokens against
+  the JWKS endpoint derived from `SUPABASE_URL`, and a real owner session
+  returned 200 from the protected route. The HS256 branch stays supported but
+  is not the production path.
+- **The two-project shape works as described.** `pantheon-web` (root `web/`)
+  and `pantheon-api` (root `api/`) deploy independently from `main`, with the
+  frontend passing the session token as a bearer header across origins.
+
+One deployment detail worth recording, because it is not obvious: Vercel's
+Deployment Protection is on by default and blocks the frontend's server-side
+call to the API, since that request is external and arrives without a Vercel
+session. It has to be disabled on `pantheon-api`. The real gate is the
+Supabase token plus the owner check, not Vercel's auth wall.
+
+## Open, for the owner to confirm
+
+- **Function region does not match the database region.** Functions run in
+  `iad1` (Virginia); the Supabase project is in `us-west-2` (Oregon). Every
+  query crosses the country. The build plan's prerequisites call for keeping
+  them close. Moving the Supabase project is cheap while it holds no data and
+  expensive afterwards, so this is worth settling early.
 - `CLAUDE.md` states function duration limits of "default 300s, Pro max 800s,
   1800s beta". A `maxDuration` of 1800 does appear in Vercel's Python examples,
   but the per-plan table could not be read from this environment, and **Hobby
   limits are lower than Pro**. Confirm the ceiling before Step 3 sizes its
   runs, since "runs are short and resumable" depends on it.
-- Supabase's current guidance on JWT verification (asymmetric signing keys and
-  the JWKS endpoint versus the legacy shared HS256 secret) could not be read
-  either — `supabase.com` is also unreachable from this environment. The API
-  therefore supports both schemes, selected by environment variable. Confirm
-  which one your project issues and set the variables accordingly.

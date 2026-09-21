@@ -106,6 +106,7 @@ Build:
 - Supabase Realtime subscription on `events` (RLS-aware).
 - A chat window to talk to the HOD and give orders in real time.
 - The brain visualization at the center: it should glow and flow with information as agents work, driven by real events (not fake animation). Design after the framework is chosen.
+- Model management: change the model behind each tier, and per department, without a redeploy. Picked from OpenRouter's live catalogue rather than typed free-hand, and every change audited to `events`. See `docs/adr/0003-model-selection-is-runtime-configuration.md`.
 
 Done when: chatting with the HOD works end to end and agent activity visibly lights up the brain in near real time.
 

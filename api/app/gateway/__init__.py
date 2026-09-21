@@ -17,6 +17,13 @@ from app.gateway.errors import (
 )
 from app.gateway.factory import gateway_from, tier_map_from, transport_from
 from app.gateway.gateway import AgentRecord, Gateway
+from app.gateway.model_admin import (
+    ModelCatalogue,
+    OpenRouterCatalogue,
+    UnknownModel,
+    assign_model,
+    clear_assignment,
+)
 from app.gateway.tiers import TIERS, TierMap
 from app.gateway.transport import (
     SENSITIVE_PROVIDER_PREFERENCES,
@@ -36,12 +43,17 @@ __all__ = [
     "Gateway",
     "GatewayError",
     "KillSwitchEngaged",
+    "ModelCatalogue",
     "ModelResponse",
+    "OpenRouterCatalogue",
     "OpenRouterTransport",
     "TierMap",
     "TierNotConfigured",
     "Transport",
+    "UnknownModel",
     "UpstreamError",
+    "assign_model",
+    "clear_assignment",
     "gateway_from",
     "tier_map_from",
     "transport_from",

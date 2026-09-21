@@ -25,9 +25,11 @@ from app.gateway.errors import (
     DepartmentDisabled,
     GatewayError,
     KillSwitchEngaged,
+    UpstreamError,
 )
 from app.gateway.tiers import TierMap
 from app.gateway.transport import SENSITIVE_PROVIDER_PREFERENCES, ModelResponse, Transport
+from app.tracing import NullTracer, Tracer
 
 
 @dataclass(frozen=True)
@@ -45,6 +47,9 @@ class AgentRecord:
     department_enabled: bool
     #: Optional sub-cap. None means only the department budget applies.
     daily_budget_usd: Decimal | None
+    #: The model assigned to this agent's tier in the database, department
+    #: override first. None means no row, so the MODEL_TIERS default applies.
+    assigned_model: str | None = None
 
 
 class Gateway:
@@ -67,10 +72,12 @@ class Gateway:
         connection: psycopg.Connection,
         transport: Transport,
         tiers: TierMap,
+        tracer: Tracer | None = None,
     ) -> None:
         self._connection = connection
         self._transport = transport
         self._tiers = tiers
+        self._tracer = tracer or NullTracer()
 
     def complete(
         self,
@@ -88,22 +95,50 @@ class Gateway:
         agent, because the same agent may handle both kinds of work.
         """
         agent = self._load_agent(agent_id)
+        run = str(run_id) if run_id else None
+        trace_context = _trace_context(agent, run)
+        trace_tags = [f"department:{agent.department_name}", f"tier:{agent.model_tier}"]
 
         try:
             self._check_permitted(agent)
         except GatewayError as error:
             self._emit_event(agent, run_id, "model_call_blocked", error.detail())
+            self._tracer.blocked(
+                context=trace_context, tags=trace_tags, run_id=run, detail=error.detail()
+            )
             raise
 
-        model = self._tiers.model_for(agent.model_tier)
+        model = agent.assigned_model or self._tiers.model_for(agent.model_tier)
         preferences = dict(SENSITIVE_PROVIDER_PREFERENCES) if sensitive else None
 
-        response = self._transport.complete(
+        with self._tracer.model_call(
+            context=trace_context,
+            tags=trace_tags,
+            run_id=run,
             model=model,
             messages=messages,
             max_tokens=max_tokens,
-            provider_preferences=preferences,
-        )
+            sensitive=sensitive,
+        ) as recorder:
+            try:
+                response = self._transport.complete(
+                    model=model,
+                    messages=messages,
+                    max_tokens=max_tokens,
+                    provider_preferences=preferences,
+                )
+            except UpstreamError as error:
+                recorder.failed(code=error.code, message=str(error))
+                raise
+            recorder.succeeded(
+                text=response.text,
+                served_model=response.model,
+                provider=response.provider,
+                tokens_in=response.tokens_in,
+                tokens_out=response.tokens_out,
+                cost_usd=response.cost_usd,
+                latency_ms=response.latency_ms,
+            )
 
         self._record_call(agent, run_id, response)
         self._emit_event(
@@ -111,6 +146,8 @@ class Gateway:
             run_id,
             "model_call",
             {
+                "tier": agent.model_tier,
+                "requested_model": model,
                 "model": response.model,
                 "provider": response.provider,
                 "tokens_in": response.tokens_in,
@@ -172,9 +209,23 @@ class Gateway:
                        d.id as department_id,
                        d.name as department_name,
                        d.daily_budget_usd as department_budget_usd,
-                       d.enabled as department_enabled
+                       d.enabled as department_enabled,
+                       assigned.model as assigned_model
                 from public.agents a
                 join public.departments d on d.id = a.department_id
+                -- ADR 003: the tier's model is data. A department override
+                -- wins over the org-wide row; with neither, the gateway falls
+                -- back to MODEL_TIERS. Read on every call, in this same
+                -- query, so a change applies to the very next call.
+                left join lateral (
+                    select m.model
+                    from public.model_tier_assignments m
+                    where m.org_id = a.org_id
+                      and m.tier = a.model_tier
+                      and (m.department_id = a.department_id or m.department_id is null)
+                    order by m.department_id nulls last
+                    limit 1
+                ) assigned on true
                 where a.id = %s
                 """,
                 (str(agent_id),),
@@ -198,6 +249,7 @@ class Gateway:
             department_budget_usd=Decimal(row["department_budget_usd"]),
             department_enabled=row["department_enabled"],
             daily_budget_usd=None if sub_cap is None else Decimal(sub_cap),
+            assigned_model=row["assigned_model"],
         )
 
     def _check_permitted(self, agent: AgentRecord) -> None:
@@ -287,3 +339,17 @@ class Gateway:
                     json.dumps(payload),
                 ),
             )
+
+
+def _trace_context(agent: AgentRecord, run_id: str | None) -> dict[str, str]:
+    """Who made the call, for filtering traces. Ids only; no message content."""
+    context = {
+        "org_id": str(agent.org_id),
+        "agent_id": str(agent.id),
+        "agent_name": agent.name,
+        "department_id": str(agent.department_id),
+        "tier": agent.model_tier,
+    }
+    if run_id:
+        context["run_id"] = run_id
+    return context

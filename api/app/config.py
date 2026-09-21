@@ -50,6 +50,15 @@ class Settings(BaseSettings):
     # refuses loudly rather than falling back to something expensive.
     model_tiers: str = ""
 
+    # --- Tracing (ADR 004) -----------------------------------------------
+    # Langfuse Cloud. Tracing is off unless both keys are set. Server-side
+    # only, like every other credential here.
+    langfuse_public_key: str | None = None
+    langfuse_secret_key: str | None = None
+    # The project's region, e.g. https://cloud.langfuse.com (EU) or
+    # https://us.cloud.langfuse.com (US).
+    langfuse_base_url: str | None = None
+
     # Comma-separated browser origins allowed to call this API.
     cors_allow_origins: str = ""
 

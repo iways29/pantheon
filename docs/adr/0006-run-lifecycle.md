@@ -37,6 +37,13 @@ Each invocation:
 | upstream_error | paused | yes |
 | error | failed | no |
 
+**Checkpoints are written synchronously** (`durability="sync"`). LangGraph's
+default, `"async"`, saves a step's checkpoint while the next step is already
+running. A crash can then lose that checkpoint, and the between-step read of
+graph state can still see the previous one. That race was real: in CI it ended
+a run as `completed` after its first step. `test_steps_wait_for_their_checkpoint_before_the_next_begins`
+slows checkpoint writes to make the race certain, and guards the setting.
+
 **Caps are checked between steps, never mid-step,** so a run always stops on
 a step boundary with a consistent checkpoint. The token cap can therefore be
 overshot by one step's calls; per-call `max_tokens` ceilings bound that.

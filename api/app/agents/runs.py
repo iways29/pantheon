@@ -253,7 +253,14 @@ def _execute(runtime: Runtime, connection: psycopg.Connection, run: _Run, deadli
                 stop = _Stop("failed", "max_steps")
             else:
                 for update in graph.stream(
-                    None if started else run.input, config, stream_mode="updates"
+                    None if started else run.input,
+                    config,
+                    stream_mode="updates",
+                    # LangGraph's default, "async", saves a step's checkpoint
+                    # while the next step already runs: a crash can lose it,
+                    # and the state read below can still see the previous
+                    # one, which would end a run early as "completed".
+                    durability="sync",
                 ):
                     steps += 1
                     tokens = _record_step(

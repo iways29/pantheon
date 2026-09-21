@@ -13,6 +13,7 @@ from orgs removes its runs, facts, events, ledger rows and checkpoints.
 """
 
 import json
+import time
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -433,3 +434,28 @@ def test_a_traced_run_nests_each_call_under_the_step_that_made_it(dsn: str, live
     root = next(span for span in spans if span.name == "advance-run")
     assert root.attributes["langfuse.trace.name"] == "agent-run"
     assert root.attributes["user.id"] == str(live.user_id)
+
+
+def test_steps_wait_for_their_checkpoint_before_the_next_begins(
+    dsn: str, live: LiveOrg, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With LangGraph's default "async" durability a checkpoint can still be in
+    flight when the next step starts, so a crash loses it and a between-step
+    read of the graph state sees the previous one. Slow checkpoint writes
+    make that race certain; the run must still take every step."""
+    from langgraph.checkpoint.postgres import PostgresSaver
+
+    original = PostgresSaver.put
+
+    def slow_put(self: PostgresSaver, *args: Any, **kwargs: Any) -> Any:
+        time.sleep(0.2)
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(PostgresSaver, "put", slow_put)
+    model = ScriptedModel()
+    run_id = new_run(dsn, live)
+
+    result = advance_run(runtime(dsn, model), run_id, deadline_seconds=60)
+
+    assert (result.status, result.steps_taken) == ("succeeded", 4)
+    assert model.calls == ["answer", "extract"]

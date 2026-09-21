@@ -3,15 +3,26 @@
 Secrets are server-side only; nothing here is ever exposed to the browser.
 """
 
+import os
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    environment: str = "development"
+    # Vercel sets VERCEL_ENV to production, preview or development per
+    # deployment, so previews label themselves correctly without anyone
+    # maintaining a per-environment variable. An explicit ENVIRONMENT still
+    # wins, for local runs and any non-Vercel host.
+    environment: str = ""
+
+    @field_validator("environment", mode="after")
+    @classmethod
+    def _resolve_environment(cls, value: str) -> str:
+        return value or os.getenv("VERCEL_ENV") or "development"
 
     # Supabase project, used to locate the JWKS endpoint and to verify tokens.
     supabase_url: str | None = None

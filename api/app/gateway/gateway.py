@@ -45,6 +45,9 @@ class AgentRecord:
     department_enabled: bool
     #: Optional sub-cap. None means only the department budget applies.
     daily_budget_usd: Decimal | None
+    #: The model assigned to this agent's tier in the database, department
+    #: override first. None means no row, so the MODEL_TIERS default applies.
+    assigned_model: str | None = None
 
 
 class Gateway:
@@ -95,7 +98,7 @@ class Gateway:
             self._emit_event(agent, run_id, "model_call_blocked", error.detail())
             raise
 
-        model = self._tiers.model_for(agent.model_tier)
+        model = agent.assigned_model or self._tiers.model_for(agent.model_tier)
         preferences = dict(SENSITIVE_PROVIDER_PREFERENCES) if sensitive else None
 
         response = self._transport.complete(
@@ -111,6 +114,8 @@ class Gateway:
             run_id,
             "model_call",
             {
+                "tier": agent.model_tier,
+                "requested_model": model,
                 "model": response.model,
                 "provider": response.provider,
                 "tokens_in": response.tokens_in,
@@ -172,9 +177,23 @@ class Gateway:
                        d.id as department_id,
                        d.name as department_name,
                        d.daily_budget_usd as department_budget_usd,
-                       d.enabled as department_enabled
+                       d.enabled as department_enabled,
+                       assigned.model as assigned_model
                 from public.agents a
                 join public.departments d on d.id = a.department_id
+                -- ADR 003: the tier's model is data. A department override
+                -- wins over the org-wide row; with neither, the gateway falls
+                -- back to MODEL_TIERS. Read on every call, in this same
+                -- query, so a change applies to the very next call.
+                left join lateral (
+                    select m.model
+                    from public.model_tier_assignments m
+                    where m.org_id = a.org_id
+                      and m.tier = a.model_tier
+                      and (m.department_id = a.department_id or m.department_id is null)
+                    order by m.department_id nulls last
+                    limit 1
+                ) assigned on true
                 where a.id = %s
                 """,
                 (str(agent_id),),
@@ -198,6 +217,7 @@ class Gateway:
             department_budget_usd=Decimal(row["department_budget_usd"]),
             department_enabled=row["department_enabled"],
             daily_budget_usd=None if sub_cap is None else Decimal(sub_cap),
+            assigned_model=row["assigned_model"],
         )
 
     def _check_permitted(self, agent: AgentRecord) -> None:

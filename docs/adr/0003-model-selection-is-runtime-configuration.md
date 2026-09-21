@@ -1,8 +1,8 @@
 # ADR 003: Model selection is runtime configuration, not deploy-time
 
-- **Status:** Accepted, not yet implemented
+- **Status:** Accepted; backend implemented, control-centre UI pending (Step 7)
 - **Date:** 2026-09-21
-- **Step:** 2 (Model gateway), delivered with Step 7 (control centre)
+- **Step:** 2 (Model gateway); backend pulled forward ahead of Step 3, UI in Step 7
 
 ## Context
 
@@ -77,8 +77,27 @@ switched away from without a release.
 
 ## Status
 
-Not built. Step 2 ships the environment variable, and this ADR records the
-shape the replacement takes. The gateway's tier indirection is already the
-seam it plugs into: `TierMap` is passed into `Gateway`, so swapping an
-env-backed map for a database-backed one touches the factory, not the
-gateway and not any agent.
+Backend built before Step 3, at the owner's request, because agent tuning in
+Step 3 is when model swaps become frequent. The control-centre screen is still
+Step 7.
+
+What shipped, and where it differs from the decision above:
+
+- `model_tier_assignments` (migration `20260921030000`): org-scoped with RLS,
+  optional `department_id` override, one row per scope and tier. A check
+  constraint refuses `~` aliases, empty slugs and stray whitespace even for a
+  write that bypasses the application.
+- **No cache.** The gateway resolves the model inside the query that already
+  loads the agent and its department, so a change costs no extra round trip
+  and applies to the very next call. The cache and its disagreement window
+  described under Consequences are therefore not needed.
+- **Auditing is a database trigger**, not application code, so a change made
+  by hand in the SQL editor is on the trail too. Payload: tier, department,
+  from, to, `auth.uid()` and the database role.
+- **No seeding.** An org with no row for a tier uses `MODEL_TIERS`, which is
+  still required at startup so a missing tier fails loudly on boot.
+- Slugs are checked against OpenRouter's public `/models` list by
+  `app.gateway.model_admin.assign_model`. Until Step 7, the owner changes a
+  model with `api/scripts/set_tier_model.py`, which uses it.
+- `model_call` events now also carry `tier` and `requested_model`, beside the
+  `model` OpenRouter reports serving.

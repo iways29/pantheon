@@ -8,7 +8,7 @@ Work in order. Each step lists what to build and the acceptance criteria ("done 
 - [ ] Supabase Pro project created (note the region; keep it close to the Vercel function region)
 - [ ] OpenRouter account with credit and a management/provisioning key if per-agent keys are supported
 - [ ] TypeSafe API key
-- [ ] LangSmith or Langfuse account (free tier) for tracing
+- [ ] Langfuse Cloud account (free Hobby tier) and a project for tracing; see ADR 004
 - [ ] All secrets placed in Vercel env vars and a local `.env` (never committed)
 
 ## Step 0: Foundations (S)
@@ -58,7 +58,7 @@ Build one LangGraph or deepagents agent that reads from and writes to the brain 
 
 - LangGraph Postgres checkpointer against Supabase. Test the pooler early: transaction-mode pooling can break prepared statements; if it does, use the appropriate connection mode and document it in an ADR.
 - Runs are short and resumable; per-run max steps and max tokens.
-- Tracing enabled (LangSmith or Langfuse; see Open decisions).
+- Tracing enabled with Langfuse (see `docs/adr/0004-tracing-with-langfuse.md`).
 - Run lifecycle (`runs` row, events, cost rollup).
 
 Done when: a run can be killed mid-way and resumed from its checkpoint; the run's total cost and token use are visible; hitting the step or token cap stops the run cleanly.
@@ -106,7 +106,7 @@ Build:
 - Supabase Realtime subscription on `events` (RLS-aware).
 - A chat window to talk to the HOD and give orders in real time.
 - The brain visualization at the center: it should glow and flow with information as agents work, driven by real events (not fake animation). Design after the framework is chosen.
-- Model management: change the model behind each tier, and per department, without a redeploy. Picked from OpenRouter's live catalogue rather than typed free-hand, and every change audited to `events`. See `docs/adr/0003-model-selection-is-runtime-configuration.md`.
+- Model management UI: change the model behind each tier, and per department, without a redeploy. The backend (table, gateway lookup, catalogue check, audit trigger) already exists; this is the screen on top of it. Picked from OpenRouter's live catalogue rather than typed free-hand, and every change audited to `events`. See `docs/adr/0003-model-selection-is-runtime-configuration.md`.
 
 Done when: chatting with the HOD works end to end and agent activity visibly lights up the brain in near real time.
 
@@ -119,7 +119,7 @@ Done when: the owner can see real cost per agent per day and has budget alerts c
 ## Open decisions (present options and recommend; do not decide silently)
 
 1. **Trigger mechanism:** Vercel Cron, Supabase `pg_cron` plus database webhooks, or a queue.
-2. **Tracing:** LangSmith vs Langfuse.
+2. **Tracing:** ~~LangSmith vs Langfuse.~~ Decided: Langfuse Cloud, free Hobby tier. See ADR 004.
 3. **Per-agent spend control:** OpenRouter per-key limits vs application-level budget checks (depends on what the current API supports).
 4. **Checkpointer connection mode** through the Supabase pooler (result of the Step 3 test).
 5. **HOD pattern:** deepagents subagents vs LangGraph supervisor.

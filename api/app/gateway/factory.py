@@ -11,6 +11,7 @@ from app.config import Settings
 from app.gateway.gateway import Gateway
 from app.gateway.tiers import TIERS, TierMap
 from app.gateway.transport import OpenRouterTransport
+from app.tracing import langfuse_from, tracer_from
 
 
 def tier_map_from(settings: Settings) -> TierMap:
@@ -38,4 +39,7 @@ def gateway_from(connection: psycopg.Connection, settings: Settings) -> Gateway:
             "Fill every tier from OpenRouter's model list; see .env.example."
         )
 
-    return Gateway(connection, transport_from(settings), tiers)
+    # Langfuse keeps one client per public key, so building it per gateway
+    # reuses the same background exporter rather than starting another.
+    tracer = tracer_from(langfuse_from(settings))
+    return Gateway(connection, transport_from(settings), tiers, tracer)

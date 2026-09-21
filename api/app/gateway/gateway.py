@@ -25,9 +25,11 @@ from app.gateway.errors import (
     DepartmentDisabled,
     GatewayError,
     KillSwitchEngaged,
+    UpstreamError,
 )
 from app.gateway.tiers import TierMap
 from app.gateway.transport import SENSITIVE_PROVIDER_PREFERENCES, ModelResponse, Transport
+from app.tracing import NullTracer, Tracer
 
 
 @dataclass(frozen=True)
@@ -70,10 +72,12 @@ class Gateway:
         connection: psycopg.Connection,
         transport: Transport,
         tiers: TierMap,
+        tracer: Tracer | None = None,
     ) -> None:
         self._connection = connection
         self._transport = transport
         self._tiers = tiers
+        self._tracer = tracer or NullTracer()
 
     def complete(
         self,
@@ -91,22 +95,50 @@ class Gateway:
         agent, because the same agent may handle both kinds of work.
         """
         agent = self._load_agent(agent_id)
+        run = str(run_id) if run_id else None
+        trace_context = _trace_context(agent, run)
+        trace_tags = [f"department:{agent.department_name}", f"tier:{agent.model_tier}"]
 
         try:
             self._check_permitted(agent)
         except GatewayError as error:
             self._emit_event(agent, run_id, "model_call_blocked", error.detail())
+            self._tracer.blocked(
+                context=trace_context, tags=trace_tags, run_id=run, detail=error.detail()
+            )
             raise
 
         model = agent.assigned_model or self._tiers.model_for(agent.model_tier)
         preferences = dict(SENSITIVE_PROVIDER_PREFERENCES) if sensitive else None
 
-        response = self._transport.complete(
+        with self._tracer.model_call(
+            context=trace_context,
+            tags=trace_tags,
+            run_id=run,
             model=model,
             messages=messages,
             max_tokens=max_tokens,
-            provider_preferences=preferences,
-        )
+            sensitive=sensitive,
+        ) as recorder:
+            try:
+                response = self._transport.complete(
+                    model=model,
+                    messages=messages,
+                    max_tokens=max_tokens,
+                    provider_preferences=preferences,
+                )
+            except UpstreamError as error:
+                recorder.failed(code=error.code, message=str(error))
+                raise
+            recorder.succeeded(
+                text=response.text,
+                served_model=response.model,
+                provider=response.provider,
+                tokens_in=response.tokens_in,
+                tokens_out=response.tokens_out,
+                cost_usd=response.cost_usd,
+                latency_ms=response.latency_ms,
+            )
 
         self._record_call(agent, run_id, response)
         self._emit_event(
@@ -307,3 +339,17 @@ class Gateway:
                     json.dumps(payload),
                 ),
             )
+
+
+def _trace_context(agent: AgentRecord, run_id: str | None) -> dict[str, str]:
+    """Who made the call, for filtering traces. Ids only; no message content."""
+    context = {
+        "org_id": str(agent.org_id),
+        "agent_id": str(agent.id),
+        "agent_name": agent.name,
+        "department_id": str(agent.department_id),
+        "tier": agent.model_tier,
+    }
+    if run_id:
+        context["run_id"] = run_id
+    return context

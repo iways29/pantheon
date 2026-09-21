@@ -46,27 +46,50 @@ from environment variables alone with no code, and LangGraph Studio. For us
 that saves about half a day of instrumentation, and neither is worth a
 per-seat bill.
 
-## How it is wired (Step 3)
+## How it is wired
 
-- The Python SDK is configured with `LANGFUSE_PUBLIC_KEY`,
-  `LANGFUSE_SECRET_KEY` and `LANGFUSE_BASE_URL`. These are server-side only,
-  listed in `.env.example`, and must be set in Vercel as well.
-- LangGraph nodes are traced through the LangChain callback handler.
-- The gateway calls OpenRouter over plain `httpx`, not through a LangChain
-  chat model, so the callback handler does not see model calls. The gateway
-  opens its own generation observation instead, recording model, tokens and
-  OpenRouter's reported cost.
-- **Sensitive calls are masked.** Tracing sends prompt text to a third party.
-  A `mask` function on the Langfuse client replaces the input and output of
-  any call made with `sensitive=True`, leaving only metadata. CLAUDE.md's rule
-  that sensitive data goes only to no-retention providers covers observability
-  vendors too.
-- **Infrastructure spans are filtered.** The v3+ SDK is OpenTelemetry-native
-  and will also collect spans from other instrumented libraries (HTTP clients,
-  database drivers). Each of those spends units. Only Langfuse's own and
-  LangChain's instrumentation scopes are exported.
-- Serverless functions must flush before returning, or buffered spans are lost
-  when the instance freezes. The run lifecycle flushes at the end of each step.
+Built with the Langfuse agent skill (vendored in `.claude/skills/langfuse`) and
+Python SDK `langfuse` 4.15.4, against the SDK docs and best-practices guide as
+published on 2026-09-20. All of it lives in `api/app/tracing.py`; nothing else
+imports the SDK.
+
+- **Off without keys.** `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` and
+  `LANGFUSE_BASE_URL` are server-side only and must also be set in Vercel.
+  With no keys, a no-op tracer stands in, so tests and local work need no
+  account.
+- **One `generation` per model call**, named `call-model`. The gateway calls
+  OpenRouter over plain `httpx`, so no framework integration can see these
+  calls. It records the served model, `input`/`output` token usage, and
+  OpenRouter's `usage.cost`, ingested as `cost_details.total`. Langfuse cannot
+  price OpenRouter slugs itself, and this way the trace matches `model_calls`.
+- **A refused call is a `guardrail`**, named `enforce-call-gates`, with the
+  refusal code. An upstream failure marks the generation `ERROR`.
+- **One trace per run.** Calls carrying a `run_id` get a trace id seeded from
+  it, so a run resumed in a later serverless invocation joins the same trace.
+  When an observation is already open, as Step 3's run observation will be,
+  calls nest under it instead.
+- **Tags** are `department:<name>` and `tier:<tier>`; **metadata** holds ids,
+  the agent name and the requested model. `environment` comes from settings
+  and `release` from `VERCEL_GIT_COMMIT_SHA`. Names are stable and never
+  include a model, so a model swap (ADR 003) breaks no filter or evaluator.
+- **Sensitive calls never send their text.** This differs from the plan
+  above. Instead of masking at export, the gateway never hands the prompt or
+  completion to the SDK; the observation says it was withheld and still
+  carries usage and cost. Data that is never sent cannot leak if a mask
+  function has a bug.
+- **Infrastructure spans:** SDK v4 exports only Langfuse and GenAI spans by
+  default, so HTTP and database spans stay out without any filter of ours.
+- **Flushing.** Scripts call `flush()`. No request path traces anything yet.
+  Step 3's run lifecycle must flush at the end of each step, before the
+  function returns, or buffered spans can be lost when the instance freezes.
+- **Verification.** `tests/test_tracing.py` asserts on the spans the real SDK
+  exports, using an in-memory exporter. `api/scripts/trace_smoke.py` sends a
+  real trace for the audit the skill requires.
+
+Still to do in Step 3: trace LangGraph nodes with the LangChain
+`CallbackHandler` under a root `agent` observation per run, set `user_id` to
+the owner, and apply the same sensitive-call rule to anything the callback
+captures.
 
 ## Consequences
 

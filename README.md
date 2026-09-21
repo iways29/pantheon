@@ -57,6 +57,15 @@ make db-psql     # interactive shell
 Migrations are additive and versioned in `supabase/migrations/`. Never edit a
 migration that has been applied; add a new one.
 
+`supabase/local_bootstrap.sql` recreates the parts of Supabase that migrations
+assume -- the `auth` schema, `auth.uid()`, and the anon/authenticated/
+service_role roles -- so the same migrations run on a plain PostgreSQL server.
+It is local-only and is never applied to a Supabase project.
+
+Tests that need a database read `DATABASE_URL`, and skip when nothing is
+listening. Set `REQUIRE_DATABASE=1` to turn that skip into a failure, which is
+what CI does: row-level security is only proven if the tests actually ran.
+
 ## Checks
 
 `make check` runs all of these, and they are what CI runs.

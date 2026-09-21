@@ -8,6 +8,8 @@ dependencies = [
     "pydantic>=2.9",
     "pydantic-settings>=2.6",
     "pyjwt[crypto]>=2.9",
+    "psycopg[binary]>=3.2",
+    "pgvector>=0.3.6",
 ]
 
 [dependency-groups]

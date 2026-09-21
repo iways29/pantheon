@@ -91,3 +91,9 @@ grant usage on schema public to authenticated, service_role;
 grant select, update on public.orgs to authenticated;
 grant select on public.org_members to authenticated;
 grant execute on function public.is_org_member(uuid) to authenticated;
+
+-- service_role is the backend identity for work with no authenticated caller
+-- behind it. BYPASSRLS lets it past the policies but grants no privileges of
+-- its own, so they are given explicitly here.
+grant select, insert, update, delete on public.orgs to service_role;
+grant select, insert, update, delete on public.org_members to service_role;

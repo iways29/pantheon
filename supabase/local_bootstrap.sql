@@ -62,4 +62,18 @@ as $$
 $$;
 
 grant usage on schema auth to anon, authenticated, service_role;
-grant select on auth.users to authenticated, service_role;
+grant select on auth.users to authenticated;
+grant select, insert, update, delete on auth.users to service_role;
+
+-- A login role for local tests. Deliberately NOT a superuser: superusers
+-- bypass RLS silently, which would make an isolation test pass without
+-- proving anything. Tests connect as this role and SET ROLE to authenticated
+-- or service_role, mirroring how Supabase switches roles per request.
+do $$
+begin
+  create role pantheon login password 'pantheon' nosuperuser;
+exception when duplicate_object then null;
+end $$;
+
+grant authenticated, service_role to pantheon;
+grant usage on schema auth to pantheon;

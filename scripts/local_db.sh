@@ -14,7 +14,8 @@ set -euo pipefail
 
 DB_NAME="${DB_NAME:-pantheon_dev}"
 PSQL_SUPER="${PSQL_SUPER:-sudo -n -u postgres psql}"
-MIGRATIONS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/supabase/migrations"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+MIGRATIONS_DIR="${ROOT_DIR}/supabase/migrations"
 
 usage() {
   cat <<'USAGE'
@@ -34,7 +35,8 @@ create_db() {
     || $PSQL_SUPER -qc "CREATE DATABASE ${DB_NAME}"
   $PSQL_SUPER -d "${DB_NAME}" -qc "CREATE EXTENSION IF NOT EXISTS vector"
   $PSQL_SUPER -d "${DB_NAME}" -qc "CREATE EXTENSION IF NOT EXISTS pgcrypto"
-  echo "Database ${DB_NAME} ready (pgvector, pgcrypto enabled)."
+  $PSQL_SUPER -d "${DB_NAME}" -q -v ON_ERROR_STOP=1 -f "${ROOT_DIR}/supabase/local_bootstrap.sql"
+  echo "Database ${DB_NAME} ready (pgvector, pgcrypto, Supabase auth shim)."
 }
 
 migrate() {

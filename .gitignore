@@ -1,0 +1,25 @@
+# Secrets — never commit. See .env.example for the shape.
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Node / Next.js
+node_modules/
+.next/
+next-env.d.ts
+*.tsbuildinfo
+
+# Vercel
+.vercel/
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/

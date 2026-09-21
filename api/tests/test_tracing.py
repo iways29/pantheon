@@ -64,7 +64,8 @@ def call(
     **kwargs: Any,
 ) -> None:
     with acting_as(db, user_id=str(tenants.user_a)) as connection:
-        Gateway(connection, transport, TIERS, LangfuseTracer(langfuse)).complete(
+        tracer = LangfuseTracer(langfuse, public_key="pk-lf-test")
+        Gateway(connection, transport, TIERS, tracer).complete(
             agent_id=agent_id,
             messages=[{"role": "user", "content": kwargs.pop("content", "hi")}],
             **kwargs,
@@ -169,7 +170,7 @@ def test_calls_in_one_run_share_a_trace(langfuse: Langfuse, spans: Any) -> None:
 
 def test_trace_names_are_stable_whatever_comes_first(langfuse: Langfuse, spans: Any) -> None:
     """A run's trace is `agent-run` even when its first observation is a refusal."""
-    tracer = LangfuseTracer(langfuse)
+    tracer = LangfuseTracer(langfuse, public_key="pk-lf-test")
     tracer.blocked(context={"run_id": "run-9"}, tags=[], run_id="run-9", detail={"code": "x"})
     call_in_run(langfuse, "run-9")
     with tracer.model_call(
@@ -195,7 +196,7 @@ def test_trace_names_are_stable_whatever_comes_first(langfuse: Langfuse, spans: 
 def call_in_run(langfuse: Langfuse, run: str) -> None:
     # The gateway's run_id is a runs.id foreign key, so grouping is checked at
     # the tracer boundary rather than by seeding runs rows.
-    with LangfuseTracer(langfuse).model_call(
+    with LangfuseTracer(langfuse, public_key="pk-lf-test").model_call(
         context={"run_id": run},
         tags=[],
         run_id=run,
@@ -218,7 +219,7 @@ def call_in_run(langfuse: Langfuse, run: str) -> None:
 def test_tracing_is_off_without_keys() -> None:
     settings = Settings(_env_file=None, langfuse_public_key=None, langfuse_secret_key=None)
     assert langfuse_from(settings) is None
-    assert isinstance(tracer_from(None), NullTracer)
+    assert isinstance(tracer_from(settings), NullTracer)
 
 
 def test_a_call_inside_an_open_observation_nests_under_it(langfuse: Langfuse, spans: Any) -> None:

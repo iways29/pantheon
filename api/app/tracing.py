@@ -32,7 +32,8 @@ from collections.abc import Iterator
 from contextlib import AbstractContextManager, contextmanager
 from typing import Any, Protocol
 
-from langfuse import Langfuse, LangfuseGeneration, propagate_attributes
+from langfuse import Langfuse, LangfuseGeneration, LangfuseSpan, propagate_attributes
+from langfuse.langchain import CallbackHandler
 from opentelemetry import trace
 
 from app.config import Settings
@@ -73,7 +74,30 @@ class CallRecorder(Protocol):
     def failed(self, *, code: str, message: str) -> None: ...
 
 
+class RunRecorder(Protocol):
+    """Filled in when an invocation of a run stops, for whatever reason."""
+
+    def stopped(self, *, status: str, stop_reason: str, output: dict[str, Any] | None) -> None: ...
+
+
 class Tracer(Protocol):
+    def agent_run(
+        self,
+        *,
+        run_id: str,
+        agent_name: str,
+        user_id: str | None,
+        input: dict[str, Any],
+        context: dict[str, str],
+        tags: list[str],
+    ) -> AbstractContextManager[RunRecorder]: ...
+
+    def callbacks(self) -> list[Any]:
+        """LangChain callbacks that trace graph nodes; open inside agent_run."""
+        ...
+
+    def flush(self) -> None: ...
+
     def model_call(
         self,
         *,
@@ -103,9 +127,22 @@ class _NullRecorder:
     def failed(self, **_: object) -> None:
         pass
 
+    def stopped(self, **_: object) -> None:
+        pass
+
 
 class NullTracer:
     """Tracing switched off. Same shape, no effect."""
+
+    @contextmanager
+    def agent_run(self, **_: object) -> Iterator[RunRecorder]:
+        yield _NullRecorder()
+
+    def callbacks(self) -> list[Any]:
+        return []
+
+    def flush(self) -> None:
+        pass
 
     @contextmanager
     def model_call(self, **_: object) -> Iterator[CallRecorder]:
@@ -152,9 +189,66 @@ class _GenerationRecorder:
         self._generation.update(level="ERROR", status_message=f"{code}: {message}"[:500])
 
 
+class _RunObservationRecorder:
+    def __init__(self, observation: LangfuseSpan) -> None:
+        self._observation = observation
+
+    def stopped(self, *, status: str, stop_reason: str, output: dict[str, Any] | None) -> None:
+        paused = status != "succeeded"
+        self._observation.update(
+            output=output,
+            level="WARNING" if paused else None,
+            status_message=f"{status}: {stop_reason}",
+            metadata={"status": status, "stop_reason": stop_reason},
+        )
+
+
 class LangfuseTracer:
-    def __init__(self, langfuse: Langfuse) -> None:
+    def __init__(self, langfuse: Langfuse, *, public_key: str) -> None:
         self._langfuse = langfuse
+        # The LangChain handler finds its client by public key; the client does
+        # not expose its own, so it is kept here.
+        self._public_key = public_key
+
+    @contextmanager
+    def agent_run(
+        self,
+        *,
+        run_id: str,
+        agent_name: str,
+        user_id: str | None,
+        input: dict[str, Any],
+        context: dict[str, str],
+        tags: list[str],
+    ) -> Iterator[RunRecorder]:
+        """One invocation of a run, as the root `advance-run` span.
+
+        Every invocation of the same run joins one trace, seeded from run_id,
+        so a run resumed later (a new serverless invocation, after a crash)
+        reads as one story in Langfuse, with one root per invocation. Under
+        it, LangGraph's callback adds the graph as an `agent` observation
+        named after the agent, one span per step, and the gateway's
+        `call-model` generations inside the step that made them.
+        """
+        with (
+            propagate_attributes(user_id=user_id, tags=tags, trace_name="agent-run"),
+            self._langfuse.start_as_current_observation(
+                trace_context={"trace_id": self._langfuse.create_trace_id(seed=run_id)},
+                name="advance-run",
+                as_type="span",
+                input=input,
+                metadata={**context, "agent": agent_name},
+            ) as observation,
+        ):
+            yield _RunObservationRecorder(observation)
+
+    def callbacks(self) -> list[Any]:
+        return [CallbackHandler(public_key=self._public_key)]
+
+    def flush(self) -> None:
+        # Serverless: buffered spans are lost if the instance freezes after
+        # the response, so every invocation flushes before it returns.
+        self._langfuse.flush()
 
     @contextmanager
     def model_call(
@@ -231,5 +325,8 @@ class LangfuseTracer:
         return {"trace_id": self._langfuse.create_trace_id(seed=run_id)}, "agent-run"
 
 
-def tracer_from(langfuse: Langfuse | None) -> Tracer:
-    return LangfuseTracer(langfuse) if langfuse is not None else NullTracer()
+def tracer_from(settings: Settings) -> Tracer:
+    langfuse = langfuse_from(settings)
+    if langfuse is None or not settings.langfuse_public_key:
+        return NullTracer()
+    return LangfuseTracer(langfuse, public_key=settings.langfuse_public_key)

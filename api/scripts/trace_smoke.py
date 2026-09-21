@@ -120,7 +120,7 @@ def _run(
         connection,
         transport,
         tier_map_from(settings),
-        LangfuseTracer(langfuse),
+        LangfuseTracer(langfuse, public_key=settings.langfuse_public_key or ""),
     )
     question = [
         {"role": "system", "content": "Answer in one short sentence."},

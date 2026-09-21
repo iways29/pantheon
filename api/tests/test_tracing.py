@@ -167,6 +167,31 @@ def test_calls_in_one_run_share_a_trace(langfuse: Langfuse, spans: Any) -> None:
     assert by_run["run-1"] == {int(langfuse.create_trace_id(seed="run-1"), 16)}
 
 
+def test_trace_names_are_stable_whatever_comes_first(langfuse: Langfuse, spans: Any) -> None:
+    """A run's trace is `agent-run` even when its first observation is a refusal."""
+    tracer = LangfuseTracer(langfuse)
+    tracer.blocked(context={"run_id": "run-9"}, tags=[], run_id="run-9", detail={"code": "x"})
+    call_in_run(langfuse, "run-9")
+    with tracer.model_call(
+        context={}, tags=[], run_id=None, model="m", messages=[], max_tokens=None, sensitive=False
+    ):
+        pass
+
+    observed = {
+        (
+            span.name,
+            attrs(span).get("langfuse.observation.metadata.run_id"),
+            attrs(span).get("langfuse.trace.name"),
+        )
+        for span in spans()
+    }
+    assert observed == {
+        ("enforce-call-gates", "run-9", "agent-run"),
+        ("call-model", "run-9", "agent-run"),
+        ("call-model", None, "call-model"),
+    }
+
+
 def call_in_run(langfuse: Langfuse, run: str) -> None:
     # The gateway's run_id is a runs.id foreign key, so grouping is checked at
     # the tracer boundary rather than by seeding runs rows.

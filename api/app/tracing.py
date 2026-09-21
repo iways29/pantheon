@@ -143,7 +143,9 @@ class _GenerationRecorder:
             # OpenRouter's own charge for this request, ingested rather than
             # inferred, so the trace agrees with model_calls.
             cost_details={"total": cost_usd},
-            metadata={"provider": provider or "", "latency_ms": str(latency_ms)},
+            # Latency is not repeated here: Langfuse measures it from the
+            # observation's own start and end.
+            metadata={"provider": provider or ""},
         )
 
     def failed(self, *, code: str, message: str) -> None:
@@ -166,10 +168,11 @@ class LangfuseTracer:
         max_tokens: int | None,
         sensitive: bool,
     ) -> Iterator[CallRecorder]:
+        trace_context, trace_name = self._trace_placement(run_id, default="call-model")
         with (
-            propagate_attributes(tags=tags),
+            propagate_attributes(tags=tags, trace_name=trace_name),
             self._langfuse.start_as_current_observation(
-                trace_context=self._trace_context(run_id),
+                trace_context=trace_context,
                 name="call-model",
                 as_type="generation",
                 model=model,
@@ -190,10 +193,11 @@ class LangfuseTracer:
         run_id: str | None,
         detail: dict[str, Any],
     ) -> None:
+        trace_context, trace_name = self._trace_placement(run_id, default="call-model")
         with (
-            propagate_attributes(tags=tags),
+            propagate_attributes(tags=tags, trace_name=trace_name),
             self._langfuse.start_as_current_observation(
-                trace_context=self._trace_context(run_id),
+                trace_context=trace_context,
                 name="enforce-call-gates",
                 as_type="guardrail",
                 input=context,
@@ -205,13 +209,26 @@ class LangfuseTracer:
         ):
             pass
 
-    def _trace_context(self, run_id: str | None) -> dict[str, str] | None:
-        """Group a run's calls into one trace, unless a parent is already open."""
+    def _trace_placement(
+        self, run_id: str | None, *, default: str
+    ) -> tuple[dict[str, str] | None, str | None]:
+        """Where an observation lands: its trace context and the trace's name.
+
+        Inside an open observation (Step 3's run), it simply nests and leaves
+        the trace name to the parent. Otherwise a run's calls share a trace
+        seeded from run_id, named `agent-run`; a call outside any run is its
+        own `call-model` trace. Naming the trace explicitly keeps it stable:
+        left alone, it would take the name of whichever observation came
+        first, so a run that opened with a refused call would be named after
+        the guardrail and drop out of dashboard filters.
+        """
         # Asked of OpenTelemetry directly: Langfuse's get_current_trace_id()
         # logs an error whenever no span is open, which here is the normal case.
-        if run_id is None or trace.get_current_span().get_span_context().is_valid:
-            return None
-        return {"trace_id": self._langfuse.create_trace_id(seed=run_id)}
+        if trace.get_current_span().get_span_context().is_valid:
+            return None, None
+        if run_id is None:
+            return None, default
+        return {"trace_id": self._langfuse.create_trace_id(seed=run_id)}, "agent-run"
 
 
 def tracer_from(langfuse: Langfuse | None) -> Tracer:

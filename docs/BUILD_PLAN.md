@@ -67,6 +67,8 @@ Done when: a run can be killed mid-way and resumed from its checkpoint; the run'
 
 Show: cost per run for the first agent, a budget-block demo, a kill-switch demo, and the projected monthly cost at a few run volumes. The owner sets the daily budget before anything else is built.
 
+**Reported 2026-09-21** (evidence in ADR 006): research agent on the cheap tier, $0.000226 mean per run over 8 real runs; about $45/month of platform cost plus $0.68/month in models at 100 runs/day. **Owner decision: the `research` department's daily budget is $0.25.**
+
 ## Step 4: Triggers and safety (M)
 
 Build:

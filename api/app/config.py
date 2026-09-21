@@ -38,6 +38,18 @@ class Settings(BaseSettings):
     # rejected, so a stray Supabase signup cannot reach the API.
     owner_user_id: str | None = None
 
+    # --- Model gateway ---------------------------------------------------
+    # The only provider credential. Server-side only, and never prefixed
+    # NEXT_PUBLIC_, which would compile it into the browser bundle.
+    openrouter_api_key: str | None = None
+
+    # Which model each tier resolves to, as JSON:
+    #   {"cheap": "<slug>", "standard": "<slug>", "frontier": "<slug>"}
+    # Slugs come from OpenRouter's model list. Deliberately no default: a
+    # guessed catalogue would be configuration that lies, and an unset tier
+    # refuses loudly rather than falling back to something expensive.
+    model_tiers: str = ""
+
     # Comma-separated browser origins allowed to call this API.
     cors_allow_origins: str = ""
 

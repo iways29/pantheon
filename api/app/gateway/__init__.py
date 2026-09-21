@@ -15,6 +15,7 @@ from app.gateway.errors import (
     TierNotConfigured,
     UpstreamError,
 )
+from app.gateway.factory import gateway_from, tier_map_from, transport_from
 from app.gateway.gateway import AgentRecord, Gateway
 from app.gateway.tiers import TIERS, TierMap
 from app.gateway.transport import (
@@ -41,4 +42,7 @@ __all__ = [
     "TierNotConfigured",
     "Transport",
     "UpstreamError",
+    "gateway_from",
+    "tier_map_from",
+    "transport_from",
 ]

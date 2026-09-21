@@ -14,11 +14,11 @@ Checks, each reported ok / FAIL with the error:
    documentation says transaction mode cannot support.
 2. prepare_threshold=0, what LangGraph's own from_conn_string() uses.
 3. prepare_threshold=None, Supabase's documented fix for psycopg.
-4. The checkpointer's connect-time settings (`options=-c role=service_role
-   -c search_path=langgraph,public`): the role so it may use the private
-   `langgraph` schema, the path so LangGraph's unqualified table names resolve
-   there. Checked on every statement across autocommit transactions, since
-   under transaction pooling each one may land on a different backend.
+4. The checkpointer's connect-time search_path (`options=-c
+   search_path=langgraph,public`), so LangGraph's unqualified table names
+   resolve to the private schema. Checked on every statement across
+   autocommit transactions, since under transaction pooling each one may land
+   on a different backend. Also that the login role may write there.
 5. SET LOCAL ROLE plus request.jwt.claims inside one transaction, which is how
    app.db.acting_as keeps RLS in force.
 6. Pipeline mode, which LangGraph's PostgresSaver uses for its writes.
@@ -72,18 +72,20 @@ def _repeat_query(dsn: str, **connect_kwargs: object) -> Callable[[], str]:
 
 
 def _checkpointer_options(dsn: str) -> str:
-    options = "-c role=service_role -c search_path=langgraph,public"
+    options = "-c search_path=langgraph,public"
     with psycopg.connect(dsn, autocommit=True, prepare_threshold=None, options=options) as conn:
-        seen = {
-            (role, path.replace(" ", ""))
-            for role, path in (
-                conn.execute("select current_user, current_setting('search_path')").fetchone()
-                for _ in range(REPEATS)
-            )
+        paths = {
+            conn.execute("select current_setting('search_path')").fetchone()[0].replace(" ", "")
+            for _ in range(REPEATS)
         }
-    if seen != {("service_role", "langgraph,public")}:
-        raise AssertionError(f"connect-time settings not held on every statement: {sorted(seen)}")
-    return "role and search_path held on every statement"
+        writable = conn.execute(
+            "select has_table_privilege(current_user, 'langgraph.checkpoints', 'insert')"
+        ).fetchone()[0]
+    if paths != {"langgraph,public"}:
+        raise AssertionError(f"search_path not held on every statement: {sorted(paths)}")
+    if not writable:
+        raise AssertionError("the login role cannot write langgraph.checkpoints")
+    return "search_path held on every statement; login role can write checkpoints"
 
 
 def _set_local_role(dsn: str) -> str:
@@ -116,7 +118,7 @@ def main(argv: list[str]) -> int:
         _check("default auto-prepare (threshold 5)", _repeat_query(dsn)),
         _check("prepare_threshold=0 (LangGraph)", _repeat_query(dsn, prepare_threshold=0)),
         _check("prepare_threshold=None", _repeat_query(dsn, prepare_threshold=None)),
-        _check("role + search_path via connect options", lambda: _checkpointer_options(dsn)),
+        _check("checkpointer search_path + write access", lambda: _checkpointer_options(dsn)),
         _check("SET LOCAL ROLE + claims within a transaction", lambda: _set_local_role(dsn)),
         _check("pipeline mode", lambda: _pipeline(dsn)),
     ]

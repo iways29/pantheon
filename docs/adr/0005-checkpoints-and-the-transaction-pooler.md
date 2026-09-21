@@ -1,6 +1,6 @@
 # ADR 005: Checkpoints in a private schema, reached through the transaction pooler
 
-- **Status:** Accepted; the live pooler probe is still to run (see Verification)
+- **Status:** Accepted; verified against Supabase's transaction pooler on 2026-09-21
 - **Date:** 2026-09-21
 - **Step:** 3 (First agent end to end); resolves Open decision 4
 
@@ -46,13 +46,12 @@ to work under it:
   documented fix for psycopg. `acting_as` already scopes the role and the JWT
   claims to one transaction with `SET LOCAL`, which pooling preserves.
 - **The checkpointer opens its own connection** (`app/agents/checkpointer.py`)
-  with `autocommit=True` and `prepare_threshold=None`, plus two connect-time
-  options:
-  - `role=service_role`, so only the backend can reach the checkpoint schema,
-    and it bypasses RLS there;
-  - `search_path=langgraph,public`, so the library's unqualified table names
-    resolve to the private schema. This has to be a connect-time option: a
-    `SET` would not survive to the next transaction under the pooler.
+  with `autocommit=True` and `prepare_threshold=None`. It connects as the
+  backend's own login, like the rest of the app. On Supabase that is
+  `postgres`, which owns the checkpoint schema. `search_path=langgraph,public`
+  is a connect-time option, so the library's unqualified table names resolve
+  to the private schema. It has to be connect-time, because a `SET` would not
+  survive to the next transaction under the pooler.
 - **The checkpoint tables come from our own migration**
   (`20260921040000_langgraph_checkpoints.sql`), in a `langgraph` schema that
   the Data API does not expose. `anon` and `authenticated` are revoked by
@@ -66,17 +65,30 @@ to work under it:
 
 ## Verification
 
-- Locally, against plain Postgres as a non-superuser role:
-  `scripts/pooler_probe.py` passes all six checks, and the lifecycle tests run
-  the real checkpointer end to end.
-- **Against Supabase's pooler: not yet run.** It needs the owner's pooler
-  connection string. The run decides one open question: whether Supavisor's
-  transaction mode passes the connect-time `options` through to Postgres.
-  Supabase's docs do not say.
-- **If it does not,** the fallback is a dedicated login role for the
-  checkpointer, with `search_path` and `role` set on the role itself
-  (`ALTER ROLE ... SET`). Role-level settings apply on every backend the
-  pooler opens. The owner would create that role's password by hand.
+`scripts/pooler_probe.py` was run against the project's transaction pooler
+(`aws-0-us-west-2.pooler.supabase.com:6543`) on 2026-09-21:
+
+| Check | Result |
+| --- | --- |
+| `prepare_threshold=0`, LangGraph's default | **Fails**: `DuplicatePreparedStatement` |
+| `prepare_threshold=None` | ok |
+| Connect-time `search_path`, on every statement | ok |
+| Connect-time `role` | **Ignored**: statements ran as `postgres` |
+| `SET LOCAL ROLE` + JWT claims within a transaction | ok |
+| Pipeline mode, which the saver uses for writes | ok |
+
+The first row confirms the problem this ADR exists for. The ignored `role`
+changed the design. An earlier draft had the checkpointer connect as
+`service_role`; it now connects as the backend login instead. Migration
+`20260921050000` makes that work everywhere:
+
+- The org_id trigger becomes `SECURITY DEFINER`, so it can read the run
+  through RLS whoever writes the checkpoint.
+- Backend-only row policies cover logins that are merely members of
+  `service_role`, such as the local test role.
+
+`anon` and `authenticated` still have no privilege on the schema. The
+dedicated-role fallback is not needed.
 
 ## Consequences
 

@@ -121,7 +121,7 @@ Done when: the owner can see real cost per agent per day and has budget alerts c
 1. **Trigger mechanism:** Vercel Cron, Supabase `pg_cron` plus database webhooks, or a queue.
 2. **Tracing:** ~~LangSmith vs Langfuse.~~ Decided: Langfuse Cloud, free Hobby tier. See ADR 004.
 3. **Per-agent spend control:** OpenRouter per-key limits vs application-level budget checks (depends on what the current API supports).
-4. **Checkpointer connection mode** through the Supabase pooler (result of the Step 3 test).
+4. **Checkpointer connection mode** through the Supabase pooler (result of the Step 3 test). ~~Open.~~ Decided: transaction pooler, checkpoints in a private `langgraph` schema. See ADR 005; the live probe against the pooler is still to run.
 5. **HOD pattern:** deepagents subagents vs LangGraph supervisor.
 6. **UI framework:** decided at Step 7.
 

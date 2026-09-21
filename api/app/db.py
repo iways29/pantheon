@@ -23,7 +23,10 @@ _ALLOWED_ROLES = frozenset({"authenticated", "service_role", "anon"})
 
 
 def connect(dsn: str) -> psycopg.Connection:
-    connection = psycopg.connect(dsn, row_factory=dict_row)
+    # prepare_threshold=None turns off psycopg's automatic prepared statements.
+    # Supabase's transaction pooler, the only endpoint Vercel can reach over
+    # IPv4, does not support them (ADR 005); a direct connection loses nothing.
+    connection = psycopg.connect(dsn, row_factory=dict_row, prepare_threshold=None)
     register_vector(connection)
     return connection
 

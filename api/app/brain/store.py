@@ -137,6 +137,19 @@ class Brain:
             row = cursor.fetchone()
         return Fact.from_row(row) if row else None
 
+    def claims_from_run(self, run_id: UUID | str) -> list[str]:
+        """Every claim a run has already stored, in insertion order.
+
+        What lets an agent step that re-runs after a crash skip the facts it
+        wrote the first time instead of duplicating them.
+        """
+        with self._connection.cursor() as cursor:
+            cursor.execute(
+                "select claim from public.facts where created_by_run_id = %s order by created_at",
+                (str(run_id),),
+            )
+            return [row["claim"] for row in cursor.fetchall()]
+
     def search(
         self,
         query: str,

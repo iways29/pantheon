@@ -67,6 +67,8 @@ Done when: a run can be killed mid-way and resumed from its checkpoint; the run'
 
 Show: cost per run for the first agent, a budget-block demo, a kill-switch demo, and the projected monthly cost at a few run volumes. The owner sets the daily budget before anything else is built.
 
+**Reported 2026-09-21** (evidence in ADR 006): research agent on the cheap tier, $0.000226 mean per run over 8 real runs; about $45/month of platform cost plus $0.68/month in models at 100 runs/day. **Owner decision: the `research` department's daily budget is $0.25.**
+
 ## Step 4: Triggers and safety (M)
 
 Build:
@@ -121,7 +123,7 @@ Done when: the owner can see real cost per agent per day and has budget alerts c
 1. **Trigger mechanism:** Vercel Cron, Supabase `pg_cron` plus database webhooks, or a queue.
 2. **Tracing:** ~~LangSmith vs Langfuse.~~ Decided: Langfuse Cloud, free Hobby tier. See ADR 004.
 3. **Per-agent spend control:** OpenRouter per-key limits vs application-level budget checks (depends on what the current API supports).
-4. **Checkpointer connection mode** through the Supabase pooler (result of the Step 3 test).
+4. **Checkpointer connection mode** through the Supabase pooler (result of the Step 3 test). ~~Open.~~ Decided: transaction pooler, checkpoints in a private `langgraph` schema. See ADR 005; the live probe against the pooler is still to run.
 5. **HOD pattern:** deepagents subagents vs LangGraph supervisor.
 6. **UI framework:** decided at Step 7.
 

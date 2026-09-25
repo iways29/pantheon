@@ -709,3 +709,236 @@ def get_department_report(
     except CharterError as error:
         raise HTTPException(error.status, str(error)) from error
     return report
+
+
+# --- MCP servers and their tools (Step 7.7, ADR 025) ------------------------------
+
+
+def get_mcp_gateway() -> Any:  # noqa: ANN401 - overridden in tests
+    from app.mcp_servers.client import McpGateway
+
+    return McpGateway()
+
+
+McpGatewayDep = Annotated[Any, Depends(get_mcp_gateway)]
+
+
+def _mcp_refuse(error: Exception) -> HTTPException:
+    return HTTPException(getattr(error, "status", 400), str(error))
+
+
+def _redirect_uri(settings: Settings) -> str:
+    if not settings.public_api_url:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE, "PUBLIC_API_URL is not set: sign-in cannot return"
+        )
+    return f"{settings.public_api_url.rstrip('/')}/mcp/oauth/callback"
+
+
+class McpServerRequest(BaseModel):
+    name: str
+    url: str
+    auth: Literal["none", "bearer", "oauth"] = "oauth"
+    #: Only for `bearer`. Stored in Vault; never returned.
+    token: str | None = None
+
+
+@router.get("/mcp/servers")
+def get_mcp_servers(principal: OwnerPrincipal, connection: Connection) -> list[dict[str, Any]]:
+    from app.mcp_servers.servers import list_servers
+
+    owner_org(connection, principal.user_id)
+    return [
+        {k: (str(v) if isinstance(v, UUID) else v) for k, v in row.items()}
+        for row in list_servers(connection, user_id=principal.user_id)
+    ]
+
+
+@router.post("/mcp/servers", status_code=status.HTTP_201_CREATED)
+def post_mcp_server(
+    body: McpServerRequest, principal: OwnerPrincipal, connection: Connection
+) -> dict[str, Any]:
+    from app.mcp_servers.servers import McpError, add_server
+
+    org_id = owner_org(connection, principal.user_id)
+    try:
+        server = add_server(
+            connection,
+            user_id=principal.user_id,
+            org_id=org_id,
+            name=body.name,
+            url=body.url,
+            auth=body.auth,
+            token=body.token,
+        )
+    except McpError as error:
+        raise _mcp_refuse(error) from error
+    return {"name": server["name"], "status": server["status"], "auth": server["auth"]}
+
+
+@router.post("/mcp/servers/{name}/connect")
+def connect_mcp_server(
+    name: str,
+    principal: OwnerPrincipal,
+    connection: Connection,
+    settings: Annotated[Settings, Depends(get_settings)],
+    gateway: McpGatewayDep,
+) -> dict[str, Any]:
+    """OAuth: returns the URL to open to sign in. Otherwise lists the tools."""
+    from app.mcp_servers import oauth
+    from app.mcp_servers.servers import McpError, get_server, refresh
+
+    owner_org(connection, principal.user_id)
+    try:
+        server = get_server(connection, user_id=principal.user_id, name=name)
+        if server["auth"] == "oauth":
+            url = oauth.start(
+                connection,
+                user_id=principal.user_id,
+                server=server,
+                redirect_uri=_redirect_uri(settings),
+            )
+            return {"authorize_url": url}
+        return refresh(connection, user_id=principal.user_id, name=name, gateway=gateway).summary()
+    except (McpError, oauth.McpAuthError) as error:
+        raise _mcp_refuse(error) from error
+
+
+@router.get("/mcp/oauth/callback", include_in_schema=False)
+def mcp_oauth_callback(
+    connection: Connection,
+    gateway: McpGatewayDep,
+    state: str = "",
+    code: str = "",
+    iss: str | None = None,
+    error: str | None = None,
+) -> Any:  # noqa: ANN401 - an HTML page
+    """Where the owner's browser lands after signing in. The state, single use
+    and ten minutes long, is what proves this is the sign-in we started."""
+    from fastapi.responses import HTMLResponse
+
+    from app.mcp_servers import oauth
+    from app.mcp_servers.servers import McpError, refresh
+
+    def page(message: str, code_: int = 200) -> HTMLResponse:
+        import html
+
+        return HTMLResponse(
+            f"<!doctype html><title>Pantheon</title><p>{html.escape(message)}</p>",
+            status_code=code_,
+        )
+
+    if error or not state or not code:
+        return page(f"Sign-in did not complete ({error or 'missing code'}).", 400)
+    try:
+        done = oauth.finish(connection, state=state, code=code, iss=iss)
+    except oauth.McpAuthError as failure:
+        return page(str(failure), 400)
+    with as_service_role(connection) as conn:
+        server = conn.execute(
+            "select name from public.mcp_servers where id = %s", (str(done["server_id"]),)
+        ).fetchone()
+    try:
+        report = refresh(connection, user_id=done["user_id"], name=server["name"], gateway=gateway)
+    except (McpError, oauth.McpAuthError) as failure:
+        return page(f"Signed in, but listing the tools failed: {failure}", 502)
+    return page(
+        f"Connected to {server['name']}: {len(report.added)} new tools, all switched off "
+        "until you approve them. You can close this tab."
+    )
+
+
+@router.post("/mcp/servers/{name}/refresh")
+def refresh_mcp_server(
+    name: str, principal: OwnerPrincipal, connection: Connection, gateway: McpGatewayDep
+) -> dict[str, Any]:
+    from app.mcp_servers.oauth import McpAuthError
+    from app.mcp_servers.servers import McpError, refresh
+
+    owner_org(connection, principal.user_id)
+    try:
+        return refresh(connection, user_id=principal.user_id, name=name, gateway=gateway).summary()
+    except (McpError, McpAuthError) as error:
+        raise _mcp_refuse(error) from error
+
+
+@router.get("/mcp/tools")
+def get_mcp_tools(
+    principal: OwnerPrincipal, connection: Connection, server: str | None = None
+) -> list[dict[str, Any]]:
+    """Every MCP tool with exactly what its server says it does, for review."""
+    from app.mcp_servers.servers import list_tools
+
+    owner_org(connection, principal.user_id)
+    rows = list_tools(connection, user_id=principal.user_id, server=server)
+    return [
+        {**row, "approved_at": row["approved_at"].isoformat() if row["approved_at"] else None}
+        for row in rows
+    ]
+
+
+class ApproveToolRequest(BaseModel):
+    risk_class: Literal["R0", "R1", "R2", "R3", "R4"] | None = None
+    approval: Literal["auto", "approval"] | None = None
+    max_calls_per_day: int | None = None
+
+
+@router.post("/mcp/tools/{name}/approve")
+def approve_mcp_tool(
+    name: str, body: ApproveToolRequest, principal: OwnerPrincipal, connection: Connection
+) -> dict[str, Any]:
+    from app.mcp_servers.servers import McpError, approve_tool
+
+    owner_org(connection, principal.user_id)
+    try:
+        return approve_tool(
+            connection,
+            user_id=principal.user_id,
+            name=name,
+            risk_class=body.risk_class,
+            approval=body.approval,
+            max_calls_per_day=body.max_calls_per_day,
+        )
+    except McpError as error:
+        raise _mcp_refuse(error) from error
+
+
+@router.post("/mcp/tools/{name}/off")
+def switch_off_mcp_tool(
+    name: str, principal: OwnerPrincipal, connection: Connection
+) -> dict[str, Any]:
+    from app.mcp_servers.servers import McpError, switch_off
+
+    owner_org(connection, principal.user_id)
+    try:
+        switch_off(connection, user_id=principal.user_id, name=name)
+    except McpError as error:
+        raise _mcp_refuse(error) from error
+    return {"name": name, "enabled": False}
+
+
+class AgentToolsRequest(BaseModel):
+    add: list[str] = []
+    remove: list[str] = []
+
+
+@router.post("/agents/{name}/tools")
+def post_agent_tools(
+    name: str, body: AgentToolsRequest, principal: OwnerPrincipal, connection: Connection
+) -> dict[str, Any]:
+    """Assign tools to an agent, built-in or MCP alike."""
+    from app.agents.admin import set_tools
+
+    org_id = owner_org(connection, principal.user_id)
+    try:
+        tools = set_tools(
+            connection,
+            user_id=principal.user_id,
+            org_id=org_id,
+            name=name,
+            add=body.add,
+            remove=body.remove,
+        )
+    except AgentAdminError as error:
+        raise _refuse(error) from error
+    return {"name": name, "allowed_tools": tools}

@@ -90,6 +90,11 @@ class Settings(BaseSettings):
     # Comma-separated browser origins allowed to call this API.
     cors_allow_origins: str = ""
 
+    # This API's public address, e.g. https://api.example.com (with any root
+    # path). MCP sign-ins return the owner's browser to
+    # <PUBLIC_API_URL>/mcp/oauth/callback (ADR 025).
+    public_api_url: str = ""
+
     # Set when the API is mounted under a path prefix (e.g. "/api" behind a
     # single-project rewrite). Empty when it serves its own domain root.
     api_root_path: str = ""

@@ -68,7 +68,13 @@ def apply_charter(
     report = ApplyReport(department, version)
 
     with acting_as(connection, user_id=str(user_id)) as conn, conn.cursor() as cursor:
-        missing_tools = sorted({t for a in charter.agents for t in a.allowed_tools} - set(REGISTRY))
+        # Built-in tools come from code; MCP tools from the servers the owner added.
+        cursor.execute(
+            "select name from public.tools where org_id = %s and source = 'mcp'", (str(org_id),)
+        )
+        mcp_tools = {r["name"] for r in cursor.fetchall()}
+        wanted = {t for a in charter.agents for t in a.allowed_tools}
+        missing_tools = sorted(wanted - set(REGISTRY) - mcp_tools)
         if missing_tools:
             raise CharterError(f"Tools not built yet: {', '.join(missing_tools)}")
         cursor.execute(

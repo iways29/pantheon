@@ -73,4 +73,6 @@ def agent_services() -> dict[str, Any]:
             writer=session.writer,
         )
 
-    return {"fetcher": fetch, "links": links}
+    from app.mcp_servers.client import McpGateway
+
+    return {"fetcher": fetch, "links": links, "mcp": McpGateway()}

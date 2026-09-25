@@ -20,7 +20,8 @@ decision desk, autonomy and limits; ADRs 017 to 023, including pause versus kill
 but not live**; the Step 7 Milestone was reported and nothing past it
 starts until the owner says go. **Step 8.0 and 8.1** (charters, Research and
 Intelligence; ADR 024) are built and tested; waiting on the owner's sources and
-a deploy for the five live mornings. 448 tests pass.
+a deploy for the five live mornings. **Step 7.7** (MCP tools; ADR 025) is built
+and tested. 464 tests pass.
 
 ## Working agreement with the owner (keep to it)
 
@@ -47,7 +48,8 @@ a deploy for the five live mornings. 448 tests pass.
 | --- | --- |
 | GitHub | `iways29/pantheon` |
 | Supabase project | `epelwbiehczkkgqtgkqt` (name `pantheon`, us-west-2), reachable through the Supabase MCP |
-| Migrations applied to Supabase | all of `supabase/migrations/` through `20260926120000_department_charters.sql` (2026-09-26, owner's go) |
+| Migrations applied to Supabase | all of `supabase/migrations/` through `20260926140000_event_order.sql` (2026-09-26, owner's go) |
+| Supabase Vault | holds MCP server credentials (checked live 2026-09-26: stored encrypted, read back, removed) |
 | Seeded live (2026-09-26) | 3 department charters (research final; executive and marketing drafts; not applied), 9 starter Jev gates (32 questions), 6 tools, Jev price, embedding model `openai/text-embedding-3-small`. Not yet: `scripts.brain reembed` (3 old facts use the hashing stand-in and are invisible to search until then) |
 | Vercel team | `team_6UC1DSN83JcGLrVJC3P8aXE6` |
 | API project | `pantheon-api` (`prj_XHno72KOypj7fapEIXze9XtZZJMR`), production `https://api-xi-opal-67.vercel.app`, deploys from `main` |
@@ -107,7 +109,7 @@ those; the API's 401 versus 503 answers reveal whether `TRIGGER_SECRET` is set.
   (the graph), `runs.py` (leased, resumable runs), `prompts.py`, `triggers.py`,
   `starter_prompts.py`. `api/app/internal.py` the endpoint the scheduler calls.
 - `supabase/migrations/` versioned SQL (RLS on every table). `docs/adr/` ADRs
-  0001 to 0024. `docs/BUILD_PLAN.md` is the source of truth for order.
+  0001 to 0025. `docs/BUILD_PLAN.md` is the source of truth for order.
 
 ## What to do next
 
@@ -125,6 +127,10 @@ those; the API's 401 versus 503 answers reveal whether `TRIGGER_SECRET` is set.
    `scripts.department sources research --topic ... --source https://...`,
    then `apply research`, then `enable research`; after five weekday mornings,
    `scripts.department report research` is the Milestone report.
+6. MCP (Step 7.7): set `PUBLIC_API_URL` in Vercel to the API's address, deploy,
+   then `scripts.mcp add higgsfield <its MCP URL>` and `scripts.mcp connect
+   higgsfield` (opens the sign-in; a bearer token goes in `MCP_TOKEN` instead),
+   `scripts.mcp tools`, `approve`, `assign`.
 
 ## Prompt to paste into the new chat
 

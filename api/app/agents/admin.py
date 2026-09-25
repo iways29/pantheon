@@ -188,6 +188,47 @@ def set_enabled(
     return summary
 
 
+def set_tools(
+    connection: psycopg.Connection,
+    *,
+    user_id: UUID | str,
+    org_id: UUID | str,
+    name: str,
+    add: list[str] | None = None,
+    remove: list[str] | None = None,
+) -> list[str]:
+    """Give an agent tools, or take them away. Built-in or MCP, the same way.
+
+    A tool must exist in the org's `tools` table; it may be switched off
+    (the runtime refuses it until it is on). The agents audit writes the event.
+    """
+    add, remove = add or [], remove or []
+    with acting_as(connection, user_id=str(user_id)) as conn, conn.cursor() as cursor:
+        if add:
+            cursor.execute(
+                "select name from public.tools where org_id = %s and name = any(%s)",
+                (str(org_id), add),
+            )
+            unknown = sorted(set(add) - {r["name"] for r in cursor.fetchall()})
+            if unknown:
+                raise AgentAdminError(f"No such tools: {', '.join(unknown)}")
+        cursor.execute(
+            """
+            update public.agents
+               set allowed_tools = array(
+                     select distinct t from unnest(allowed_tools || %s::text[]) t
+                      where t <> all(%s::text[]) order by t)
+             where org_id = %s and name = %s
+            returning allowed_tools
+            """,
+            (add, remove, str(org_id), name),
+        )
+        row = cursor.fetchone()
+    if row is None:
+        raise AgentNotFound(f"No agent {name!r}")
+    return list(row["allowed_tools"])
+
+
 def list_agents(
     connection: psycopg.Connection, *, user_id: UUID | str, org_id: UUID | str
 ) -> list[AgentSummary]:

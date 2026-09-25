@@ -19,6 +19,7 @@ dependencies = [
     "psycopg-pool>=3.2",
     "langchain>=1.4.2,<2",
     "deepagents>=0.7.19",
+    "mcp>=2.2,<3",
 ]
 
 [dependency-groups]

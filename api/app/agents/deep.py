@@ -130,9 +130,14 @@ def _tools(scope: DeepScope) -> list[StructuredTool]:
         allowed = _runtime(scope, s).allowed()
     tools = []
     for row in allowed:
-        spec = REGISTRY[row["name"]]
+        # Built-in tools bring their Pydantic model; an MCP tool its server's
+        # JSON Schema (ADR 025). Either way every call goes through the runtime.
+        if row["source"] == "mcp":
+            name, schema = row["name"], row["input_schema"] or {"type": "object"}
+        else:
+            name, schema = row["name"], REGISTRY[row["name"]].args
 
-        def call(_name: str = spec.name, **kwargs: Any) -> str:  # noqa: ANN401
+        def call(_name: str = name, **kwargs: Any) -> str:  # noqa: ANN401
             with scope.session() as session:
                 result = _runtime(scope, session).call(_name, kwargs)
             # Committed above: the held call, its approval and the task's
@@ -144,7 +149,7 @@ def _tools(scope: DeepScope) -> list[StructuredTool]:
 
         tools.append(
             StructuredTool.from_function(
-                func=call, name=spec.name, description=row["description"], args_schema=spec.args
+                func=call, name=name, description=row["description"], args_schema=schema
             )
         )
     return tools
@@ -171,6 +176,7 @@ def _runtime(scope: DeepScope, session: Any) -> ToolRuntime:  # noqa: ANN401
             links=links(session) if callable(links) else None,
             fetcher=services.get("fetcher"),
             judge=getattr(session, "judge", None),
+            mcp=services.get("mcp"),
             extras={"task_id": str(scope.task_id)} if scope.task_id else {},
         )
     )

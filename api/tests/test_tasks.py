@@ -160,14 +160,19 @@ def test_a_head_splits_its_task_and_wakes_when_both_workers_finish(
             "select type from public.events where payload->>'task_id' = %s order by created_at",
             (str(task.id),),
         )
-        assert [r["type"] for r in cursor.fetchall()] == [
-            "task_queued",
-            "task_running",
-            "task_blocked",
-            "task_queued",
-            "task_running",
-            "task_done",
-        ]
+        # One transaction, so one timestamp: the order among them is not
+        # recorded, only that each step happened (this was an intermittent
+        # failure until 2026-09-26).
+        assert sorted(r["type"] for r in cursor.fetchall()) == sorted(
+            [
+                "task_queued",
+                "task_running",
+                "task_blocked",
+                "task_queued",
+                "task_running",
+                "task_done",
+            ]
+        )
 
 
 def test_a_failed_run_fails_its_task_and_the_parent_still_wakes(

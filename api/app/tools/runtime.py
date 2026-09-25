@@ -58,6 +58,8 @@ class ToolContext:
     links: Any = None
     fetcher: Any = None
     tasks: Any = None
+    #: Talks to MCP servers (ADR 025); None: the default Streamable HTTP one.
+    mcp: Any = None
     #: The judge (tool-risk gate, decision desk); None without TypeSafe.
     judge: Any = None
     extras: dict[str, Any] = field(default_factory=dict)
@@ -94,7 +96,8 @@ class ToolRuntime:
         with self._ctx.connection.cursor() as cursor:
             cursor.execute(
                 """
-                select t.name, t.description, t.risk_class, t.approval
+                select t.name, t.description, t.risk_class, t.approval, t.source,
+                       t.input_schema
                 from public.tools t
                 join public.agents a on a.org_id = t.org_id
                 where a.id = %s and t.enabled and t.name = any(a.allowed_tools)
@@ -102,7 +105,11 @@ class ToolRuntime:
                 """,
                 (str(self._ctx.agent_id),),
             )
-            return [dict(row) for row in cursor.fetchall() if row["name"] in REGISTRY]
+            return [
+                dict(row)
+                for row in cursor.fetchall()
+                if row["source"] == "mcp" or row["name"] in REGISTRY
+            ]
 
     def call(
         self,
@@ -111,8 +118,8 @@ class ToolRuntime:
         *,
         idempotency_key: str | None = None,
     ) -> ToolResult:
-        spec = REGISTRY.get(name)
         config = self._config(name)
+        spec = spec_for(name, config)
         if spec is None or config is None:
             return self._finish(name, {}, None, "refused", {"error": f"No tool named {name!r}"})
         if not config["enabled"]:
@@ -141,6 +148,14 @@ class ToolRuntime:
         if config["approval"] == "approval" or risk == "R4":
             return self._hold(
                 name, payload, key, risk, "The tool always needs the owner's approval"
+            )
+        if config["max_calls_per_day"] and self._calls_today(name) >= config["max_calls_per_day"]:
+            return self._finish(
+                name,
+                payload,
+                None,
+                "refused",
+                {"error": f"{name} has reached its {config['max_calls_per_day']} calls for today"},
             )
         level, mode = self._mode(risk)
         if mode == "hold":
@@ -290,12 +305,22 @@ class ToolRuntime:
     def _config(self, name: str) -> dict[str, Any] | None:
         with self._ctx.connection.cursor() as cursor:
             cursor.execute(
-                "select risk_class, approval, enabled, timeout_seconds, max_output_chars "
-                "from public.tools where org_id = %s and name = %s",
+                "select name, description, risk_class, approval, enabled, timeout_seconds, "
+                "max_output_chars, source, mcp_server_id, remote_name, input_schema, "
+                "max_calls_per_day from public.tools where org_id = %s and name = %s",
                 (str(self._ctx.org_id), name),
             )
             row = cursor.fetchone()
         return dict(row) if row else None
+
+    def _calls_today(self, name: str) -> int:
+        with self._ctx.connection.cursor() as cursor:
+            cursor.execute(
+                "select count(*) as n from public.tool_calls where org_id = %s and tool = %s "
+                "and status = 'ok' and created_at >= date_trunc('day', now())",
+                (str(self._ctx.org_id), name),
+            )
+            return int(cursor.fetchone()["n"])
 
     def _granted(self, name: str) -> bool:
         with self._ctx.connection.cursor() as cursor:
@@ -487,5 +512,21 @@ def _capped(output: dict[str, Any], limit: int) -> dict[str, Any]:
     return {"truncated": True, "output": text[: max(limit - 100, 0)]}
 
 
-def spec_for(name: str) -> ToolSpec | None:
-    return REGISTRY.get(name)
+def spec_for(name: str, config: dict[str, Any] | None = None) -> ToolSpec | None:
+    """A built-in tool from code, or an MCP tool built from its `tools` row (ADR 025)."""
+    if config is None or config.get("source", "builtin") == "builtin":
+        return REGISTRY.get(name)
+    from app.mcp_servers.definition import args_model
+    from app.mcp_servers.servers import call
+
+    return ToolSpec(
+        name=name,
+        description=config["description"],
+        args=args_model(name, config["input_schema"] or {}),
+        risk_class=config["risk_class"],
+        # Anything that may change something acts at most once per key.
+        side_effect=config["risk_class"] not in ("R0", "R2"),
+        handler=lambda ctx, args: call(ctx, config, args.model_dump(mode="json")),
+        timeout_seconds=config["timeout_seconds"],
+        max_output_chars=config["max_output_chars"],
+    )

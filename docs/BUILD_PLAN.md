@@ -442,6 +442,34 @@ API and `scripts.approvals`, never by editing the database or code.
 Follow-up (owner, 2026-09-26): the old kill switch is now called **pause**,
 and a real **kill** cancels everything for good (ADR 023).
 
+### Step 7.7: Tools from MCP servers (M)
+
+Added by the owner, 2026-09-26: tools must be configurable, not only built in.
+The owner adds a remote MCP server (Streamable HTTP), signs in once, reads each
+tool it offers and switches it on with a risk class, and gives it to any agent.
+First server: Higgsfield (the owner's subscription).
+- MCP tools are ordinary `tools` rows, so every rule for tools applies: the
+  autonomy ladder, the tool-risk gate, approvals, idempotency, loop detection,
+  the pause and the kill, the audit trail.
+- A new tool starts off; approval is of its exact definition, and a server that
+  changes a tool switches it off until the owner approves again.
+- R4 (spending, irreversible) always asks; a daily cap per tool.
+- What a tool returns is screened before an agent reads it.
+- Credentials in Supabase Vault, backend only. OAuth in two requests (start,
+  then the browser's callback), with refresh; bearer tokens for servers without
+  OAuth sign-up.
+- Official MCP Python SDK (`mcp` 2.x, MIT); remote servers only (Vercel cannot run
+  local ones).
+
+Done when: a server's tools are listed switched off; an approved tool runs for an
+agent in a real run; a changed definition switches it off; an R4 tool waits for
+the owner and runs once; returned text is screened; no credential can be read by a
+person's or an agent's session.
+
+**Status (2026-09-26):** built and tested (ADR 025), against an in-memory MCP server
+from the SDK and a scripted authorization server. Live: set `PUBLIC_API_URL`, deploy,
+then `scripts.mcp add higgsfield <url>` and `connect`.
+
 ### Milestone after Step 7 (stop and report)
 
 Show: a head delegating to two workers under all limits, an approval-held action
@@ -485,6 +513,8 @@ The proposal, charters and starting budgets are in
   hard content rules: `docs/business/the-unreal-lab.md`. Each draft records the
   facts it relied on (`artifact_claims`) so a wrong fact can be traced to every
   piece that used it.
+  **Visuals (owner, 2026-09-26):** images and video through the owner's Higgsfield
+  subscription, as MCP tools (Step 7.7): R4, approved per piece, with a daily cap.
   Needs from the owner: what the business sells and to whom, example content in the
   voice they want, the channels, and any banned claims. Sales and Outreach follows it.
 - **8.4 Product and Engineering (L).** Any change to code is an approval, always.
@@ -554,7 +584,10 @@ configurable, with no code edits. Screens over the Step 6 backend and the Step 7
 6. **Morning routine.** Add, edit, enable and disable the scheduled tasks: what each
    agent does each morning, at what time, on which days. Shows what fired and what it
    cost.
-7. **Tools and approvals.** Which agent may use which tool, the approval queue as
+7. **Tools and approvals.** **MCP servers (Step 7.7):** add a server by its
+   address, sign in with one click, read each tool it offers (description, inputs,
+   suggested risk), switch it on with a risk class and an optional daily cap, and
+   see tools switched off because their server changed them. Which agent may use which tool, the approval queue as
    the **decision desk** (right-hand idea 1: one card per decision with Jev's
    recommendation, the facts checked and similar past decisions; one tap to
    decide), agreement per action type, and the autonomy ladder.
@@ -612,6 +645,14 @@ configured.
 14. **Where labels come from** for calibration: the owner's approval decisions (best, slow to accumulate), a frontier-model ensemble (fast, costs a few cents, needs spot checks), and the owner's spot checks. Recommended: start with the ensemble, verify a sample by hand, add approvals as they accumulate.
 15. **Entity and relationship layer.** The owner's earlier `unreal-lab-os` sketch models companies, people and investors with `FOUNDED`, `INVESTED_IN`, `ADVISES` and `COMPETES_WITH` edges and warm-introduction paths. Our brain holds facts only. ~~Now or later?~~ **Decided: later** (owner, 2026-09-25). When it is time: `entities` and `relationships` tables in **Postgres** (not the graph database, which is outside the locked stack); short paths are recursive queries.
 16. **How Pantheon relates to The Unreal Lab.** ~~Open.~~ **Decided (owner, 2026-09-25): Pantheon is for the owner to operate The Unreal Lab.** Expanding to onboarded companies is a possible future and not fixed, so only the multi-tenant groundwork is built. **Founder Relations is deferred** (nothing arrives yet; applications come by email).
+
+## After phase 1: agent-to-agent (A2A)
+
+Owner, 2026-09-26: once the project is complete, consider A2A, so Pantheon's
+agents can work with agents in other systems (and be offered to them). Nothing
+is built for it now; the groundwork that keeps it open is already there: tasks
+are durable rows with results, every agent has a charter and a tool list, and
+every outside action goes through the approval queue.
 
 ## Explicitly out of scope for phase 1
 

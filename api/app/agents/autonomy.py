@@ -71,3 +71,26 @@ def resume_paused_runs(
     with acting_as(connection, user_id=str(user_id)) as conn, conn.cursor() as cursor:
         cursor.execute("select public.resume_paused_runs(%s, %s) as n", (str(org_id), reason))
         return int(cursor.fetchone()["n"])
+
+
+def set_pause(
+    connection: psycopg.Connection, *, user_id: UUID | str, org_id: UUID | str, on: bool
+) -> bool:
+    """The pause switch: nothing runs while on; paused work can be resumed."""
+    with acting_as(connection, user_id=str(user_id)) as conn, conn.cursor() as cursor:
+        cursor.execute("select public.set_pause(%s, %s) as on", (str(org_id), on))
+        return bool(cursor.fetchone()["on"])
+
+
+def kill_everything(
+    connection: psycopg.Connection,
+    *,
+    user_id: UUID | str,
+    org_id: UUID | str,
+    note: str | None = None,
+) -> dict[str, Any]:
+    """The kill: pause, then cancel every unfinished run and task and expire
+    every pending approval. Nothing killed can be resumed (ADR 023)."""
+    with acting_as(connection, user_id=str(user_id)) as conn, conn.cursor() as cursor:
+        cursor.execute("select public.kill_everything(%s, %s) as result", (str(org_id), note))
+        return dict(cursor.fetchone()["result"])

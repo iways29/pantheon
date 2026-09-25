@@ -566,3 +566,36 @@ def resume_runs(
     except psycopg.errors.CheckViolation as error:
         raise HTTPException(status.HTTP_409_CONFLICT, str(error).splitlines()[0]) from error
     return {"resumed": count}
+
+
+# --- Pause and kill (ADR 023) ---------------------------------------------------
+
+
+class PauseRequest(BaseModel):
+    on: bool
+
+
+@router.post("/pause")
+def pause(body: PauseRequest, principal: OwnerPrincipal, connection: Connection) -> dict[str, Any]:
+    """Pause everything (resumable), or lift the pause."""
+    from app.agents.autonomy import set_pause
+
+    org_id = owner_org(connection, principal.user_id)
+    return {"paused": set_pause(connection, user_id=principal.user_id, org_id=org_id, on=body.on)}
+
+
+class KillRequest(BaseModel):
+    #: Must be the word KILL: a kill cannot be undone.
+    confirm: str
+    note: str | None = None
+
+
+@router.post("/kill")
+def kill(body: KillRequest, principal: OwnerPrincipal, connection: Connection) -> dict[str, Any]:
+    """Stop everything for good: every unfinished run and task is cancelled."""
+    from app.agents.autonomy import kill_everything
+
+    if body.confirm != "KILL":
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, 'A kill needs "confirm": "KILL"')
+    org_id = owner_org(connection, principal.user_id)
+    return kill_everything(connection, user_id=principal.user_id, org_id=org_id, note=body.note)

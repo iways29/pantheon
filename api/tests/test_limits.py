@@ -20,7 +20,13 @@ import psycopg
 import pytest
 from pydantic import BaseModel
 
-from app.agents.autonomy import resume_paused_runs, set_level, suggestions
+from app.agents.autonomy import (
+    kill_everything,
+    resume_paused_runs,
+    set_level,
+    set_pause,
+    suggestions,
+)
 from app.agents.runs import advance_run
 from app.db import acting_as, as_service_role, connect
 from app.gateway import ModelResponse, ToolCall
@@ -549,3 +555,118 @@ def test_the_owner_sets_levels_reads_suggestions_and_resumes_through_the_api(
             (str(tenants.org_a),),
         )
     assert api.post("/runs/resume", json={}).status_code == 409, "not while it is still on"
+
+
+# --- The kill: everything stops for good (ADR 023) ---------------------------------------
+
+
+@dataclass
+class KilledTeam(ScriptedTeam):
+    """The team, but the owner kills everything while w1 is working."""
+
+    dsn: str = ""
+    org_id: UUID | None = None
+    user_id: UUID | None = None
+    killed: dict[str, Any] | None = None
+
+    def complete(self, *, model: str, messages: list[dict[str, Any]], **kw: Any) -> ModelResponse:
+        response = super().complete(model=model, messages=messages, **kw)
+        user = next(m["content"] for m in messages if m["role"] == "user")
+        if "founding date" in user and self.killed is None:
+            with connect(self.dsn) as connection:
+                self.killed = kill_everything(
+                    connection, user_id=self.user_id, org_id=self.org_id, note="Stop it all"
+                )
+        return response
+
+
+def test_a_kill_ends_the_whole_tree_and_nothing_comes_back(
+    dsn: str,
+    team: Team,  # noqa: F811
+) -> None:
+    model = KilledTeam(dsn=dsn, org_id=team.org_id, user_id=team.user_id)
+    rt = team_runtime(dsn, model)
+    with connect(dsn) as connection:
+        root = order(
+            connection,
+            user_id=team.user_id,
+            org_id=team.org_id,
+            agent="lead",
+            title="Brief on Acme Corp",
+            instructions="Founding date and headcount.",
+        )
+    (head_run,) = tick(dsn)
+    advance_run(rt, head_run, deadline_seconds=60)
+    w1_run, w2_run = tick(dsn)
+
+    # w1 is mid-turn when the kill lands: its invocation ends, and stays, cancelled.
+    stopped = advance_run(rt, w1_run, deadline_seconds=60)
+
+    assert (stopped.status, stopped.stop_reason) == ("cancelled", "killed")
+    assert model.killed == {
+        "runs": 2,
+        "tasks": 3,
+        "approvals": 0,
+        "note": "Stop it all",
+        "killed_by": str(team.user_id),
+    }
+    with connect(dsn) as connection, as_service_role(connection) as conn:
+        tasks = {
+            r["status"]
+            for r in conn.execute(
+                "select status from public.tasks where org_id = %s", (str(team.org_id),)
+            )
+        }
+        w2 = conn.execute(
+            "select status, stop_reason from public.runs where id = %s", (str(w2_run),)
+        ).fetchone()
+    assert tasks == {"cancelled"}
+    assert (w2["status"], w2["stop_reason"]) == ("cancelled", "killed")
+    with pytest.raises(Exception, match=r"cancelled"):
+        advance_run(rt, w2_run, deadline_seconds=60)
+
+    # Lifting the pause afterwards brings none of it back.
+    with connect(dsn) as connection:
+        set_pause(connection, user_id=team.user_id, org_id=team.org_id, on=False)
+        assert resume_paused_runs(connection, user_id=team.user_id, org_id=team.org_id) == 0
+    assert tick(dsn) == [] and wakeups(dsn) == []
+    assert status(dsn, root.id) == "cancelled"
+
+
+def test_a_kill_expires_held_actions_so_they_can_never_be_approved(
+    db: psycopg.Connection, tenants: Tenants, agent: UUID
+) -> None:
+    from app.approvals import decide
+
+    with acting_as(db, user_id=str(tenants.user_a), agent_id=str(agent)) as conn:
+        held = runtime(conn, tenants, agent, ScriptedJev()).call("r4_test", {"text": "x"})
+    with pytest.raises(psycopg.errors.InsufficientPrivilege):
+        with acting_as(db, user_id=str(tenants.user_a), agent_id=str(agent)) as conn:
+            conn.execute("select public.kill_everything(%s)", (str(tenants.org_a),))
+
+    result = kill_everything(db, user_id=tenants.user_a, org_id=tenants.org_a)
+    after = decide(
+        db, user_id=tenants.user_a, approval_id=held.output["approval_id"], decision="approve"
+    )
+
+    assert result["approvals"] == 1 and after["status"] == "expired"
+    with acting_as(db, user_id=str(tenants.user_a), agent_id=str(agent)) as conn:
+        again = runtime(conn, tenants, agent, ScriptedJev()).call("r4_test", {"text": "x"})
+    assert again.status == "refused" and "Killed" in again.output["error"]
+    with as_service_role(db) as conn:
+        paused = conn.execute(
+            "select public.kill_switch_on(%s) as on", (str(tenants.org_a),)
+        ).fetchone()["on"]
+    assert paused, "a kill also pauses, so nothing new starts"
+
+
+def test_the_kill_needs_the_word_kill_through_the_api(
+    api: Any, db: psycopg.Connection, tenants: Tenants
+) -> None:
+    refused = api.post("/kill", json={"confirm": "yes"})
+    paused = api.post("/pause", json={"on": True})
+    killed = api.post("/kill", json={"confirm": "KILL", "note": "test"})
+
+    assert refused.status_code == 422
+    assert paused.json() == {"paused": True}
+    assert killed.status_code == 200 and killed.json()["note"] == "test"

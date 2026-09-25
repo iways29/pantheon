@@ -16,9 +16,9 @@ eval still owed. The right-hand design (`docs/design/right-hand.md`, seven
 ideas) is folded into Steps 7.5 to 11. Owner content rule (2026-09-26):
 English only everywhere except the website's vetted verses. **Step 7**
 (tool calling, tools, tasks and delegation, runners, approvals and the
-decision desk, autonomy and limits; ADRs 017 to 022) is **built and tested
-but not live**; the Step 7 Milestone report is owed and nothing past it
-starts until the owner says go. 434 tests pass.
+decision desk, autonomy and limits; ADRs 017 to 023, including pause versus kill) is **built and tested
+but not live**; the Step 7 Milestone was reported and nothing past it
+starts until the owner says go. 437 tests pass.
 
 ## Working agreement with the owner (keep to it)
 
@@ -104,12 +104,12 @@ those; the API's 401 versus 503 answers reveal whether `TRIGGER_SECRET` is set.
   (the graph), `runs.py` (leased, resumable runs), `prompts.py`, `triggers.py`,
   `starter_prompts.py`. `api/app/internal.py` the endpoint the scheduler calls.
 - `supabase/migrations/` versioned SQL (RLS on every table). `docs/adr/` ADRs
-  0001 to 0022. `docs/BUILD_PLAN.md` is the source of truth for order.
+  0001 to 0023. `docs/BUILD_PLAN.md` is the source of truth for order.
 
 ## What to do next
 
 1. **With the owner's go-ahead**, apply every migration from
-   `20260925050000` to `20260926090000` to Supabase through the Supabase MCP.
+   `20260925050000` to `20260926100000` to Supabase through the Supabase MCP.
    Then, against the pooler: `scripts.agent seed` (starter gates, Jev price,
    embedding model), `scripts.brain reembed` (moves old facts to the real
    embedding model; until then they are invisible to search), and

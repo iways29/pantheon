@@ -439,6 +439,8 @@ defaults in `tool_mode`); limits are in `delegation_limits`. Runs stopped by
 the kill switch wait for the owner to resume them (`scripts.approvals resume`).
 Until Step 11 gives them a screen (item 10), they are changed through the owner
 API and `scripts.approvals`, never by editing the database or code.
+Follow-up (owner, 2026-09-26): the old kill switch is now called **pause**,
+and a real **kill** cancels everything for good (ADR 023).
 
 ### Milestone after Step 7 (stop and report)
 
@@ -567,7 +569,9 @@ configurable, with no code edits. Screens over the Step 6 backend and the Step 7
       department per day, tasks per agent per hour, the loop limit, when a task
       counts as stuck, and the promotion bar (decisions and agreement);
     - the tool-risk gate's thresholds per risk class (with the Judge screen);
-    - the kill switch, and "resume paused runs" once it is off;
+    - **Pause** (stops everything where it is; "resume paused runs" once
+      lifted) and **Kill** (cancels every unfinished task, run and held
+      action for good, with a typed confirmation), ADR 023;
     - standing rules for the decision desk (right-hand idea 4), listed and
       addable in plain English.
 11. **More to come.** The owner will add further features; the tab is a list of

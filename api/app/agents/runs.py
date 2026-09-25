@@ -566,11 +566,14 @@ def _finish(connection: psycopg.Connection, run: _Run, stop: _Stop) -> None:
         cursor.execute(
             """
             update public.runs
-               set status = %s,
-                   stop_reason = %s,
-                   error = %s,
+               -- A run killed while this invocation was working stays
+               -- cancelled (ADR 023): nothing an invocation reports undoes it.
+               set status = case when status = 'cancelled' then status else %s end,
+                   stop_reason = case when status = 'cancelled' then stop_reason else %s end,
+                   error = case when status = 'cancelled' then error else %s end,
                    output = coalesce(%s::jsonb, output),
-                   ended_at = case when %s in ('succeeded', 'failed', 'cancelled')
+                   ended_at = case when status = 'cancelled' then coalesce(ended_at, now())
+                                   when %s in ('succeeded', 'failed', 'cancelled')
                                    then now() end,
                    lease_expires_at = null
              where id = %s
@@ -611,13 +614,16 @@ def _kill_switch_on(connection: psycopg.Connection, org_id: UUID) -> bool:
 
 
 def _task_cancelled(connection: psycopg.Connection, run: _Run) -> bool:
-    """A run stops when the owner (or a decision) cancelled its task."""
-    if run.task_id is None:
-        return False
+    """A run stops when it, or its task, was cancelled: by the owner, a
+    decision, or the kill (ADR 023)."""
     with as_service_role(connection) as conn, conn.cursor() as cursor:
-        cursor.execute("select status from public.tasks where id = %s", (str(run.task_id),))
+        cursor.execute(
+            "select r.status = 'cancelled' or coalesce(t.status = 'cancelled', false) as stop "
+            "from public.runs r left join public.tasks t on t.id = r.task_id where r.id = %s",
+            (str(run.id),),
+        )
         row = cursor.fetchone()
-    return bool(row and row["status"] == "cancelled")
+    return bool(row and row["stop"])
 
 
 def _lifecycle_event(

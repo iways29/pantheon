@@ -9,6 +9,8 @@
     uv run python -m scripts.approvals level writer L2        # the autonomy ladder (ADR 022)
     uv run python -m scripts.approvals suggest [--all]        # promotions the history supports
     uv run python -m scripts.approvals resume [--reason kill_switch]
+    uv run python -m scripts.approvals pause on|off           # stop for now (resumable)
+    uv run python -m scripts.approvals kill --note "why"      # stop everything for good
 
 A decision with a note, and every rule, is written to the brain as the
 owner's (through the write gate), so later proposals are checked against it.
@@ -19,7 +21,13 @@ import argparse
 import json
 import sys
 
-from app.agents.autonomy import resume_paused_runs, set_level, suggestions
+from app.agents.autonomy import (
+    kill_everything,
+    resume_paused_runs,
+    set_level,
+    set_pause,
+    suggestions,
+)
 from app.approvals import decide, decision_statement, list_pending, remember
 from app.config import Settings
 from app.db import acting_as, as_service_role, connect
@@ -54,6 +62,10 @@ def main(argv: list[str]) -> int:
         default="kill_switch",
         choices=["kill_switch", "budget_exceeded", "agent_disabled", "department_disabled"],
     )
+    pause = commands.add_parser("pause", help="pause everything (resumable), or lift it")
+    pause.add_argument("state", choices=["on", "off"])
+    kill = commands.add_parser("kill", help="cancel every unfinished run and task, for good")
+    kill.add_argument("--note")
     args = parser.parse_args(argv)
 
     settings = Settings(_env_file=ROOT_ENV)  # type: ignore[call-arg]
@@ -78,6 +90,16 @@ def main(argv: list[str]) -> int:
                     f"{row['agreed']}/{row['recommended']} agreed; "
                     f"{row['current_level']} -> {row['suggested_level']}"
                 )
+            return 0
+        if args.command == "pause":
+            on = set_pause(connection, user_id=user_id, org_id=org_id, on=args.state == "on")
+            print("paused" if on else "running")
+            return 0
+        if args.command == "kill":
+            if input("This cancels all unfinished work for good. Type KILL: ") != "KILL":
+                print("Not killed.")
+                return 1
+            print(kill_everything(connection, user_id=user_id, org_id=org_id, note=args.note))
             return 0
         if args.command == "resume":
             count = resume_paused_runs(

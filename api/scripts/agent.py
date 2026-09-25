@@ -9,14 +9,20 @@ would: start_run, then advance_run in bounded invocations until it stops.
     uv run python -m scripts.agent ask "What is ...?" [--max-steps N] [--max-tokens N]
     uv run python -m scripts.agent resume <run-id>
     uv run python -m scripts.agent show <run-id>
+    uv run python -m scripts.agent trigger list
+    uv run python -m scripts.agent trigger add <name> --time 08:30 --tz <zone> --question "..."
+    uv run python -m scripts.agent trigger enable|disable|remove <name>
+    uv run python -m scripts.agent retry <run-id>
     uv run python -m scripts.agent prompt list [--slot answer]
     uv run python -m scripts.agent prompt set <slot> --file prompt.txt [--note "why"]
     uv run python -m scripts.agent prompt activate <slot> <version>
 
 `seed` creates, idempotently, the org, the user's membership, a `research`
 department with a daily budget, a `researcher` agent on the cheap tier, and
-that agent's starting prompts. `prompt` reads and changes the prompts in the
-database: a `set` takes effect on the next run, with no code change.
+that agent's starting prompts. `trigger` manages the morning routine: fixed
+tasks at fixed times, once a day, created switched off. `prompt` reads and
+changes the prompts in the database: a `set` takes effect on the next run,
+with no code change.
 The user must already exist in auth.users; on a local database with no
 Supabase Auth, `--create-local-user` adds a stand-in row.
 
@@ -33,8 +39,8 @@ from pathlib import Path
 import psycopg
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from app.agents import prompts
-from app.agents.runs import RunReport, Runtime, advance_run, report, start_run
+from app.agents import prompts, triggers
+from app.agents.runs import RunReport, Runtime, advance_run, report, retry_run, start_run
 from app.agents.starter_prompts import STARTER_PROMPTS
 from app.brain.embeddings import HashingEmbedder
 from app.config import Settings
@@ -86,6 +92,23 @@ def main(argv: list[str]) -> int:
     prompt_activate.add_argument("slot")
     prompt_activate.add_argument("version", type=int)
 
+    retry = commands.add_parser("retry", help="resume a run that failed on an error")
+    retry.add_argument("run_id")
+
+    trigger = commands.add_parser("trigger", help="manage the scheduled morning tasks")
+    trigger_commands = trigger.add_subparsers(dest="trigger_command", required=True)
+    trigger_commands.add_parser("list", help="every trigger and whether it is on")
+    trigger_add = trigger_commands.add_parser("add", help="create a trigger (switched off)")
+    trigger_add.add_argument("name")
+    trigger_add.add_argument("--time", required=True, help="local time, 24-hour, e.g. 08:30")
+    trigger_add.add_argument("--tz", required=True, help="IANA zone, e.g. Asia/Kolkata")
+    trigger_add.add_argument("--question", required=True, help="the task the agent is given")
+    trigger_add.add_argument("--days", default="mon-fri", help="mon-fri, all, or mon,wed,fri")
+    trigger_add.add_argument("--grace", type=int, help="minutes after its time it may still run")
+    trigger_add.add_argument("--max-tokens", type=int)
+    for verb in ("enable", "disable", "remove"):
+        trigger_commands.add_parser(verb).add_argument("name")
+
     show = commands.add_parser("show", help="print a run and its events")
     show.add_argument("run_id")
 
@@ -104,6 +127,15 @@ def main(argv: list[str]) -> int:
     if args.command == "prompt":
         with connect(dsn) as connection:
             return _prompt(connection, args)
+
+    if args.command == "trigger":
+        with connect(dsn) as connection:
+            return _trigger(connection, args)
+
+    if args.command == "retry":
+        with connect(dsn) as connection:
+            retry_run(connection, args.run_id)
+        args.command = "resume"
 
     if args.command == "show":
         with connect(dsn) as connection:
@@ -136,6 +168,49 @@ def main(argv: list[str]) -> int:
     result = drive(runtime, run_id)
     _print(result)
     return 0 if result.status == "succeeded" else 1
+
+
+def _trigger(connection: psycopg.Connection, args: argparse.Namespace) -> int:
+    org_id, user_id, agent_id = _setup(connection)
+    command = args.trigger_command
+    try:
+        if command == "list":
+            for t in triggers.list_triggers(connection, user_id=user_id):
+                state = "ON " if t.enabled else "off"
+                days = ",".join(str(d) for d in t.days_of_week)
+                print(f"{state} {t.name}  {t.time_of_day:%H:%M} {t.timezone}  days {days}")
+                print(f"    {t.task.get('question')}   (last fired for {t.last_slot or 'never'})")
+            return 0
+        if command == "add":
+            t = triggers.create(
+                connection,
+                user_id=user_id,
+                org_id=org_id,
+                agent_id=agent_id,
+                name=args.name,
+                task={"question": args.question},
+                time_of_day=triggers.parse_time(args.time),
+                timezone=args.tz,
+                days_of_week=triggers.parse_days(args.days),
+                grace_minutes=args.grace,
+                max_tokens=args.max_tokens,
+            )
+            print(f"created '{t.name}' (off). Turn it on: trigger enable {t.name}")
+        elif command == "remove":
+            triggers.delete(connection, user_id=user_id, name=args.name)
+            print(f"removed '{args.name}'")
+        else:
+            t = triggers.set_enabled(
+                connection, user_id=user_id, name=args.name, enabled=command == "enable"
+            )
+            print(f"'{t.name}' is now {'ON' if t.enabled else 'off'}")
+    except triggers.TriggerNotFound:
+        print(f"No trigger named '{args.name}'", file=sys.stderr)
+        return 1
+    except (ValueError, psycopg.Error) as error:
+        print(f"Could not do that: {error}", file=sys.stderr)
+        return 1
+    return 0
 
 
 def _prompt(connection: psycopg.Connection, args: argparse.Namespace) -> int:

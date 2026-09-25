@@ -174,6 +174,41 @@ def start_run(
     return existing["id"]
 
 
+def retry_run(connection: psycopg.Connection, run_id: UUID | str) -> None:
+    """Put a run that failed on an error back to where it can be resumed.
+
+    Only runs that failed with `error` qualify: a hit cap is a decision, not a
+    fault, and stays final. The run keeps its checkpoint, so resuming it
+    re-runs only the step that failed, and every side effect in a step is
+    idempotent (facts are keyed by run and claim), so the retry cannot repeat
+    an action that already happened.
+    """
+    with as_service_role(connection) as conn, conn.cursor() as cursor:
+        cursor.execute(
+            """
+            update public.runs
+               set status = 'paused', stop_reason = 'retry', error = null,
+                   ended_at = null, lease_expires_at = null, wake_count = 0
+             where id = %s and status = 'failed' and stop_reason = 'error'
+            returning org_id, agent_id
+            """,
+            (str(run_id),),
+        )
+        row = cursor.fetchone()
+        if row is None:
+            cursor.execute(
+                "select status, stop_reason from public.runs where id = %s", (str(run_id),)
+            )
+            current = cursor.fetchone()
+            if current is None:
+                raise RunNotFound(str(run_id))
+            raise RunBusy(
+                f"Run {run_id} is {current['status']} ({current['stop_reason']}); "
+                "only a run that failed on an error can be retried"
+            )
+        _event(cursor, row["org_id"], run_id, row["agent_id"], "run_retry_requested", {})
+
+
 def advance_run(runtime: Runtime, run_id: UUID | str, *, deadline_seconds: float) -> RunReport:
     """Advance a run as far as it will go within `deadline_seconds`."""
     deadline = time.monotonic() + deadline_seconds

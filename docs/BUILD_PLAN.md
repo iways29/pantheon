@@ -78,6 +78,10 @@ Build:
 
 Done when: sending the same trigger twice produces one run and one side effect; a failed run can be retried without duplicating actions.
 
+Owner requirement, built into this step: **a fixed morning routine, not an all-day loop.** Triggers are rows the owner edits (agent, task, time, weekdays, time zone); they fire at most once per local day, start switched off, and never run past the kill switch, a disabled agent or department, or the department's budget. The owner can step in at any time. See ADR 008.
+
+**Status:** code, migrations and tests done (ADR 008). Going live needs the owner's steps listed in the ADR (apply migrations, set `TRIGGER_SECRET`, two Vault secrets, deploy).
+
 ## Step 5: TypeSafe judge (M)
 
 Build `api/app/judge/`.
@@ -135,7 +139,8 @@ A new tab in the web app: the owner's place to change everything configurable, w
 3. **Knowledge.** Upload documents with a scope picker (company, department or agent), and see what each agent can read.
 4. **Add links.** Paste a URL, preview the extracted facts, then an optional "Push to brain" button.
 5. **Model management.** The tier and per-department model screen from Step 7 lives here.
-6. **More to come.** The owner will add further features; the tab is built as a list of sections so a new one is a new section, not a redesign.
+6. **Morning routine.** Add, edit, enable and disable the scheduled tasks (Step 4's `triggers`): what each agent does each morning, at what time, on which days. Shows what fired and what it cost.
+7. **More to come.** The owner will add further features; the tab is built as a list of sections so a new one is a new section, not a redesign.
 
 Done when: the owner can do items 1 to 5 entirely from the browser, every change is audited to `events`, and none of them needed a code change or redeploy.
 
@@ -147,7 +152,7 @@ Done when: the owner can see real cost per agent per day and has budget alerts c
 
 ## Open decisions (present options and recommend; do not decide silently)
 
-1. **Trigger mechanism:** Vercel Cron, Supabase `pg_cron` plus database webhooks, or a queue.
+1. **Trigger mechanism:** ~~Vercel Cron, pg_cron plus webhooks, or a queue.~~ Decided: Supabase `pg_cron` + `pg_net`, with schedules stored in a table. See ADR 008.
 2. **Tracing:** ~~LangSmith vs Langfuse.~~ Decided: Langfuse Cloud, free Hobby tier. See ADR 004.
 3. **Per-agent spend control:** OpenRouter per-key limits vs application-level budget checks (depends on what the current API supports).
 4. **Checkpointer connection mode** through the Supabase pooler (result of the Step 3 test). ~~Open.~~ Decided: transaction pooler, checkpoints in a private `langgraph` schema. See ADR 005; the live probe against the pooler is still to run.

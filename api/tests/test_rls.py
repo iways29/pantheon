@@ -10,12 +10,14 @@ import pytest
 
 from app.brain import Brain, HashingEmbedder
 from app.db import acting_as, as_service_role
-from tests.conftest_db import Tenants
+from tests.conftest_db import Tenants, admit
 
 
 def seed_fact(db: psycopg.Connection, org_id, claim: str) -> None:
     with as_service_role(db) as connection:
-        Brain(connection, HashingEmbedder()).insert_fact(org_id=org_id, claim=claim)
+        Brain(connection, HashingEmbedder()).insert_fact(
+            org_id=org_id, claim=claim, admission=admit(connection, org_id)
+        )
 
 
 def test_connection_is_subject_to_rls(db: psycopg.Connection) -> None:
@@ -67,10 +69,14 @@ def test_a_member_cannot_write_into_another_org(db: psycopg.Connection, tenants:
     # pytest.raises wraps the transaction rather than sitting inside it: an
     # error caught within the block would leave the savepoint unwound and the
     # connection in a failed state for everything after.
+    # A genuine org B judgment, so the only thing refusing the write is the
+    # insert policy under test.
+    with as_service_role(db) as connection:
+        admission = admit(connection, tenants.org_b)
     with pytest.raises(psycopg.errors.InsufficientPrivilege):
         with acting_as(db, user_id=str(tenants.user_a)) as connection:
             Brain(connection, HashingEmbedder()).insert_fact(
-                org_id=tenants.org_b, claim="Planted by org A"
+                org_id=tenants.org_b, claim="Planted by org A", admission=admission
             )
 
 
@@ -80,7 +86,9 @@ def test_a_member_cannot_read_another_orgs_fact_by_id(
     """A known id is not a way around the policy."""
     with as_service_role(db) as connection:
         planted = Brain(connection, HashingEmbedder()).insert_fact(
-            org_id=tenants.org_b, claim="Org B's private roadmap"
+            org_id=tenants.org_b,
+            claim="Org B's private roadmap",
+            admission=admit(connection, tenants.org_b),
         )
 
     with acting_as(db, user_id=str(tenants.user_a)) as connection:

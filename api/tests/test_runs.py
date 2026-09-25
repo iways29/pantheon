@@ -33,15 +33,20 @@ from app.agents.runs import RunBusy, Runtime, advance_run, report, start_run
 from app.agents.starter_prompts import STARTER_PROMPTS
 from app.brain import Brain
 from app.brain.embeddings import HashingEmbedder
+from app.brain.write_gate import BrainWriter
 from app.db import acting_as, as_service_role, connect
 from app.gateway import Gateway, ModelResponse, TierMap
+from app.judge import Judge
+from app.judge.starter_gates import STARTER_GATES
+from app.judge.store import seed_gates
 from app.tracing import LangfuseTracer, NullTracer
+from tests.scripted_jev import ScriptedJev, choice
 
 TIERS = TierMap(
     models={"cheap": "vendor/small", "standard": "vendor/mid", "frontier": "vendor/big"}
 )
 QUESTION = "What is the boiling point of water at sea level?"
-ANSWER = "Water boils at 100 degrees Celsius at sea level."
+ANSWER = "Water boils at 100 degrees Celsius at sea level. Sea-level pressure is 1 atm."
 CLAIMS = ["Water boils at 100 degrees Celsius at sea level.", "Sea-level pressure is 1 atm."]
 
 
@@ -123,6 +128,12 @@ def live(dsn: str) -> Iterator[LiveOrg]:
                 "select public.publish_agent_prompt(%s, %s, %s, 'Starting prompt')",
                 (str(ids.agent_id), slot, body),
             )
+        cursor.execute(
+            "insert into public.model_prices (org_id, provider, model, input_usd_per_mtok) "
+            "values (%s, 'typesafe', 'jev-1.13.0', 0.042)",
+            (str(ids.org_id),),
+        )
+    seed_gates(connection, user_id=ids.user_id, org_id=ids.org_id, gates=STARTER_GATES)
     try:
         yield ids
     finally:
@@ -132,9 +143,16 @@ def live(dsn: str) -> Iterator[LiveOrg]:
         connection.close()
 
 
-def runtime(dsn: str, model: ScriptedModel) -> Runtime:
+def runtime(dsn: str, model: ScriptedModel, jev: ScriptedJev | None = None) -> Runtime:
+    # The scripted TypeSafe reports zero tokens, so the run's token and cost
+    # totals below are the research model's alone.
     return Runtime(
-        dsn=dsn, transport=model, tiers=TIERS, embedder=HashingEmbedder(), tracer=NullTracer()
+        dsn=dsn,
+        transport=model,
+        tiers=TIERS,
+        embedder=HashingEmbedder(),
+        tracer=NullTracer(),
+        systemone=jev or ScriptedJev(),
     )
 
 
@@ -189,6 +207,65 @@ def test_a_run_answers_stores_facts_and_rolls_up_cost(dsn: str, live: LiveOrg) -
     )
     assert sorted(f["claim"] for f in stored) == sorted(CLAIMS)
     assert all(f["created_by_run_id"] == run_id and f["source"] == "agent:research" for f in stored)
+    assert [w["outcome"] for w in result.output["fact_writes"]] == ["accepted", "accepted"]
+
+
+def test_every_fact_a_run_stores_passed_the_write_gate(dsn: str, live: LiveOrg) -> None:
+    jev = ScriptedJev()
+    run_id = new_run(dsn, live)
+
+    advance_run(runtime(dsn, ScriptedModel(), jev), run_id, deadline_seconds=60)
+
+    stored = sql(
+        dsn,
+        """
+        select f.claim, count(j.id) as answers
+        from public.facts f
+        join public.judgments j on j.request_id = f.admitted_by and j.gate = 'brain_claim'
+        where f.created_by_run_id = %s
+        group by f.claim
+        """,
+        str(run_id),
+    )
+    assert sorted(r["claim"] for r in stored) == sorted(CLAIMS)
+    assert all(r["answers"] == 6 for r in stored)
+    evidence = {c["state"]["evidence"] for c in jev.calls_for("support")}
+    assert evidence == {ANSWER}, "the answer is the evidence for the claims taken from it"
+
+
+def test_a_claim_the_gate_rejects_is_not_stored(dsn: str, live: LiveOrg) -> None:
+    def reject_pressure(state: Any, questions: dict[str, Any]) -> dict[str, Any]:
+        if state.get("claim") == CLAIMS[1]:
+            return {"support": choice("says_nothing", list(questions["support"].criteria))}
+        return {}
+
+    run_id = new_run(dsn, live)
+    result = advance_run(
+        runtime(dsn, ScriptedModel(), ScriptedJev(respond=reject_pressure)),
+        run_id,
+        deadline_seconds=60,
+    )
+
+    assert result.status == "succeeded"
+    writes = {w["claim"]: w["outcome"] for w in result.output["fact_writes"]}
+    assert writes == {CLAIMS[0]: "accepted", CLAIMS[1]: "rejected"}
+    stored = sql(dsn, "select claim from public.facts where created_by_run_id = %s", str(run_id))
+    assert [f["claim"] for f in stored] == [CLAIMS[0]]
+
+
+def test_without_typesafe_a_run_answers_but_stores_nothing(dsn: str, live: LiveOrg) -> None:
+    model = ScriptedModel()
+    no_judge = Runtime(
+        dsn=dsn, transport=model, tiers=TIERS, embedder=HashingEmbedder(), tracer=NullTracer()
+    )
+    run_id = new_run(dsn, live)
+
+    result = advance_run(no_judge, run_id, deadline_seconds=60)
+
+    assert result.status == "succeeded"
+    assert result.output["answer"] == ANSWER
+    assert [w["outcome"] for w in result.output["fact_writes"]] == ["not_judged"] * 2
+    assert sql(dsn, "select id from public.facts where org_id = %s", str(live.org_id)) == []
 
 
 def test_every_lifecycle_transition_is_an_event(dsn: str, live: LiveOrg) -> None:
@@ -268,7 +345,9 @@ def test_a_repeated_store_step_does_not_duplicate_facts(dsn: str, live: LiveOrg)
         @contextmanager
         def session() -> Iterator[Session]:
             with acting_as(connection, user_id=str(live.user_id)) as conn:
-                yield Session(Gateway(conn, ScriptedModel(), TIERS), Brain(conn, HashingEmbedder()))
+                gateway = Gateway(conn, ScriptedModel(), TIERS, systemone=ScriptedJev())
+                brain = Brain(conn, HashingEmbedder())
+                yield Session(gateway, brain, BrainWriter(conn, brain, Judge(conn, gateway)))
 
         scope = RunScope(run_id, live.org_id, live.agent_id, STARTER_PROMPTS["research"], session)
         build_graph(scope).invoke({"question": QUESTION})

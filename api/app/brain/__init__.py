@@ -6,10 +6,11 @@ a hurry.
 """
 
 from app.brain.embeddings import EMBEDDING_DIMENSIONS, Embedder, HashingEmbedder
-from app.brain.store import Brain, BrainError, Fact, FactMatch
+from app.brain.store import Admission, Brain, BrainError, Fact, FactMatch
 
 __all__ = [
     "EMBEDDING_DIMENSIONS",
+    "Admission",
     "Brain",
     "BrainError",
     "Embedder",

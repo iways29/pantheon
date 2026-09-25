@@ -11,6 +11,7 @@ gates are visible. Writes act as the named user, as prompt edits do.
 """
 
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
@@ -22,6 +23,8 @@ from app.db import acting_as
 from app.gateway.systemone import JsonText, Question
 from app.judge.errors import GateMisconfigured, GateNotConfigured
 from app.judge.policy import FailMode, Policy
+from app.judge.starter_gates import MODEL as STARTER_MODEL
+from app.judge.starter_gates import StarterGate
 
 _QUESTION_COLUMNS = "gate, key, version, type, instructions, criteria, note, active"
 _GATE_COLUMNS = (
@@ -286,3 +289,50 @@ def list_gates(
             (str(org_id),),
         )
         return [GateVersion(**row) for row in cursor.fetchall()]
+
+
+def seed_gates(
+    connection: psycopg.Connection,
+    *,
+    user_id: UUID | str,
+    org_id: UUID | str,
+    gates: Iterable[StarterGate],
+) -> list[str]:
+    """Publish starter gates the org has never had. Returns the gates seeded.
+
+    A gate with any version already is left alone, whatever its state: the
+    owner may have edited or disabled it on purpose.
+    """
+    seeded: list[str] = []
+    for starter in gates:
+        with acting_as(connection, user_id=str(user_id)) as conn, conn.cursor() as cursor:
+            cursor.execute(
+                "select 1 from public.judge_gates where org_id = %s and gate = %s limit 1",
+                (str(org_id), starter.gate),
+            )
+            if cursor.fetchone() is not None:
+                continue
+        for question in starter.questions:
+            publish_question(
+                connection,
+                user_id=user_id,
+                org_id=org_id,
+                gate=starter.gate,
+                key=question.key,
+                type=question.type,
+                instructions=question.instructions,
+                criteria=question.criteria,
+                note=starter.note,
+            )
+        publish_gate(
+            connection,
+            user_id=user_id,
+            org_id=org_id,
+            gate=starter.gate,
+            model=STARTER_MODEL,
+            policy=starter.policy,
+            fail_mode=starter.fail_mode,  # type: ignore[arg-type]
+            note=starter.note,
+        )
+        seeded.append(starter.gate)
+    return seeded

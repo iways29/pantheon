@@ -149,6 +149,16 @@ class Policy(BaseModel):
     #: the fail-open outcome; the last is the fail-closed outcome.
     outcomes: list[str] = Field(min_length=2)
     rules: list[Rule] = Field(default_factory=list)
+    #: Gate-specific numbers the calling code reads (length limits, how many
+    #: neighbours to compare, how long until a volatile fact is rechecked).
+    #: Here so they are data like the thresholds, not constants in code.
+    settings: dict[str, float | int | str | bool] = Field(default_factory=dict)
+
+    def setting(self, name: str, default: float) -> float:
+        value = self.settings.get(name, default)
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise ValueError(f"setting {name!r} must be a number")
+        return float(value)
 
     @model_validator(mode="after")
     def _known_outcomes(self) -> "Policy":

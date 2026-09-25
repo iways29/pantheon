@@ -6,7 +6,8 @@ costs at most the step in flight:
 1. recall   -- find facts in the brain near the question (no model call)
 2. answer   -- answer the question, grounded in what was recalled
 3. extract  -- pull standalone factual claims out of the answer
-4. store    -- write the new claims to the brain, with the run as provenance
+4. store    -- propose the new claims to the brain through its write gate
+               (ADR 010), with the answer as evidence and the run as provenance
 
 Models are reached only through the gateway and facts only through the
 brain. A plain LangGraph graph rather than deepagents: the gateway returns
@@ -34,7 +35,9 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from app.brain import Brain
+from app.brain.write_gate import BrainWriter, FactCandidate
 from app.gateway import Gateway
+from app.judge import JudgeError
 
 AGENT_ROLE = "research"
 
@@ -58,12 +61,17 @@ class ResearchState(TypedDict, total=False):
     answer: str
     claims: list[str]
     stored_fact_ids: list[str]
+    #: What the write gate decided for each claim, in order.
+    fact_writes: list[dict[str, Any]]
 
 
 @dataclass(frozen=True)
 class Session:
     gateway: Gateway
     brain: Brain
+    #: The brain's write gate. None when TypeSafe is not configured, in which
+    #: case nothing can be written: no fact enters the brain unjudged.
+    writer: BrainWriter | None = None
 
 
 @dataclass(frozen=True)
@@ -126,26 +134,48 @@ def build_graph(
         return {"claims": parse_claims(response.text)}
 
     def store(state: ResearchState) -> ResearchState:
-        known = {f["claim"].strip().lower() for f in state.get("recalled", [])}
+        writes: list[dict[str, Any]] = []
+        stored: list[str] = []
         with scope.session() as s:
-            # Re-running this step after a crash must not duplicate facts, so
-            # claims this run already stored are skipped (and a unique index
-            # on run and claim backs that up).
+            # Re-running this step after a crash must not duplicate facts or
+            # judgments, so claims this run already stored are skipped (a
+            # unique index on run and claim backs that up, and held claims
+            # are keyed by run and claim in the approval queue).
             already = {c.strip().lower() for c in s.brain.claims_from_run(scope.run_id)}
-            stored = [
-                str(
-                    s.brain.insert_fact(
-                        org_id=scope.org_id,
-                        claim=claim,
-                        source=f"agent:{AGENT_ROLE}",
-                        source_ref=str(scope.run_id),
-                        created_by_run_id=scope.run_id,
-                    ).id
+            for claim in _unique(state.get("claims", [])):
+                if claim.strip().lower() in already:
+                    continue
+                if s.writer is None:
+                    writes.append({"claim": claim, "outcome": "not_judged"})
+                    continue
+                candidate = FactCandidate(
+                    claim=claim,
+                    source=f"agent:{AGENT_ROLE}",
+                    source_text=state.get("answer", ""),
+                    source_ref=str(scope.run_id),
                 )
-                for claim in _unique(state.get("claims", []))
-                if claim.strip().lower() not in known | already
-            ]
-        return {"stored_fact_ids": stored}
+                try:
+                    result = s.writer.propose(
+                        candidate,
+                        org_id=scope.org_id,
+                        agent_id=scope.agent_id,
+                        run_id=scope.run_id,
+                    )
+                except JudgeError as error:
+                    # A gate missing or misconfigured: nothing is written,
+                    # and the run says why rather than failing outright.
+                    writes.append({"claim": claim, "outcome": "not_judged", "error": error.code})
+                    continue
+                writes.append(
+                    {
+                        "claim": claim,
+                        "outcome": result.outcome,
+                        "fact_id": str(result.fact.id) if result.fact else None,
+                    }
+                )
+                if result.fact is not None:
+                    stored.append(str(result.fact.id))
+        return {"stored_fact_ids": stored, "fact_writes": writes}
 
     graph = StateGraph(ResearchState)
     graph.add_node("recall", recall)

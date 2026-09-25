@@ -214,6 +214,10 @@ contradiction becomes disputed or goes to review; a fabricated quote is rejected
 without a model call; the judgment behind every fact is queryable; and with the
 service down, brain writes fail closed.
 
+**Status (2026-09-25):** done (ADR 010). The research agent's store step uses
+it. Live: apply the migrations, then run `scripts.agent seed` once to publish
+the brain gates.
+
 ### Step 5.3: Content screening and guardrails (M)
 
 Needed before Step 6 fetches web pages or reads uploads.

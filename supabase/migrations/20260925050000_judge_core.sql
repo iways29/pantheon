@@ -52,6 +52,10 @@ declare
 begin
   if tg_op = 'DELETE' then
     subject := old;
+    -- Deleting the org cascades here; there is no org left to audit against.
+    if not exists (select 1 from public.orgs where id = old.org_id) then
+      return old;
+    end if;
   else
     subject := new;
   end if;

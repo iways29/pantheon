@@ -48,8 +48,17 @@ from app.agents.prompts import PromptMissing, resolve_for_run
 from app.agents.research import PROMPT_SLOTS, RunScope, Session, build_graph
 from app.brain import Brain
 from app.brain.embeddings import Embedder
+from app.brain.write_gate import BrainWriter
 from app.db import acting_as, as_service_role, connect
-from app.gateway import Gateway, GatewayError, TierMap, Transport, UpstreamError
+from app.gateway import (
+    Gateway,
+    GatewayError,
+    SystemOneTransport,
+    TierMap,
+    Transport,
+    UpstreamError,
+)
+from app.judge import Judge
 from app.tracing import Tracer
 
 #: Gateway refusals that pause a run until the condition is lifted.
@@ -79,6 +88,8 @@ class Runtime:
     tiers: TierMap
     embedder: Embedder
     tracer: Tracer
+    #: TypeSafe, for the brain write gate. None means no fact can be written.
+    systemone: SystemOneTransport | None = None
     #: How long a claim lasts without renewal. Renewed after every step, so it
     #: only needs to cover one step plus slack.
     lease_seconds: int = 300
@@ -373,10 +384,12 @@ def _next_step_blocked(
 @contextmanager
 def _session(runtime: Runtime, connection: psycopg.Connection, run: _Run) -> Iterator[Session]:
     with acting_as(connection, user_id=str(run.requested_by)) as conn:
-        yield Session(
-            gateway=Gateway(conn, runtime.transport, runtime.tiers, runtime.tracer),
-            brain=Brain(conn, runtime.embedder),
+        gateway = Gateway(
+            conn, runtime.transport, runtime.tiers, runtime.tracer, systemone=runtime.systemone
         )
+        brain = Brain(conn, runtime.embedder)
+        writer = BrainWriter(conn, brain, Judge(conn, gateway)) if runtime.systemone else None
+        yield Session(gateway=gateway, brain=brain, writer=writer)
 
 
 def _claim(connection: psycopg.Connection, run_id: UUID | str, lease_seconds: int) -> _Run:
@@ -537,5 +550,6 @@ def _output(values: dict[str, Any]) -> dict[str, Any]:
         "answer": values.get("answer"),
         "claims": values.get("claims", []),
         "stored_fact_ids": values.get("stored_fact_ids", []),
+        "fact_writes": values.get("fact_writes", []),
         "recalled_fact_ids": [f["id"] for f in values.get("recalled", [])],
     }

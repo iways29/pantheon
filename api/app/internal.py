@@ -23,7 +23,7 @@ from pydantic import BaseModel
 from app.agents.runs import RunBusy, RunNotFound, Runtime, advance_run
 from app.brain.embeddings import HashingEmbedder
 from app.config import Settings, get_settings
-from app.gateway.factory import tier_map_from, transport_from
+from app.gateway.factory import systemone_transport_from, tier_map_from, transport_from
 from app.tracing import tracer_from
 
 #: One invocation's time budget. Vercel's function limit for this app is 60s
@@ -80,6 +80,9 @@ def get_runtime(settings: Annotated[Settings, Depends(get_settings)]) -> Runtime
         tiers=tier_map_from(settings),
         embedder=HashingEmbedder(),
         tracer=tracer_from(settings),
+        # Without a TypeSafe key a run still answers, but writes no facts: no
+        # fact enters the brain unjudged (ADR 010).
+        systemone=systemone_transport_from(settings) if settings.typesafe_api_key else None,
     )
 
 

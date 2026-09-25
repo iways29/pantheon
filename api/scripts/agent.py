@@ -19,10 +19,11 @@ would: start_run, then advance_run in bounded invocations until it stops.
 
 `seed` creates, idempotently, the org, the user's membership, a `research`
 department with a daily budget, a `researcher` agent on the cheap tier, that
-agent's starting prompts, and the price of TypeSafe's Jev model. `trigger`
-manages the morning routine: fixed tasks at fixed times, once a day, created
-switched off. `prompt` reads and changes the prompts in the database: a `set`
-takes effect on the next run, with no code change.
+agent's starting prompts, the price of TypeSafe's Jev model and the starter
+judge gates. `trigger` manages the morning routine: fixed tasks at fixed
+times, once a day, created switched off. `prompt` reads and changes the
+prompts in the database: a `set` takes effect on the next run, with no code
+change.
 The user must already exist in auth.users; on a local database with no
 Supabase Auth, `--create-local-user` adds a stand-in row.
 
@@ -45,7 +46,9 @@ from app.agents.starter_prompts import STARTER_PROMPTS
 from app.brain.embeddings import HashingEmbedder
 from app.config import Settings
 from app.db import as_service_role, connect
-from app.gateway.factory import tier_map_from, transport_from
+from app.gateway.factory import systemone_transport_from, tier_map_from, transport_from
+from app.judge.starter_gates import STARTER_GATES
+from app.judge.store import seed_gates
 from app.tracing import tracer_from
 
 ROOT_ENV = Path(__file__).resolve().parents[2] / ".env"
@@ -149,6 +152,7 @@ def main(argv: list[str]) -> int:
         tiers=tier_map_from(settings),
         embedder=HashingEmbedder(),
         tracer=tracer_from(settings),
+        systemone=systemone_transport_from(settings) if settings.typesafe_api_key else None,
     )
     if args.command == "ask":
         with connect(dsn) as connection:
@@ -306,7 +310,11 @@ def _seed(
             "on conflict (org_id, provider, model) do nothing",
             (org_id,),
         )
+    # The brain write gate's starting questions and thresholds (ADR 010). A
+    # gate the org already has, edited or not, is left alone.
+    seeded = seed_gates(connection, user_id=user_id, org_id=org_id, gates=STARTER_GATES)
     print(f"org {org_id}: department '{DEPARTMENT}' at ${budget:.2f}/day, agent '{AGENT}'")
+    print(f"judge gates seeded: {', '.join(seeded) or 'none (already present)'}")
 
 
 def _setup(connection: psycopg.Connection) -> tuple[str, str, str]:

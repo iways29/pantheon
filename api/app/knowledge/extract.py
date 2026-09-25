@@ -104,6 +104,15 @@ class _TextParser(HTMLParser):
             self.parts.append(f"\n\n<!-- {data.strip()} -->\n\n")
 
 
+def without_comments(text: str) -> str:
+    """The text as a person reads it: the HTML comments html_to_text kept for
+    screening removed. Use it only on text already screened clean, for what
+    agents read and extract facts from (tracking snippets and CMS markers
+    are noise there, and cost tokens)."""
+    kept = [p for p in text.split("\n\n") if not (p.startswith("<!--") and p.endswith("-->"))]
+    return "\n\n".join(kept)
+
+
 def _tidy(text: str) -> str:
     paragraphs = []
     for block in text.replace("\r\n", "\n").split("\n\n"):

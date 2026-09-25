@@ -66,3 +66,4 @@ supabase/migrations/  versioned SQL, RLS on every table
 - When something in the plan conflicts with current docs (Vercel, Supabase, OpenRouter, LangGraph, deepagents, TypeSafe), check the live docs, tell the owner what differs, and propose a fix. Do not silently work around it.
 - If a decision is listed under "Open decisions" in the plan, present 2-3 options with cost and complexity tradeoffs and recommend one. Do not decide silently.
 - Never create accounts, enter credentials, or make purchases. List what the owner must do by hand.
+- **Never merge or push to `main` directly.** All work reaches `main` through a pull request that the owner merges (owner, 2026-09-26).

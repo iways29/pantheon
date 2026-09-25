@@ -108,6 +108,7 @@ class Gateway:
         max_tokens: int | None = None,
         tools: list[dict[str, Any]] | None = None,
         tool_choice: str | dict[str, Any] | None = None,
+        plugins: list[dict[str, Any]] | None = None,
     ) -> ModelResponse:
         """Run one model call on behalf of an agent.
 
@@ -145,6 +146,10 @@ class Gateway:
                 if tools:
                     extra = {"tools": tools, "tool_choice": tool_choice}
                     preferences = {**(preferences or {}), "require_parameters": True}
+                if plugins:
+                    # OpenRouter plugins, e.g. web search (ADR 026). Their
+                    # charge is part of the call's reported cost.
+                    extra["plugins"] = plugins
                 response = self._transport.complete(
                     model=model,
                     messages=messages,

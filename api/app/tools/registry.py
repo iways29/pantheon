@@ -6,6 +6,7 @@ table (`seed_tools`), which the owner then edits; the runtime reads the
 table, never these defaults, when deciding whether a call may run.
 """
 
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -35,6 +36,10 @@ class ToolSpec:
     approval: str = "auto"
     timeout_seconds: int = 30
     max_output_chars: int = 8000
+    #: Starting knobs and daily cap, seeded into the tool's row; the owner
+    #: changes them there (ADR 026).
+    settings: dict[str, Any] | None = None
+    max_calls_per_day: int | None = None
 
 
 REGISTRY: dict[str, ToolSpec] = {}
@@ -63,8 +68,8 @@ def seed_tools(
                 """
                 insert into public.tools
                     (org_id, name, description, risk_class, approval, timeout_seconds,
-                     max_output_chars)
-                values (%s, %s, %s, %s, %s, %s, %s)
+                     max_output_chars, settings, max_calls_per_day)
+                values (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 on conflict (org_id, name) do nothing
                 returning name
                 """,
@@ -76,6 +81,8 @@ def seed_tools(
                     "approval" if spec.risk_class == "R4" else spec.approval,
                     spec.timeout_seconds,
                     spec.max_output_chars,
+                    json.dumps(spec.settings or {}),
+                    spec.max_calls_per_day,
                 ),
             )
             if cursor.fetchone():

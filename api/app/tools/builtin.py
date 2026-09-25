@@ -333,3 +333,107 @@ register(
         handler=_brain_hygiene_scan,
     )
 )
+
+
+# --- Live web search (ADR 026) ----------------------------------------------------
+
+
+class SearchWebArgs(_Args):
+    query: str = Field(min_length=3, max_length=300, description="What to search the web for")
+
+
+def _web_search(ctx: ToolContext, args: SearchWebArgs) -> dict[str, Any]:
+    """Search the live web through the gateway (OpenRouter's web plugin).
+
+    The engine, depth, number of results and allowed or excluded sites are the
+    tool row's `settings`, so the owner tunes them without a deploy. Results
+    are untrusted text: screened before an agent may read their excerpts.
+    """
+    if ctx.gateway is None:
+        raise RuntimeError("Web search is not available in this session")
+    with ctx.connection.cursor() as cursor:
+        cursor.execute(
+            "select settings from public.tools where org_id = %s and name = 'web_search'",
+            (str(ctx.org_id),),
+        )
+        row = cursor.fetchone()
+    settings = dict(row["settings"]) if row else {}
+    instruction = settings.pop("instruction", None)
+    if not instruction:
+        raise RuntimeError("web_search has no `instruction` in its settings")
+    plugin = {"id": "web", **{k: v for k, v in settings.items() if v not in (None, [], "")}}
+    response = ctx.gateway.complete(
+        agent_id=ctx.agent_id,
+        run_id=ctx.run_id,
+        max_tokens=300,
+        plugins=[plugin],
+        messages=[
+            {"role": "system", "content": instruction},
+            {"role": "user", "content": args.query},
+        ],
+    )
+    message = ((response.raw.get("choices") or [{}])[0]).get("message") or {}
+    results = []
+    for note in message.get("annotations") or []:
+        cite = note.get("url_citation") or {}
+        if cite.get("url"):
+            results.append(
+                {
+                    "url": cite["url"],
+                    "title": (cite.get("title") or "")[:200],
+                    "excerpt": (cite.get("content") or "")[:1200],
+                }
+            )
+    output: dict[str, Any] = {
+        "query": args.query,
+        "urls": [r["url"] for r in results],
+        "cost_usd": response.cost_usd,
+    }
+    text = "\n\n".join(
+        [response.text] + [f"{r['title']}\n{r['url']}\n{r['excerpt']}" for r in results]
+    )
+    if ctx.judge is None:
+        return output | {"screened": "unscreened", "note": "Excerpts withheld: no screening here"}
+    from app.judge.screening import Screener
+
+    screening = Screener(ctx.connection, ctx.judge, ctx.brain).screen(
+        text,
+        purpose=f"Web search results for: {args.query}",
+        source_kind="web_page",
+        org_id=ctx.org_id,
+        agent_id=ctx.agent_id,
+        source_ref=f"search:{args.query}"[:200],
+        run_id=ctx.run_id,
+    )
+    if screening.label != "clean":
+        return output | {"screened": screening.label, "reasons": list(screening.reasons)}
+    return output | {"screened": "clean", "summary": response.text, "results": results}
+
+
+register(
+    ToolSpec(
+        name="web_search",
+        description=(
+            "Search the live web. Returns result links with short excerpts, screened. "
+            "To add a fact to the brain, read the page with web_fetch_preview and push it."
+        ),
+        args=SearchWebArgs,
+        risk_class="R2",
+        handler=_web_search,
+        timeout_seconds=40,
+        max_calls_per_day=40,
+        settings={
+            # Parallel's fast mode: about $0.001 a search on OpenRouter credits
+            # (docs read 2026-09-26), plus the few tokens of the call itself.
+            "engine": "parallel",
+            "mode": "fast",
+            "max_results": 5,
+            "include_domains": [],
+            "exclude_domains": [],
+            "instruction": (
+                "Answer from the web search results only, in at most five short lines, "
+                "each naming its source. If the results do not answer, say so."
+            ),
+        },
+    )
+)

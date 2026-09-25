@@ -102,6 +102,7 @@ class Transport(Protocol):
         provider_preferences: dict[str, Any] | None = None,
         tools: list[dict[str, Any]] | None = None,
         tool_choice: str | dict[str, Any] | None = None,
+        plugins: list[dict[str, Any]] | None = None,
     ) -> ModelResponse: ...
 
 
@@ -139,6 +140,7 @@ class OpenRouterTransport:
         provider_preferences: dict[str, Any] | None = None,
         tools: list[dict[str, Any]] | None = None,
         tool_choice: str | dict[str, Any] | None = None,
+        plugins: list[dict[str, Any]] | None = None,
     ) -> ModelResponse:
         """One chat completion. With `tools`, the reply may carry tool calls.
 
@@ -160,6 +162,8 @@ class OpenRouterTransport:
                 payload["tool_choice"] = tool_choice
         if provider_preferences:
             payload["provider"] = provider_preferences
+        if plugins:
+            payload["plugins"] = plugins
 
         started = time.monotonic()
         try:

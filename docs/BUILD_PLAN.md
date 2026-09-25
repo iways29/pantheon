@@ -469,6 +469,9 @@ person's or an agent's session.
 **Status (2026-09-26):** built and tested (ADR 025), against an in-memory MCP server
 from the SDK and a scripted authorization server. Live: set `PUBLIC_API_URL`, deploy,
 then `scripts.mcp add higgsfield <url>` and `connect`.
+**Live web search (owner, 2026-09-26; ADR 026):** a `web_search` tool through
+OpenRouter's web plugin, via the gateway (no new vendor), settings and daily cap
+as data, results screened; the Research web researcher uses it.
 
 ### Milestone after Step 7 (stop and report)
 

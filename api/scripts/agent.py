@@ -1,6 +1,6 @@
 """Run the research agent from the command line.
 
-The owner's way to drive Step 3 until triggers (Step 4) and the UI (Step 7)
+The owner's way to drive Step 3 until triggers (Step 4) and the UI (Step 10)
 exist. Every run goes through the same lifecycle a serverless invocation
 would: start_run, then advance_run in bounded invocations until it stops.
 

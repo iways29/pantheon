@@ -1,6 +1,6 @@
 """Point a tier at a different model, with no redeploy.
 
-The owner's tool until the control centre ships in Step 7 (ADR 003). The slug
+The owner's tool until the control centre ships in Step 11 (ADR 003). The slug
 is checked against OpenRouter's live catalogue before it is saved, and the
 change lands in `events` through the table's audit trigger.
 

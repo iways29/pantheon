@@ -12,7 +12,7 @@ Models are reached only through the gateway and facts only through the
 brain. A plain LangGraph graph rather than deepagents: the gateway returns
 text and has no tool calling, and a fixed graph is easier to audit than a
 model choosing its own next step. Deepagents is reconsidered for the head of
-department in Step 6.
+department in Step 7.4.
 
 Prompt text is not in this file: it is configuration the owner edits, read
 from the database and pinned per run (see prompts.py).

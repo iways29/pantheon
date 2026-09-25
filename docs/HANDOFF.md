@@ -113,12 +113,11 @@ those; the API's 401 versus 503 answers reveal whether `TRIGGER_SECRET` is set.
 3. **The TypeSafe API key is set locally and verified** (2026-09-25: 108 characters, and a
    free `GET /v1/models` call returned 200 with `jev-latest` and `jev-preview`). The owner
    was to confirm it in Vercel too (not checkable through the Vercel MCP).
-   Where it goes: It goes in the
-   repo-root `.env` as `TYPESAFE_API_KEY=` (the line already exists, blank) and
-   in the Vercel `pantheon-api` project as `TYPESAFE_API_KEY` (server-side,
-   sensitive). Add a `typesafe_api_key` field to `app/config.py`'s `Settings`.
-   Verify the value exists by length only. Until it is set, build and test
-   against a scripted transport and skip the live smoke test.
+   It lives in the repo-root `.env` as `TYPESAFE_API_KEY=` and belongs in the
+   Vercel `pantheon-api` project as `TYPESAFE_API_KEY` (server-side, sensitive).
+   Add a `typesafe_api_key` field to `app/config.py`'s `Settings`. Verify the
+   value by length only, never print it. Build and test against a scripted
+   transport; the one live smoke test can now run.
 4. **Build Step 5.1** (judge core). Then 5.2, 5.3, 5.4, and stop at the Step 5
    Milestone. Write ADR 009 for the TypeSafe decisions when they are confirmed.
 5. Keep the test suite green, commit after each part, and update

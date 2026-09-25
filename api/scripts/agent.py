@@ -51,6 +51,7 @@ from app.db import as_service_role, connect
 from app.gateway.factory import systemone_transport_from, tier_map_from, transport_from
 from app.judge.starter_gates import STARTER_GATES
 from app.judge.store import seed_gates
+from app.knowledge.wiring import agent_services
 from app.tools import seed_tools
 from app.tracing import tracer_from
 
@@ -168,6 +169,7 @@ def main(argv: list[str]) -> int:
         embedder=None,
         tracer=tracer_from(settings),
         systemone=systemone_transport_from(settings) if settings.typesafe_api_key else None,
+        services=agent_services(),
     )
     if args.command == "ask":
         with connect(dsn) as connection:

@@ -43,6 +43,12 @@ class AgentSpec(BaseModel):
     allowed_tools: list[str] = Field(default_factory=list)
     #: The department head this agent reports to, by name.
     parent: str | None = None
+    #: Step 7.4 (ADR 020): who may delegate, which code runs it, how much it
+    #: may do alone, and an optional tighter cap on its sub-tasks.
+    role_type: Literal["chief_of_staff", "head", "worker"] = "worker"
+    runner: Literal["pipeline", "deep", "router", "digest"] = "pipeline"
+    autonomy_level: Literal["L0", "L1", "L2", "L3"] = "L1"
+    max_children: int | None = Field(default=None, ge=1, le=20)
 
     @model_validator(mode="after")
     def _check(self) -> "AgentSpec":
@@ -66,6 +72,10 @@ class AgentSummary:
     daily_budget_usd: Decimal | None
     allowed_tools: tuple[str, ...]
     enabled: bool
+    role_type: str = "worker"
+    runner: str = "pipeline"
+    autonomy_level: str = "L1"
+    max_children: int | None = None
     #: False when an identical agent already existed and was returned.
     created: bool = True
 
@@ -127,8 +137,9 @@ def create_agent(
             """
             insert into public.agents
                 (org_id, department_id, parent_agent_id, name, role, model_tier,
-                 daily_budget_usd, allowed_tools, enabled)
-            values (%s, %s, %s, %s, %s, %s, %s, %s, false)
+                 daily_budget_usd, allowed_tools, role_type, runner, autonomy_level,
+                 max_children, enabled)
+            values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, false)
             returning id
             """,
             (
@@ -140,6 +151,10 @@ def create_agent(
                 spec.tier,
                 spec.daily_budget_usd,
                 list(spec.allowed_tools),
+                spec.role_type,
+                spec.runner,
+                spec.autonomy_level,
+                spec.max_children,
             ),
         )
         agent_id = cursor.fetchone()["id"]
@@ -188,7 +203,8 @@ def _summary(cursor: psycopg.Cursor, org_id: UUID | str, name: str) -> AgentSumm
     cursor.execute(
         """
         select a.id, a.name, a.role, d.name as department, a.model_tier as tier,
-               a.daily_budget_usd, a.allowed_tools, a.enabled
+               a.daily_budget_usd, a.allowed_tools, a.enabled, a.role_type, a.runner,
+               a.autonomy_level, a.max_children
         from public.agents a join public.departments d on d.id = a.department_id
         where a.org_id = %s and a.name = %s
         """,
@@ -206,6 +222,10 @@ def _summary(cursor: psycopg.Cursor, org_id: UUID | str, name: str) -> AgentSumm
         daily_budget_usd=row["daily_budget_usd"],
         allowed_tools=tuple(row["allowed_tools"]),
         enabled=row["enabled"],
+        role_type=row["role_type"],
+        runner=row["runner"],
+        autonomy_level=row["autonomy_level"],
+        max_children=row["max_children"],
     )
 
 
@@ -222,7 +242,21 @@ def _same(
         existing.tier,
         existing.daily_budget_usd,
         existing.allowed_tools,
-    ) != (spec.department, spec.role, spec.tier, budget, tuple(spec.allowed_tools)):
+        existing.role_type,
+        existing.runner,
+        existing.autonomy_level,
+        existing.max_children,
+    ) != (
+        spec.department,
+        spec.role,
+        spec.tier,
+        budget,
+        tuple(spec.allowed_tools),
+        spec.role_type,
+        spec.runner,
+        spec.autonomy_level,
+        spec.max_children,
+    ):
         return False
     cursor.execute(
         "select slot, body from public.agent_prompts where agent_id = %s and version = 1",

@@ -138,3 +138,51 @@ def _text(content: str | list[Any]) -> str:
         elif isinstance(part, dict) and part.get("type") == "text":
             parts.append(str(part.get("text", "")))
     return "".join(parts)
+
+
+class SessionChatModel(BaseChatModel):
+    """Like GatewayChatModel, but opens a fresh database session per call.
+
+    A deep agent's loop spans many model calls and tool calls within one
+    invocation. Each call commits on its own, like each node of a pipeline
+    graph, so a crash loses at most the call in flight and never rolls back
+    a ledger row or a tool's recorded effect.
+    """
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    #: Returns a context manager yielding an object with a `gateway`.
+    session: Callable[[], Any]
+    agent_id: str
+    run_id: str | None = None
+    max_tokens: int | None = None
+
+    @property
+    def _llm_type(self) -> str:
+        return "pantheon-gateway-session"
+
+    def bind_tools(
+        self,
+        tools: Sequence[dict[str, Any] | type | Callable | BaseTool],
+        *,
+        tool_choice: str | None = None,
+        **kwargs: Any,  # noqa: ANN401 - LangChain's signature
+    ) -> Runnable[LanguageModelInput, AIMessage]:
+        formatted = [convert_to_openai_tool(tool) for tool in tools]
+        return self.bind(tools=formatted, tool_choice=tool_choice, **kwargs)
+
+    def _generate(
+        self,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        run_manager: CallbackManagerForLLMRun | None = None,
+        **kwargs: Any,  # noqa: ANN401 - LangChain's signature
+    ) -> ChatResult:
+        with self.session() as s:
+            inner = GatewayChatModel(
+                gateway=s.gateway,
+                agent_id=self.agent_id,
+                run_id=self.run_id,
+                max_tokens=self.max_tokens,
+            )
+            return inner._generate(messages, stop, run_manager, **kwargs)

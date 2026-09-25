@@ -72,6 +72,9 @@ class Session:
     #: The brain's write gate. None when TypeSafe is not configured, in which
     #: case nothing can be written: no fact enters the brain unjudged.
     writer: BrainWriter | None = None
+    #: The connection the session's transaction is on, acting for the agent.
+    connection: Any = None
+    embedder: Any = None
 
 
 @dataclass(frozen=True)

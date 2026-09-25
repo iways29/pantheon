@@ -43,6 +43,7 @@ from uuid import UUID
 
 import psycopg
 
+from app.agents import deep
 from app.agents.checkpointer import checkpointer
 from app.agents.prompts import PromptMissing, resolve_for_run
 from app.agents.research import PROMPT_SLOTS, RunScope, Session, build_graph
@@ -92,6 +93,9 @@ class Runtime:
     tracer: Tracer
     #: TypeSafe, for the brain write gate. None means no fact can be written.
     systemone: SystemOneTransport | None = None
+    #: Extra services for agents' tools (ADR 020): `fetcher` (a URL to a
+    #: page) and `links` (a session to a Links). Absent: those tools say so.
+    services: dict[str, Any] | None = None
     #: How long a claim lasts without renewal. Renewed after every step, so it
     #: only needs to cover one step plus slack.
     lease_seconds: int = 300
@@ -123,6 +127,8 @@ class _Run:
     max_steps: int
     max_tokens: int
     prompt_versions: dict[str, int]
+    runner: str = "pipeline"
+    task_id: UUID | None = None
 
 
 @dataclass(frozen=True)
@@ -266,29 +272,61 @@ def _execute(runtime: Runtime, connection: psycopg.Connection, run: _Run, deadli
     if _kill_switch_on(connection, run.org_id):
         return _Stop("paused", "kill_switch")
 
+    # Which code runs this agent is data (ADR 020): its runner.
+    if run.runner not in ("pipeline", "deep"):
+        return _Stop(
+            "failed", "runner_not_built", error=f"The {run.runner!r} runner arrives in Step 8.2"
+        )
+    slots = deep.PROMPT_SLOTS if run.runner == "deep" else PROMPT_SLOTS
     try:
         prompts = resolve_for_run(
             connection,
             run_id=run.id,
             agent_id=run.agent_id,
-            slots=PROMPT_SLOTS,
+            slots=slots,
             pinned=run.prompt_versions,
         )
     except PromptMissing as error:
         return _Stop("paused", "prompt_missing", error=str(error))
 
-    scope = RunScope(
-        run_id=run.id,
-        org_id=run.org_id,
-        agent_id=run.agent_id,
-        prompts={slot: prompt.body for slot, prompt in prompts.items()},
-        session=lambda: _session(runtime, connection, run),
-    )
+    session = lambda: _session(runtime, connection, run)  # noqa: E731
+    if run.runner == "deep":
+        deep_scope = deep.DeepScope(
+            run_id=run.id,
+            org_id=run.org_id,
+            agent_id=run.agent_id,
+            agent_name=run.agent_name,
+            task_id=run.task_id,
+            system_prompt=prompts["system"].body,
+            session=session,
+            services=runtime.services,
+        )
+        build = lambda saver: deep.build_deep_graph(deep_scope, checkpointer=saver)  # noqa: E731
+        first_input = lambda: deep.first_message(deep_scope, run.input)  # noqa: E731
+        summarise = deep.output
+    else:
+        scope = RunScope(
+            run_id=run.id,
+            org_id=run.org_id,
+            agent_id=run.agent_id,
+            prompts={slot: prompt.body for slot, prompt in prompts.items()},
+            session=session,
+        )
+        build = lambda saver: build_graph(scope, checkpointer=saver)  # noqa: E731
+        # A task given to the research pipeline carries its question as the
+        # task's instructions or title.
+        first_input = lambda: {  # noqa: E731
+            **run.input,
+            "question": run.input.get("question")
+            or run.input.get("instructions")
+            or run.input.get("title", ""),
+        }
+        summarise = _output
     steps = run.steps_taken
     with (
         runtime.tracer.agent_run(
             run_id=str(run.id),
-            agent_name="research-agent",
+            agent_name=f"{run.runner}-agent",
             user_id=str(run.requested_by),
             input=run.input,
             context={
@@ -300,7 +338,7 @@ def _execute(runtime: Runtime, connection: psycopg.Connection, run: _Run, deadli
         ) as recorder,
         checkpointer(runtime.dsn) as saver,
     ):
-        graph = build_graph(scope, checkpointer=saver)
+        graph = build(saver)
         config: dict[str, Any] = {
             "configurable": {"thread_id": str(run.id)},
             "callbacks": runtime.tracer.callbacks(),
@@ -309,7 +347,7 @@ def _execute(runtime: Runtime, connection: psycopg.Connection, run: _Run, deadli
         snapshot = graph.get_state(config)
         started = bool(snapshot.values)
         if started and not snapshot.next:
-            stop = _Stop("succeeded", "completed", _output(snapshot.values))
+            stop = _Stop("succeeded", "completed", summarise(snapshot.values))
             recorder.stopped(status=stop.status, stop_reason=stop.reason, output=stop.output)
             return stop
 
@@ -329,7 +367,7 @@ def _execute(runtime: Runtime, connection: psycopg.Connection, run: _Run, deadli
                 stop = _Stop("failed", "max_steps")
             else:
                 for update in graph.stream(
-                    None if started else run.input,
+                    None if started else first_input(),
                     config,
                     stream_mode="updates",
                     # LangGraph's default, "async", saves a step's checkpoint
@@ -363,7 +401,7 @@ def _execute(runtime: Runtime, connection: psycopg.Connection, run: _Run, deadli
             stop = _Stop("failed", "error", error=f"{type(error).__name__}: {error}"[:2000])
 
         if stop is None:
-            stop = _Stop("succeeded", "completed", _output(graph.get_state(config).values))
+            stop = _Stop("succeeded", "completed", summarise(graph.get_state(config).values))
         recorder.stopped(status=stop.status, stop_reason=stop.reason, output=stop.output)
         return stop
 
@@ -395,7 +433,9 @@ def _session(runtime: Runtime, connection: psycopg.Connection, run: _Run) -> Ite
         )
         brain = Brain(conn, embedder)
         writer = BrainWriter(conn, brain, Judge(conn, gateway)) if runtime.systemone else None
-        yield Session(gateway=gateway, brain=brain, writer=writer)
+        yield Session(
+            gateway=gateway, brain=brain, writer=writer, connection=conn, embedder=embedder
+        )
 
 
 def _claim(connection: psycopg.Connection, run_id: UUID | str, lease_seconds: int) -> _Run:
@@ -413,7 +453,7 @@ def _claim(connection: psycopg.Connection, run_id: UUID | str, lease_seconds: in
                and (r.lease_expires_at is null or r.lease_expires_at < now())
             returning r.id, r.org_id, r.agent_id, a.name as agent_name, r.requested_by,
                       r.status, r.input, r.steps_taken, r.max_steps, r.max_tokens,
-                      r.prompt_versions
+                      r.prompt_versions, a.runner, r.task_id
             """,
             (lease_seconds, str(run_id)),
         )

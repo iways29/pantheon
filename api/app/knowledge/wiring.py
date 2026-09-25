@@ -1,5 +1,6 @@
 """Building a Library for real use: gateway embeddings, screening, Storage."""
 
+from typing import Any
 from uuid import UUID
 
 import psycopg
@@ -43,3 +44,22 @@ def links_from(
         screener=Screener(connection, judge, brain),
         writer=BrainWriter(connection, brain, judge),
     )
+
+
+def agent_services() -> dict[str, Any]:
+    """Services an agent run's tools need beyond its session (ADR 020): the
+    safe fetcher, and link previews built on the run's own session."""
+    from app.knowledge.fetch import fetch
+
+    def links(session: Any) -> Links | None:  # noqa: ANN401
+        if session.writer is None:  # no TypeSafe: pages cannot be screened
+            return None
+        judge = Judge(session.connection, session.gateway)
+        return Links(
+            session.connection,
+            gateway=session.gateway,
+            screener=Screener(session.connection, judge, session.brain),
+            writer=session.writer,
+        )
+
+    return {"fetcher": fetch, "links": links}

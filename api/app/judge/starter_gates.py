@@ -585,7 +585,35 @@ GUARD_OUTPUT = StarterGate(
     },
 )
 
+# --- Tool selection: which of an agent's tools fits the task -----------------
+#
+# State: {"task": ..., "tools": {name: description}}. The options are the
+# agent's allowed tools, added by code from the `tools` table on each call;
+# `none_fit` is the one stored option. Used only when an agent has many tools.
+
+TOOL_SELECT = StarterGate(
+    gate="tool_select",
+    questions=(
+        StarterQuestion(
+            key="tool",
+            type="choice",
+            instructions="Which tool is the best first step for `task`?",
+            criteria={"none_fit": "None of the tools can help with `task`."},
+        ),
+    ),
+    policy={
+        "outcomes": ["chosen", "unsure"],
+        "rules": [
+            {"question": "tool", "choice_in": ["none_fit"], "outcome": "unsure"},
+            {"question": "tool", "confidence_below": 0.3, "outcome": "unsure"},
+        ],
+        "settings": {"offer_at_most": 3, "select_above": 6},
+    },
+    fail_mode="open",
+)
+
 STARTER_GATES: tuple[StarterGate, ...] = (
+    TOOL_SELECT,
     BRAIN_CLAIM,
     BRAIN_NEIGHBOUR,
     CONTENT_SCREEN,

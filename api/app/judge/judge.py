@@ -42,6 +42,7 @@ from app.gateway.systemone import (
 )
 from app.judge.errors import (
     GateDisabled,
+    GateMisconfigured,
     JudgeError,
     SensitiveStateRefused,
     StateTooLarge,
@@ -118,8 +119,15 @@ class Judge:
         input_ref: str | None = None,
         sensitive: bool = False,
         profile: str | None = None,
+        extra_options: dict[str, dict[str, str]] | None = None,
     ) -> Decision:
-        """Judge `state` at `gate`. `profile` picks a named rule set, if any."""
+        """Judge `state` at `gate`. `profile` picks a named rule set, if any.
+
+        `extra_options` adds options to a Choice question for this call only,
+        for choices whose options are themselves data (the tools an agent
+        may use, the departments that exist). The question's own wording and
+        its stored options still come from the database.
+        """
         # The kill switch and budgets come before anything else, as they do
         # for every model call.
         agent = self._gateway.admit(agent_id, run_id=run_id)
@@ -133,6 +141,14 @@ class Judge:
         serialized = _serialize(state)
         reference = input_ref or f"sha256:{hashlib.sha256(serialized.encode()).hexdigest()}"
         questions = config.typed_questions()
+        for key, options in (extra_options or {}).items():
+            question = questions.get(key)
+            if question is None or question.type != "choice":
+                raise GateMisconfigured(config.name, [f"{key!r} is not a Choice question"])
+            merged = {**(question.criteria or {}), **options}
+            if len(merged) > 255:
+                raise GateMisconfigured(config.name, [f"{key!r} would have over 255 options"])
+            questions[key] = question.model_copy(update={"criteria": merged})
 
         try:
             response = self._gateway.evaluate(

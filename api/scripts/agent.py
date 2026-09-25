@@ -51,6 +51,7 @@ from app.db import as_service_role, connect
 from app.gateway.factory import systemone_transport_from, tier_map_from, transport_from
 from app.judge.starter_gates import STARTER_GATES
 from app.judge.store import seed_gates
+from app.tools import seed_tools
 from app.tracing import tracer_from
 
 ROOT_ENV = Path(__file__).resolve().parents[2] / ".env"
@@ -363,6 +364,8 @@ def _seed(
     # The brain write gate's starting questions and thresholds (ADR 010). A
     # gate the org already has, edited or not, is left alone.
     seeded = seed_gates(connection, user_id=user_id, org_id=org_id, gates=STARTER_GATES)
+    tools = seed_tools(connection, user_id=user_id, org_id=org_id)
+    print(f"tools configured: {', '.join(tools) or 'none (already present)'}")
     print(f"org {org_id}: department '{DEPARTMENT}' at ${budget:.2f}/day, agent '{AGENT}'")
     print(f"judge gates seeded: {', '.join(seeded) or 'none (already present)'}")
 

@@ -119,8 +119,9 @@ def live(dsn: str) -> Iterator[LiveOrg]:
             (str(ids.department_id), str(ids.org_id)),
         )
         cursor.execute(
-            "insert into public.agents (id, org_id, department_id, name, role, model_tier) "
-            "values (%s, %s, %s, 'researcher', 'research', 'cheap')",
+            "insert into public.agents "
+            "(id, org_id, department_id, name, role, model_tier, enabled) "
+            "values (%s, %s, %s, 'researcher', 'research', 'cheap', true)",
             (str(ids.agent_id), str(ids.org_id), str(ids.department_id)),
         )
         for slot, body in STARTER_PROMPTS["research"].items():

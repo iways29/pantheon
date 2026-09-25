@@ -16,6 +16,9 @@ would: start_run, then advance_run in bounded invocations until it stops.
     uv run python -m scripts.agent prompt list [--slot answer]
     uv run python -m scripts.agent prompt set <slot> --file prompt.txt [--note "why"]
     uv run python -m scripts.agent prompt activate <slot> <version>
+    uv run python -m scripts.agent agents list
+    uv run python -m scripts.agent agents create --file agent.json
+    uv run python -m scripts.agent agents enable|disable <name>
 
 `seed` creates, idempotently, the org, the user's membership, a `research`
 department with a daily budget, a `researcher` agent on the cheap tier, that
@@ -40,7 +43,7 @@ from pathlib import Path
 import psycopg
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from app.agents import prompts, triggers
+from app.agents import admin, prompts, triggers
 from app.agents.runs import RunReport, Runtime, advance_run, report, retry_run, start_run
 from app.agents.starter_prompts import STARTER_PROMPTS
 from app.config import Settings
@@ -94,6 +97,14 @@ def main(argv: list[str]) -> int:
     prompt_activate.add_argument("slot")
     prompt_activate.add_argument("version", type=int)
 
+    agents = commands.add_parser("agents", help="create, list, enable or disable agents")
+    agent_commands = agents.add_subparsers(dest="agents_command", required=True)
+    agent_commands.add_parser("list")
+    agents_create = agent_commands.add_parser("create", help="from a JSON description")
+    agents_create.add_argument("--file", required=True, type=Path)
+    for verb in ("enable", "disable"):
+        agent_commands.add_parser(verb).add_argument("name")
+
     retry = commands.add_parser("retry", help="resume a run that failed on an error")
     retry.add_argument("run_id")
 
@@ -129,6 +140,10 @@ def main(argv: list[str]) -> int:
     if args.command == "prompt":
         with connect(dsn) as connection:
             return _prompt(connection, args)
+
+    if args.command == "agents":
+        with connect(dsn) as connection:
+            return _agents(connection, args)
 
     if args.command == "trigger":
         with connect(dsn) as connection:
@@ -216,6 +231,32 @@ def _trigger(connection: psycopg.Connection, args: argparse.Namespace) -> int:
     return 0
 
 
+def _agents(connection: psycopg.Connection, args: argparse.Namespace) -> int:
+    org_id, user_id, _ = _setup(connection)
+    command = args.agents_command
+    try:
+        if command == "list":
+            for a in admin.list_agents(connection, user_id=user_id, org_id=org_id):
+                state = "on " if a.enabled else "OFF"
+                tools = ", ".join(a.allowed_tools) or "no tools"
+                print(f"{state} {a.name:<20} {a.department:<12} {a.role:<10} {a.tier:<9} {tools}")
+            return 0
+        if command == "create":
+            spec = admin.AgentSpec.model_validate_json(args.file.read_text())
+            a = admin.create_agent(connection, user_id=user_id, org_id=org_id, spec=spec)
+            state = "on" if a.enabled else "switched off"
+            print(f"{a.name}: {'created' if a.created else 'already exists'}, {state}")
+            return 0
+        a = admin.set_enabled(
+            connection, user_id=user_id, org_id=org_id, name=args.name, enabled=command == "enable"
+        )
+        print(f"{a.name}: {'on' if a.enabled else 'off'}")
+        return 0
+    except admin.AgentAdminError as error:
+        print(f"refused: {error}", file=sys.stderr)
+        return 1
+
+
 def _prompt(connection: psycopg.Connection, args: argparse.Namespace) -> int:
     _, user_id, agent_id = _setup(connection)
     if args.prompt_command == "list":
@@ -283,8 +324,10 @@ def _seed(
         )
         if cursor.fetchone() is None:
             cursor.execute(
-                "insert into public.agents (org_id, department_id, name, role, model_tier) "
-                "values (%s, %s, %s, 'research', 'cheap')",
+                # Seeding is the owner's own act, so the researcher starts on.
+                # Agents created through the API start off (ADR 014).
+                "insert into public.agents (org_id, department_id, name, role, model_tier, "
+                "enabled) values (%s, %s, %s, 'research', 'cheap', true)",
                 (org_id, department_id, AGENT),
             )
         cursor.execute(

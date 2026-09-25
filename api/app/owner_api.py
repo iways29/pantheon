@@ -7,7 +7,7 @@ Phase 1 has one org; the owner's only membership picks it.
 
 from collections.abc import Callable, Iterator
 from dataclasses import asdict
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 import psycopg
@@ -23,13 +23,14 @@ from app.agents.admin import (
     set_enabled,
 )
 from app.auth import OwnerPrincipal
+from app.brain.write_gate import BrainWriter
 from app.config import Settings, get_settings
 from app.db import acting_as, as_service_role, connect
 from app.knowledge.extract import UnsupportedContent
 from app.knowledge.fetch import FetchedPage, FetchRefused, fetch
 from app.knowledge.library import DocumentError, Library
 from app.knowledge.links import LinkError, Links, Preview
-from app.knowledge.wiring import library_from, links_from
+from app.knowledge.wiring import library_from, links_from, writer_from
 
 router = APIRouter(tags=["owner"])
 
@@ -348,3 +349,157 @@ def cancel_task(task_id: UUID, principal: OwnerPrincipal, connection: Connection
     from app.tasks import cancel
 
     return {"cancelled": cancel(connection, user_id=principal.user_id, task_id=task_id)}
+
+
+# --- Approvals and the decision desk (Step 7.5, ADR 021) ---------------------
+
+MakeWriter = Callable[[psycopg.Connection, UUID], BrainWriter]
+
+
+def get_writer_factory(settings: Annotated[Settings, Depends(get_settings)]) -> MakeWriter:
+    """Overridden in tests with a scripted TypeSafe."""
+    return lambda connection, agent_id: writer_from(connection, settings, agent_id=agent_id)
+
+
+WriterFactory = Annotated[MakeWriter, Depends(get_writer_factory)]
+
+
+def _approval_json(row: dict[str, Any]) -> dict[str, Any]:
+    return {k: str(v) if isinstance(v, UUID) else v for k, v in row.items()}
+
+
+@router.get("/approvals")
+def get_approvals(principal: OwnerPrincipal, connection: Connection) -> list[dict[str, Any]]:
+    """What is waiting for the owner, each with its decision card."""
+    from app.approvals import list_pending
+
+    owner_org(connection, principal.user_id)
+    return [
+        _approval_json(row) | {"created_at": row["created_at"].isoformat()}
+        for row in list_pending(connection, user_id=principal.user_id)
+    ]
+
+
+class ApproveRequest(BaseModel):
+    #: Replaces the held call's arguments, when the owner edited them.
+    edited_arguments: dict[str, Any] | None = None
+    note: str | None = None
+
+
+class RejectRequest(BaseModel):
+    #: cancel: the task stops. redirect: the agent carries on, told `note`.
+    mode: Literal["cancel", "redirect"] = "cancel"
+    note: str | None = None
+
+
+@router.post("/approvals/{approval_id}/approve")
+def approve(
+    approval_id: UUID,
+    body: ApproveRequest,
+    principal: OwnerPrincipal,
+    connection: Connection,
+    make_writer: WriterFactory,
+) -> dict[str, Any]:
+    return _decide(
+        connection,
+        principal.user_id,
+        approval_id,
+        "approve",
+        body.note,
+        body.edited_arguments,
+        make_writer,
+    )
+
+
+@router.post("/approvals/{approval_id}/reject")
+def reject(
+    approval_id: UUID,
+    body: RejectRequest,
+    principal: OwnerPrincipal,
+    connection: Connection,
+    make_writer: WriterFactory,
+) -> dict[str, Any]:
+    return _decide(
+        connection, principal.user_id, approval_id, body.mode, body.note, None, make_writer
+    )
+
+
+def _decide(
+    connection: psycopg.Connection,
+    user_id: str,
+    approval_id: UUID,
+    decision: Any,  # noqa: ANN401 - one of approvals.Decision
+    note: str | None,
+    edited: dict[str, Any] | None,
+    make_writer: MakeWriter,
+) -> dict[str, Any]:
+    from app.approvals import ApprovalError, decide, decision_statement, remember
+
+    org_id = owner_org(connection, user_id)
+    try:
+        row = decide(
+            connection,
+            user_id=user_id,
+            approval_id=approval_id,
+            decision=decision,
+            note=note,
+            edited_arguments=edited,
+        )
+    except ApprovalError as error:
+        raise HTTPException(error.status, str(error)) from error
+    remembered = None
+    # A decision with a reason becomes an owner fact (right-hand idea 4), so
+    # later proposals are checked against it.
+    if note and note.strip() and row.get("agent_id"):
+        with acting_as(connection, user_id=user_id) as conn:
+            result = remember(
+                make_writer(conn, row["agent_id"]),
+                org_id=org_id,
+                agent_id=row["agent_id"],
+                statement=decision_statement(row, decision, note),
+                ref=f"approval:{approval_id}",
+            )
+        remembered = result.outcome
+    return {
+        "id": str(row["id"]),
+        "status": row["status"],
+        "recommendation": row["recommendation"],
+        "remembered": remembered,
+    }
+
+
+class PolicyRequest(BaseModel):
+    #: A standing rule in plain English, e.g. "Never email a customer on a Sunday."
+    statement: str
+    #: The agent whose budget pays for checking it.
+    agent: str
+
+
+@router.post("/policies", status_code=status.HTTP_201_CREATED)
+def post_policy(
+    body: PolicyRequest,
+    principal: OwnerPrincipal,
+    connection: Connection,
+    make_writer: WriterFactory,
+) -> dict[str, Any]:
+    """A standing rule, written to the brain as the owner's (right-hand idea 4)."""
+    import hashlib
+
+    from app.approvals import remember
+
+    org_id = owner_org(connection, principal.user_id)
+    with acting_as(connection, user_id=principal.user_id) as conn:
+        agent_id = _agent_id(conn, org_id, body.agent)
+        digest = hashlib.sha256(body.statement.strip().lower().encode()).hexdigest()[:24]
+        result = remember(
+            make_writer(conn, agent_id),
+            org_id=org_id,
+            agent_id=agent_id,
+            statement=body.statement,
+            ref=f"policy:{digest}",
+        )
+    return {
+        "outcome": result.outcome,
+        "fact_id": str(result.fact.id) if result.fact else None,
+        "reasons": list(result.reasons),
+    }

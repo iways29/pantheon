@@ -46,6 +46,17 @@ def links_from(
     )
 
 
+def writer_from(
+    connection: psycopg.Connection, settings: Settings, *, agent_id: UUID | str
+) -> BrainWriter:
+    """The brain's write gate for the owner's own statements; `agent_id` pays."""
+    if not settings.typesafe_api_key:
+        raise ValueError("TYPESAFE_API_KEY is not set: nothing can be written to the brain")
+    gateway = gateway_from(connection, settings)
+    brain = Brain(connection, GatewayEmbedder(gateway, agent_id=agent_id))
+    return BrainWriter(connection, brain, Judge(connection, gateway))
+
+
 def agent_services() -> dict[str, Any]:
     """Services an agent run's tools need beyond its session (ADR 020): the
     safe fetcher, and link previews built on the run's own session."""

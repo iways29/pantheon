@@ -68,6 +68,8 @@ _PAUSING_REFUSALS = {
     "budget_exceeded": "budget_exceeded",
     "agent_disabled": "agent_disabled",
     "department_disabled": "department_disabled",
+    # A tool call held for the owner (Step 7.5): the run waits at that call.
+    "awaiting_approval": "awaiting_approval",
 }
 _TERMINAL = ("succeeded", "failed", "cancelled")
 
@@ -271,6 +273,8 @@ def report(connection: psycopg.Connection, run_id: UUID | str) -> RunReport:
 def _execute(runtime: Runtime, connection: psycopg.Connection, run: _Run, deadline: float) -> _Stop:
     if _kill_switch_on(connection, run.org_id):
         return _Stop("paused", "kill_switch")
+    if _task_cancelled(connection, run):
+        return _Stop("cancelled", "task_cancelled")
 
     # Which code runs this agent is data (ADR 020): its runner.
     if run.runner not in ("pipeline", "deep"):
@@ -416,6 +420,8 @@ def _next_step_blocked(
         return _Stop("failed", "max_tokens")
     if _kill_switch_on(connection, run.org_id):
         return _Stop("paused", "kill_switch")
+    if _task_cancelled(connection, run):
+        return _Stop("cancelled", "task_cancelled")
     if time.monotonic() >= deadline:
         return _Stop("paused", "deadline")
     return None
@@ -432,9 +438,15 @@ def _session(runtime: Runtime, connection: psycopg.Connection, run: _Run) -> Ite
             gateway, agent_id=run.agent_id, run_id=run.id
         )
         brain = Brain(conn, embedder)
-        writer = BrainWriter(conn, brain, Judge(conn, gateway)) if runtime.systemone else None
+        judge = Judge(conn, gateway) if runtime.systemone else None
+        writer = BrainWriter(conn, brain, judge) if judge else None
         yield Session(
-            gateway=gateway, brain=brain, writer=writer, connection=conn, embedder=embedder
+            gateway=gateway,
+            brain=brain,
+            writer=writer,
+            connection=conn,
+            embedder=embedder,
+            judge=judge,
         )
 
 
@@ -567,6 +579,16 @@ def _kill_switch_on(connection: psycopg.Connection, org_id: UUID) -> bool:
         cursor.execute("select public.kill_switch_on(%s) as engaged", (str(org_id),))
         row = cursor.fetchone()
     return bool(row and row["engaged"])
+
+
+def _task_cancelled(connection: psycopg.Connection, run: _Run) -> bool:
+    """A run stops when the owner (or a decision) cancelled its task."""
+    if run.task_id is None:
+        return False
+    with as_service_role(connection) as conn, conn.cursor() as cursor:
+        cursor.execute("select status from public.tasks where id = %s", (str(run.task_id),))
+        row = cursor.fetchone()
+    return bool(row and row["status"] == "cancelled")
 
 
 def _lifecycle_event(

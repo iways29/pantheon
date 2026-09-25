@@ -247,8 +247,11 @@ class Brain:
         *,
         limit: int = 5,
         status: str | None = "active",
+        source: str | None = None,
     ) -> list[FactMatch]:
         """Find the facts nearest to `query` by cosine distance.
+
+        `source` narrows to facts from one source, e.g. the owner's decisions.
 
         Defaults to active facts only: superseded and disputed claims stay
         readable through `get`, but must not surface as though still believed.
@@ -268,10 +271,11 @@ class Brain:
                 where embedding is not null
                   and embedding_model = %s
                   and (%s::text is null or status = %s::text)
+                  and (%s::text is null or source = %s::text)
                 order by embedding <=> %s::vector
                 limit %s
                 """,
-                (embedding, self._embedder.name, status, status, embedding, limit),
+                (embedding, self._embedder.name, status, status, source, source, embedding, limit),
             )
             rows = cursor.fetchall()
 

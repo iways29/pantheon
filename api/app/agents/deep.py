@@ -7,6 +7,7 @@ it touches is ours:
   (kill switch, budgets, cost, tracing) in its own short transaction;
 - its tools are the agent's allowed tools, each call through `ToolRuntime`
   (allowlist, validation, idempotency, approval holds, screening, logging);
+  a held call pauses the run at that call until the owner decides;
 - deepagents' built-in file tools work on a scratchpad inside the run's own
   state (`StateBackend`), never on a disk, and there is no shell;
 - its `task` tool starts a temporary helper inside this run for a noisy
@@ -31,6 +32,7 @@ from langchain_core.tools import StructuredTool
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph.state import CompiledStateGraph
 
+from app.approvals import ApprovalPending
 from app.gateway.chat_model import SessionChatModel
 from app.tasks import children
 from app.tools import REGISTRY, ToolContext, ToolRuntime
@@ -132,7 +134,13 @@ def _tools(scope: DeepScope) -> list[StructuredTool]:
 
         def call(_name: str = spec.name, **kwargs: Any) -> str:  # noqa: ANN401
             with scope.session() as session:
-                return _runtime(scope, session).call(_name, kwargs).text
+                result = _runtime(scope, session).call(_name, kwargs)
+            # Committed above: the held call, its approval and the task's
+            # state. The run now pauses at this call; once the owner decides,
+            # it resumes here and the call replays by its key (ADR 021).
+            if result.status == "held":
+                raise ApprovalPending(result.output.get("approval_id", ""), _name)
+            return result.text
 
         tools.append(
             StructuredTool.from_function(
@@ -162,6 +170,7 @@ def _runtime(scope: DeepScope, session: Any) -> ToolRuntime:  # noqa: ANN401
             else None,
             links=links(session) if callable(links) else None,
             fetcher=services.get("fetcher"),
+            judge=getattr(session, "judge", None),
             extras={"task_id": str(scope.task_id)} if scope.task_id else {},
         )
     )

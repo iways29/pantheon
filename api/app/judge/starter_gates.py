@@ -612,6 +612,177 @@ TOOL_SELECT = StarterGate(
     fail_mode="open",
 )
 
+# --- Tool-risk gate: one request per R2 or R3 call, before it runs ------------
+#
+# State: {"tool": ..., "description": ..., "arguments": ..., "task": ...}.
+# Every question is phrased so that yes means risk, so an unsure answer never
+# passes a call. Thresholds scale with the tool's risk class through the
+# profiles: an R3 call (an outside effect) must look safer than an R2 read to
+# run without asking. R4 never reaches this gate: it is always held.
+
+
+def _risk_rules(ask: float, block: float) -> list:
+    rules: list[dict[str, Any]] = []
+    for hazard in _RISK_HAZARDS:
+        rules.append({"question": hazard, "noul_at_least": ask, "outcome": "ask"})
+    rules += [
+        {
+            "question": "off_task",
+            "noul_at_least": block,
+            "outcome": "block",
+            "reason": "The call does not serve the task",
+        },
+        {
+            "question": "spends_money",
+            "noul_at_least": block,
+            "outcome": "block",
+            "reason": "The call would spend money",
+        },
+    ]
+    return rules
+
+
+_RISK_HAZARDS = ["irreversible", "external_effect", "spends_money", "off_task", "sensitive_content"]
+
+TOOL_RISK = StarterGate(
+    gate="tool_risk",
+    questions=(
+        StarterQuestion(
+            key="irreversible",
+            type="noul",
+            instructions=(
+                "Would carrying out the call to `tool` with `arguments` do something that "
+                "cannot be undone afterwards?"
+            ),
+            criteria={
+                "true": (
+                    "Once done it stays done: a message sent, a post published, a record "
+                    "deleted for good."
+                ),
+                "false": "It only reads, drafts, or makes a change that can be reversed.",
+            },
+        ),
+        StarterQuestion(
+            key="external_effect",
+            type="noul",
+            instructions=(
+                "Would the call to `tool` with `arguments` be seen by, or change something "
+                "for, someone outside the company?"
+            ),
+        ),
+        StarterQuestion(
+            key="spends_money",
+            type="noul",
+            instructions="Would the call to `tool` with `arguments` spend or commit money?",
+        ),
+        StarterQuestion(
+            key="off_task",
+            type="noul",
+            instructions=(
+                "Is the call to `tool` with `arguments` unrelated to `task`, or more than "
+                "`task` asks for?"
+            ),
+            criteria={
+                "true": "The call does something `task` did not ask for.",
+                "false": "The call is a reasonable step towards what `task` asks.",
+            },
+        ),
+        StarterQuestion(
+            key="sensitive_content",
+            type="noul",
+            instructions=(
+                "Do `arguments` contain a password, an API key or access token, or "
+                "personal data about a private individual?"
+            ),
+        ),
+    ),
+    policy={
+        "outcomes": ["auto", "ask", "block"],
+        "rules": _risk_rules(0.15, 0.8),
+        "profiles": {"r2": _risk_rules(0.3, 0.8), "r3": _risk_rules(0.15, 0.8)},
+    },
+)
+
+# --- The decision desk (right-hand idea 1): one request per held action ------
+#
+# State: {"action": {"tool", "arguments", "risk_class", "reason"}, "agent": ...,
+#         "task": ..., "facts_checked": [...], "similar_decisions": [...]}.
+# A recommendation for the owner, never a decision: the action stays held.
+
+APPROVAL_RECOMMEND = StarterGate(
+    gate="approval_recommend",
+    questions=(
+        StarterQuestion(
+            key="recommendation",
+            type="choice",
+            instructions=(
+                "The owner must approve or reject `action`, which `agent` wants to take "
+                "for `task`. Given `facts_checked` and how the owner decided "
+                "`similar_decisions`, what should the owner do?"
+            ),
+            criteria={
+                "approve": (
+                    "`action` serves `task`, agrees with `facts_checked`, and matches "
+                    "actions the owner approved before."
+                ),
+                "reject": (
+                    "`action` goes against `facts_checked` or `task`, or matches actions "
+                    "the owner rejected before."
+                ),
+                "look_closer": (
+                    "There is not enough to go on, or the signals disagree, so the owner "
+                    "should read it carefully."
+                ),
+            },
+        ),
+    ),
+    policy={
+        "outcomes": ["approve", "look_closer", "reject"],
+        "rules": [
+            {"question": "recommendation", "choice_in": ["look_closer"], "outcome": "look_closer"},
+            {"question": "recommendation", "choice_in": ["reject"], "outcome": "reject"},
+            {
+                "question": "recommendation",
+                "option": "approve",
+                "probability_below": 0.7,
+                "outcome": "look_closer",
+                "reason": "Not clearly one to approve",
+            },
+        ],
+    },
+)
+
+# Right-hand idea 4: one request per (proposal, earlier owner decision) pair.
+#
+# State: {"proposal": ..., "owner_decision": ...}
+
+OWNER_CONFLICT = StarterGate(
+    gate="owner_conflict",
+    questions=(
+        StarterQuestion(
+            key="conflicts",
+            type="noul",
+            instructions=(
+                "Would carrying out `proposal` go against `owner_decision`, a decision or "
+                "standing rule the owner made earlier?"
+            ),
+            criteria={
+                "true": "`proposal` does what `owner_decision` rules out, or undoes it.",
+                "false": (
+                    "`proposal` is consistent with `owner_decision`, or about something else."
+                ),
+            },
+        ),
+    ),
+    policy={
+        "outcomes": ["consistent", "unsure", "conflict"],
+        "rules": [
+            {"question": "conflicts", "noul_at_least": 0.3, "outcome": "unsure"},
+            {"question": "conflicts", "noul_at_least": 0.7, "outcome": "conflict"},
+        ],
+    },
+)
+
 STARTER_GATES: tuple[StarterGate, ...] = (
     TOOL_SELECT,
     BRAIN_CLAIM,
@@ -619,4 +790,7 @@ STARTER_GATES: tuple[StarterGate, ...] = (
     CONTENT_SCREEN,
     GUARD_INPUT,
     GUARD_OUTPUT,
+    TOOL_RISK,
+    APPROVAL_RECOMMEND,
+    OWNER_CONFLICT,
 )

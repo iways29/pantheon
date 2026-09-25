@@ -75,6 +75,8 @@ class Session:
     #: The connection the session's transaction is on, acting for the agent.
     connection: Any = None
     embedder: Any = None
+    #: The judge, when TypeSafe is configured (tool-risk gate, decision desk).
+    judge: Any = None
 
 
 @dataclass(frozen=True)

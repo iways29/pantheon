@@ -6,13 +6,17 @@ Every call an agent makes goes through `ToolRuntime.call`, which, in order:
    allowed (`agents.allowed_tools`);
 2. validates the arguments against the tool's schema;
 3. for a side-effecting tool, finds a call already made with the same
-   idempotency key and returns its stored result instead of acting again;
+   idempotency key and returns its stored result instead of acting again; a
+   call the owner has since approved runs now, once, with the approved
+   arguments, and one the owner rejected returns the owner's note (Step 7.5);
 4. holds for the owner any tool whose policy needs approval (always for R4),
-   as a pending approval, without running it;
-5. runs it, times it, and caps the size of what comes back;
-6. for a tool that reads the outside world (R2), passes on text only if it
+   as a pending approval with a decision card, without running it;
+5. asks the tool-risk gate about an R2 or R3 call: clearly low-risk calls
+   run, uncertain ones are held, clearly wrong ones are refused (ADR 021);
+6. runs it, times it, and caps the size of what comes back;
+7. for a tool that reads the outside world (R2), passes on text only if it
    was screened clean (Step 5.3);
-7. records a `tool_calls` row and a `tool_called` event.
+8. records a `tool_calls` row and a `tool_called` event.
 
 A refusal is returned to the model as an error it can read, not raised: the
 agent should learn it may not do that. Kill switch and budget refusals from
@@ -24,13 +28,16 @@ import json
 import time
 from dataclasses import dataclass, field
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import psycopg
 from pydantic import ValidationError
 
 from app.gateway import GatewayError
 from app.tools.registry import REGISTRY, ToolSpec
+
+#: The gate asked about R2 and R3 calls before they run (ADR 021).
+RISK_GATE = "tool_risk"
 
 
 @dataclass
@@ -50,6 +57,8 @@ class ToolContext:
     links: Any = None
     fetcher: Any = None
     tasks: Any = None
+    #: The judge (tool-risk gate, decision desk); None without TypeSafe.
+    judge: Any = None
     extras: dict[str, Any] = field(default_factory=dict)
 
 
@@ -122,23 +131,36 @@ class ToolRuntime:
             )
         payload = args.model_dump(mode="json")
 
-        key = None
-        if spec.side_effect:
-            key = idempotency_key or _derived_key(self._ctx.run_id, name, payload)
-            earlier = self._earlier(key)
-            if earlier is not None:
-                return earlier
+        key = idempotency_key or _derived_key(self._ctx.run_id, name, payload)
+        earlier = self._earlier(key)
+        if earlier is not None and (spec.side_effect or earlier["status"] != "ok"):
+            return self._replay(spec, earlier)
 
-        if config["approval"] == "approval" or config["risk_class"] == "R4":
-            approval_id = self._hold(name, payload, key)
-            return self._finish(
-                name,
-                payload,
-                key,
-                "held",
-                {"approval_id": str(approval_id), "message": "Held for the owner's approval"},
+        risk = config["risk_class"]
+        if config["approval"] == "approval" or risk == "R4":
+            return self._hold(
+                name, payload, key, risk, "The tool always needs the owner's approval"
             )
+        if risk in ("R2", "R3"):
+            verdict, why = self._risk(spec, payload, risk)
+            if verdict == "block":
+                return self._finish(name, payload, None, "refused", {"error": why})
+            if verdict == "ask":
+                return self._hold(name, payload, key, risk, why)
 
+        return self._run(spec, args, payload, key if spec.side_effect else None, config)
+
+    def _run(
+        self,
+        spec: ToolSpec,
+        args: Any,  # noqa: ANN401 - the tool's own argument model
+        payload: dict[str, Any],
+        key: str | None,
+        config: dict[str, Any],
+        *,
+        replacing: UUID | None = None,
+    ) -> ToolResult:
+        name = spec.name
         started = time.monotonic()
         try:
             output = spec.handler(self._ctx, args)
@@ -152,6 +174,7 @@ class ToolRuntime:
                 "error",
                 {"error": f"{type(error).__name__}: {error}"[:500]},
                 latency_ms=_ms(started),
+                replacing=replacing,
             )
         latency = _ms(started)
         if config["risk_class"] == "R2" and output.get("screened") != "clean":
@@ -160,7 +183,88 @@ class ToolRuntime:
             }
         overran = latency > config["timeout_seconds"] * 1000
         output = _capped(output, config["max_output_chars"])
-        return self._finish(name, payload, key, "ok", output, latency_ms=latency, overran=overran)
+        return self._finish(
+            name,
+            payload,
+            key,
+            "ok",
+            output,
+            latency_ms=latency,
+            overran=overran,
+            replacing=replacing,
+        )
+
+    def _replay(self, spec: ToolSpec, row: dict[str, Any]) -> ToolResult:
+        """A call made before with the same key: the result, or the owner's decision."""
+        status = row["status"]
+        if status in ("ok", "held"):
+            return ToolResult(row["tool"], status, row["result"] or {}, row["id"], True)
+        if status == "rejected":
+            return ToolResult(
+                row["tool"],
+                "refused",
+                {"error": f"The owner rejected this call: {row['error'] or 'no reason given'}"},
+                row["id"],
+                True,
+            )
+        # Approved: run it now, once, with the arguments the owner approved.
+        config = self._config(spec.name) or {}
+        try:
+            args = spec.args.model_validate(row["arguments"] or {})
+        except ValidationError as error:
+            return self._finish(
+                spec.name,
+                row["arguments"] or {},
+                None,
+                "error",
+                {"error": f"The approved arguments are not valid: {error.errors()[:3]}"},
+                replacing=row["id"],
+            )
+        return self._run(
+            spec,
+            args,
+            args.model_dump(mode="json"),
+            row["idempotency_key"],
+            config,
+            replacing=row["id"],
+        )
+
+    def _risk(self, spec: ToolSpec, payload: dict[str, Any], risk: str) -> tuple[str, str]:
+        """The tool-risk gate's verdict: auto, ask or block, and why."""
+        judge = self._ctx.judge
+        if judge is None:
+            # No TypeSafe: reads of the outside world run (they are screened
+            # after), anything with an outside effect waits for a person.
+            if risk == "R2":
+                return "auto", ""
+            return "ask", "No risk check is available, so a person must decide"
+        decision = judge.run(
+            RISK_GATE,
+            {
+                "tool": spec.name,
+                "description": spec.description,
+                "arguments": payload,
+                "task": self._task_text(),
+            },
+            agent_id=self._ctx.agent_id,
+            run_id=self._ctx.run_id,
+            profile=risk.lower(),
+        )
+        if decision.failed:
+            return "ask", "The risk check gave no answer, so a person must decide"
+        reasons = "; ".join(r.text for r in decision.reasons if r.outcome == decision.outcome)
+        return decision.outcome, reasons or f"Risk check: {decision.outcome}"
+
+    def _task_text(self) -> str:
+        task_id = self._ctx.extras.get("task_id")
+        if not task_id:
+            return ""
+        with self._ctx.connection.cursor() as cursor:
+            cursor.execute(
+                "select title, instructions from public.tasks where id = %s", (str(task_id),)
+            )
+            row = cursor.fetchone()
+        return f"{row['title']}. {row['instructions'] or ''}".strip() if row else ""
 
     # --- helpers -------------------------------------------------------------
 
@@ -183,41 +287,91 @@ class ToolRuntime:
             row = cursor.fetchone()
         return bool(row and row["ok"])
 
-    def _earlier(self, key: str) -> ToolResult | None:
+    def _earlier(self, key: str) -> dict[str, Any] | None:
         with self._ctx.connection.cursor() as cursor:
             cursor.execute(
-                "select id, tool, status, result from public.tool_calls "
-                "where org_id = %s and idempotency_key = %s and status in ('ok', 'held')",
+                "select id, tool, status, arguments, result, error, idempotency_key "
+                "from public.tool_calls where org_id = %s and idempotency_key = %s "
+                "and status in ('ok', 'held', 'approved', 'rejected')",
                 (str(self._ctx.org_id), key),
             )
             row = cursor.fetchone()
-        if row is None:
-            return None
-        return ToolResult(row["tool"], row["status"], row["result"] or {}, row["id"], True)
+        return dict(row) if row else None
 
-    def _hold(self, name: str, payload: dict[str, Any], key: str | None) -> UUID:
+    def _hold(
+        self, name: str, payload: dict[str, Any], key: str, risk: str, reason: str
+    ) -> ToolResult:
+        """Hold the call for the owner, with a decision card, and pause its task."""
+        from app.approvals.desk import build_card
+
+        action_key = f"tool:{name}"
+        card = build_card(
+            self._ctx,
+            tool=name,
+            arguments=payload,
+            risk_class=risk,
+            reason=reason,
+            action_key=action_key,
+        )
+        approval_id = uuid4()
+        held = self._finish(
+            name,
+            payload,
+            key,
+            "held",
+            {
+                "approval_id": str(approval_id),
+                "message": "Held for the owner's approval",
+                "reason": reason,
+            },
+        )
+        task_id = self._ctx.extras.get("task_id")
         with self._ctx.connection.cursor() as cursor:
             cursor.execute(
                 """
                 insert into public.approvals
-                    (org_id, run_id, action_type, payload, agent_output_snapshot,
-                     idempotency_key)
-                values (%s, %s, 'tool_call', %s, %s, %s)
-                on conflict (org_id, idempotency_key) where idempotency_key is not null
-                do update set payload = excluded.payload
-                returning id
+                    (id, org_id, run_id, action_type, payload, agent_output_snapshot,
+                     idempotency_key, agent_id, task_id, tool_call_id, action_key,
+                     recommendation, recommendation_probs, recommendation_request_id,
+                     explanation, facts_checked, similar_decisions, conflicts)
+                values (%s, %s, %s, 'tool_call', %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
+                    str(approval_id),
                     str(self._ctx.org_id),
                     str(self._ctx.run_id) if self._ctx.run_id else None,
                     json.dumps(
-                        {"tool": name, "arguments": payload, "agent_id": str(self._ctx.agent_id)}
+                        {
+                            "tool": name,
+                            "arguments": payload,
+                            "risk_class": risk,
+                            "reason": reason,
+                            "agent_id": str(self._ctx.agent_id),
+                        }
                     ),
                     json.dumps({"tool": name, "arguments": payload}),
-                    f"tool:{key or _derived_key(self._ctx.run_id, name, payload)}",
+                    f"tool:{key}",
+                    str(self._ctx.agent_id),
+                    str(task_id) if task_id else None,
+                    str(held.call_id),
+                    action_key,
+                    card.recommendation,
+                    json.dumps(card.probabilities) if card.probabilities is not None else None,
+                    card.request_id,
+                    card.explanation,
+                    json.dumps(card.facts_checked),
+                    json.dumps(card.similar_decisions, default=str),
+                    json.dumps(card.conflicts),
                 ),
             )
-            return cursor.fetchone()["id"]
+            if task_id:
+                cursor.execute(
+                    "update public.tasks set status = 'awaiting_approval' "
+                    "where id = %s and status = 'running'",
+                    (str(task_id),),
+                )
+        return held
 
     def _finish(
         self,
@@ -229,29 +383,49 @@ class ToolRuntime:
         *,
         latency_ms: int | None = None,
         overran: bool = False,
+        replacing: UUID | None = None,
     ) -> ToolResult:
+        """Record the call. `replacing` is an approved call now carried out:
+        its row takes the outcome, so one key stays one row."""
         with self._ctx.connection.cursor() as cursor:
-            cursor.execute(
-                """
-                insert into public.tool_calls
-                    (org_id, agent_id, run_id, tool, idempotency_key, arguments, status,
-                     result, error, latency_ms)
-                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                returning id
-                """,
-                (
-                    str(self._ctx.org_id),
-                    str(self._ctx.agent_id),
-                    str(self._ctx.run_id) if self._ctx.run_id else None,
-                    name,
-                    key if status in ("ok", "held") else None,
-                    json.dumps(payload, default=str),
-                    status,
-                    json.dumps(output, default=str),
-                    output.get("error") if status in ("refused", "error") else None,
-                    latency_ms,
-                ),
-            )
+            if replacing is not None:
+                cursor.execute(
+                    """
+                    update public.tool_calls
+                       set status = %s, result = %s, error = %s, latency_ms = %s
+                     where id = %s
+                    returning id
+                    """,
+                    (
+                        status,
+                        json.dumps(output, default=str),
+                        output.get("error") if status in ("refused", "error") else None,
+                        latency_ms,
+                        str(replacing),
+                    ),
+                )
+            else:
+                cursor.execute(
+                    """
+                    insert into public.tool_calls
+                        (org_id, agent_id, run_id, tool, idempotency_key, arguments, status,
+                         result, error, latency_ms)
+                    values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    returning id
+                    """,
+                    (
+                        str(self._ctx.org_id),
+                        str(self._ctx.agent_id),
+                        str(self._ctx.run_id) if self._ctx.run_id else None,
+                        name,
+                        key if status in ("ok", "held") else None,
+                        json.dumps(payload, default=str),
+                        status,
+                        json.dumps(output, default=str),
+                        output.get("error") if status in ("refused", "error") else None,
+                        latency_ms,
+                    ),
+                )
             call_id = cursor.fetchone()["id"]
             cursor.execute(
                 "insert into public.events (org_id, run_id, agent_id, type, payload) "

@@ -414,6 +414,12 @@ low-risk call auto-passes only above its threshold; the full trail is in `events
 every held action carries a recommendation, and a proposal that conflicts with
 an earlier owner decision says so.
 
+**Status (2026-09-26):** done (ADR 021), tested with a scripted TypeSafe and a
+scripted model. One difference from the plan: a held call pauses the run and
+resumes by replaying the call through its idempotency key, not deepagents'
+`interrupt_on` (reasons in the ADR). Owner decisions and standing rules with a
+reason become owner facts. CLI: `python -m scripts.approvals`.
+
 ### Step 7.6: Autonomy and safety limits (S)
 
 - The autonomy ladder per agent (L0 draft only, L1 default, L2, L3), set only by

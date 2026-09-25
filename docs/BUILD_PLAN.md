@@ -91,6 +91,20 @@ Build `api/app/judge/`.
 
 Done when: a new fact is checked before insertion; judgments are logged and queryable; the service being down triggers the configured failure mode; the eval harness runs on a small labeled set.
 
+## Step 5b: Configuration backend (M)
+
+Principle: **configurable things live in the database, never in code.** The owner must not have to edit the repo or redeploy to change a prompt, add an agent, upload knowledge or change a model. Model tiers already work this way (ADR 003); this step brings the rest to the same standard. Backend only; the screens come in Step 7b. Write an ADR for it.
+
+Build:
+- **Prompts in the database.** Move `ANSWER_SYSTEM` and `EXTRACT_SYSTEM` (currently constants in `api/app/agents/research.py`) into a versioned `agent_prompts` table: `agent_id`, `version`, `text`, `active`. Never overwrite; a new edit is a new version. Each run records the prompt version it used. One-step rollback. Changes emit an `events` row.
+- **Agent creation API.** Create an agent from a structured payload (department, name, role, tier, daily budget, starting prompt, allowed tools). New agents start `enabled = false` and emit an event.
+- **Documents.** A `documents` table (source material, kept separate from `facts`) and a `document_chunks` table with embeddings via the gateway. Files go in Supabase Storage. Every document and chunk carries a `scope` (`company`, `department` or `agent`) plus an owner id, enforced by RLS so an agent only retrieves its own scope, its department's and the company's. A fact created from a document links back to it.
+- **Link scraping, two steps.** (1) Fetch and preview: fetch a URL, extract the text, show the facts it would create, save nothing to the brain. (2) Push to brain: a separate, explicit action that writes the facts with `source_ref` set to the URL. Start with plain HTTP fetch and text extraction (free). A paid scraping service needs owner approval first. Scraped text is treated as data, never as instructions, and should pass the Step 5 judge before a fact is written.
+
+Done when: changing an agent's prompt takes effect on its next run with no code change or redeploy, and the run records which version it used; an agent can be created through the API and starts disabled; a company doc, a department doc and an agent doc are each retrievable only by the right agents (RLS test with two orgs and two scopes); a URL can be previewed without touching the brain and then pushed as a separate action.
+
+Timing note: prompt versioning is the piece worth doing earliest (before more agents are written), because every new agent should load its prompt from the database from day one. Decide whether to pull it ahead of Step 4.
+
 ## Step 6: Approval queue and first HOD (L)
 
 Build:
@@ -108,9 +122,22 @@ Build:
 - Supabase Realtime subscription on `events` (RLS-aware).
 - A chat window to talk to the HOD and give orders in real time.
 - The brain visualization at the center: it should glow and flow with information as agents work, driven by real events (not fake animation). Design after the framework is chosen.
-- Model management UI: change the model behind each tier, and per department, without a redeploy. The backend (table, gateway lookup, catalogue check, audit trigger) already exists; this is the screen on top of it. Picked from OpenRouter's live catalogue rather than typed free-hand, and every change audited to `events`. See `docs/adr/0003-model-selection-is-runtime-configuration.md`.
+- Model management UI (lives inside the Control Center tab, Step 7b): change the model behind each tier, and per department, without a redeploy. The backend (table, gateway lookup, catalogue check, audit trigger) already exists; this is the screen on top of it. Picked from OpenRouter's live catalogue rather than typed free-hand, and every change audited to `events`. See `docs/adr/0003-model-selection-is-runtime-configuration.md`.
 
 Done when: chatting with the HOD works end to end and agent activity visibly lights up the brain in near real time.
+
+## Step 7b: Control Center tab (M)
+
+A new tab in the web app: the owner's place to change everything configurable, with no code edits. Screens over the Step 5b backend:
+
+1. **Create agents.** A common intake form per department (department, name, role, tier, daily budget, starting prompt, tools). Creates the agent disabled; the owner reviews and enables it.
+2. **Edit prompts.** Edit an agent's prompt, see version history, roll back.
+3. **Knowledge.** Upload documents with a scope picker (company, department or agent), and see what each agent can read.
+4. **Add links.** Paste a URL, preview the extracted facts, then an optional "Push to brain" button.
+5. **Model management.** The tier and per-department model screen from Step 7 lives here.
+6. **More to come.** The owner will add further features; the tab is built as a list of sections so a new one is a new section, not a redesign.
+
+Done when: the owner can do items 1 to 5 entirely from the browser, every change is audited to `events`, and none of them needed a code change or redeploy.
 
 ## Step 8: Cost review (S)
 
@@ -126,6 +153,9 @@ Done when: the owner can see real cost per agent per day and has budget alerts c
 4. **Checkpointer connection mode** through the Supabase pooler (result of the Step 3 test). ~~Open.~~ Decided: transaction pooler, checkpoints in a private `langgraph` schema. See ADR 005; the live probe against the pooler is still to run.
 5. **HOD pattern:** deepagents subagents vs LangGraph supervisor.
 6. **UI framework:** decided at Step 7.
+7. **Document scopes:** company, department and agent (recommended) vs company and agent only. Owner leaned toward the recommendation; confirm at Step 5b.
+8. **When to do prompts-in-database:** now, before Step 4 (recommended, cheap and every later agent benefits) vs with the rest of Step 5b.
+9. **Scraping:** plain HTTP fetch (free, no JavaScript rendering) vs a paid scraping service (needs owner approval).
 
 ## Explicitly out of scope for phase 1
 

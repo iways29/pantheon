@@ -73,6 +73,7 @@ class Decision:
     input_ref: str | None = None
     cost_usd: float = 0.0
     latency_ms: int | None = None
+    tokens_in: int = 0
 
     def summary(self) -> dict[str, Any]:
         """What the `judgment_made` event carries: the decision, not the text."""
@@ -160,6 +161,7 @@ class Judge:
             input_ref=reference,
             cost_usd=response.cost_usd,
             latency_ms=response.latency_ms,
+            tokens_in=response.tokens_in,
         )
         self._emit(agent, run_id, "judgment_made", decision.summary())
         return decision

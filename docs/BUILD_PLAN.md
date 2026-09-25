@@ -257,6 +257,11 @@ How well Jev itself labels the injection samples is measured live in 5.4.
 Done when: the harness runs on labelled cases for the brain gate and the screening
 gate and prints precision and recall; thresholds in config are set from it.
 
+**Status (2026-09-25):** harness, case store and 42 starting cases done
+(ADR 012), tested with a scripted TypeSafe. Still to do: the first live run
+(`scripts.judge_eval run all --repeats 3`) in a session with the key, then
+the owner sets thresholds from it. Label sources wait on open decision 14.
+
 ### Milestone after Step 5 (stop and report)
 
 Show: per-gate precision and recall, cost per 1,000 judgments, latency, what fails

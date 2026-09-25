@@ -5,12 +5,14 @@ as the owner in the database, so RLS applies as it would to any member.
 Phase 1 has one org; the owner's only membership picks it.
 """
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import asdict
 from typing import Annotated, Any
+from uuid import UUID
 
 import psycopg
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from pydantic import BaseModel
 
 from app.agents.admin import (
     AgentAdminError,
@@ -24,8 +26,10 @@ from app.auth import OwnerPrincipal
 from app.config import Settings, get_settings
 from app.db import acting_as, as_service_role, connect
 from app.knowledge.extract import UnsupportedContent
+from app.knowledge.fetch import FetchedPage, FetchRefused, fetch
 from app.knowledge.library import DocumentError, Library
-from app.knowledge.wiring import library_from
+from app.knowledge.links import LinkError, Links, Preview
+from app.knowledge.wiring import library_from, links_from
 
 router = APIRouter(tags=["owner"])
 
@@ -111,15 +115,19 @@ def _switch(name: str, on: bool, user_id: str, connection: psycopg.Connection) -
     return _json(summary)
 
 
-def get_library_factory(
-    settings: Annotated[Settings, Depends(get_settings)],
-) -> Any:  # noqa: ANN401 - a factory; overridden in tests
+MakeLibrary = Callable[[psycopg.Connection, UUID], Library]
+MakeLinks = Callable[[psycopg.Connection, UUID], Links]
+Fetcher = Callable[[str], FetchedPage]
+
+
+def get_library_factory(settings: Annotated[Settings, Depends(get_settings)]) -> MakeLibrary:
+    """Overridden in tests with a scripted screener and an in-memory store."""
     return lambda connection, agent_id: library_from(
         connection, settings, processor_agent_id=agent_id
     )
 
 
-LibraryFactory = Annotated[Any, Depends(get_library_factory)]
+LibraryFactory = Annotated[MakeLibrary, Depends(get_library_factory)]
 
 
 @router.post("/documents", status_code=status.HTTP_201_CREATED)
@@ -152,7 +160,7 @@ async def post_document(
         row = cursor.fetchone()
         if row is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, f"No agent {processed_by!r}")
-        library: Library = make_library(conn, row["id"])
+        library = make_library(conn, row["id"])
         try:
             result = library.add(
                 org_id=org_id,
@@ -179,3 +187,93 @@ async def post_document(
         "reasons": list(result.reasons),
         "approval_id": str(result.approval_id) if result.approval_id else None,
     }
+
+
+def get_links_factory(settings: Annotated[Settings, Depends(get_settings)]) -> MakeLinks:
+    return lambda connection, agent_id: links_from(connection, settings, agent_id=agent_id)
+
+
+def get_fetcher() -> Fetcher:
+    return fetch
+
+
+class PreviewRequest(BaseModel):
+    url: str
+    #: The agent that reads the page and proposes its claims (and pays).
+    agent: str
+
+
+def _preview_json(preview: Preview) -> dict[str, Any]:
+    return {
+        "id": str(preview.id),
+        "url": preview.url,
+        "final_url": preview.final_url,
+        "label": preview.label,
+        "reasons": list(preview.reasons),
+        "claims": list(preview.claims),
+        "status": preview.status,
+        "results": list(preview.results),
+        "created": preview.created,
+    }
+
+
+@router.post("/links/preview", status_code=status.HTTP_201_CREATED)
+def preview_link(
+    body: PreviewRequest,
+    principal: OwnerPrincipal,
+    connection: Connection,
+    make_links: Annotated[MakeLinks, Depends(get_links_factory)],
+    fetcher: Annotated[Fetcher, Depends(get_fetcher)],
+    response: Response,
+) -> dict[str, Any]:
+    """Fetch, screen and propose claims. Writes nothing to the brain."""
+    org_id = owner_org(connection, principal.user_id)
+    try:
+        page = fetcher(body.url)
+    except FetchRefused as error:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(error)) from error
+    with acting_as(connection, user_id=principal.user_id) as conn:
+        agent_id = _agent_id(conn, org_id, body.agent)
+        links = make_links(conn, agent_id)
+        try:
+            preview = links.preview(page, org_id=org_id, agent_id=agent_id)
+        except LinkError as error:
+            raise HTTPException(error.status, str(error)) from error
+    if not preview.created:
+        response.status_code = status.HTTP_200_OK
+    return _preview_json(preview)
+
+
+@router.post("/links/{preview_id}/push")
+def push_link(
+    preview_id: str,
+    principal: OwnerPrincipal,
+    connection: Connection,
+    make_links: Annotated[MakeLinks, Depends(get_links_factory)],
+) -> dict[str, Any]:
+    """Send a clean preview's claims through the brain write gate."""
+    org_id = owner_org(connection, principal.user_id)
+    with acting_as(connection, user_id=principal.user_id) as conn, conn.cursor() as cursor:
+        cursor.execute(
+            "select agent_id from public.link_previews where id = %s and org_id = %s",
+            (preview_id, org_id),
+        )
+        row = cursor.fetchone()
+        if row is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, f"No preview {preview_id}")
+        links = make_links(conn, row["agent_id"])
+        try:
+            return _preview_json(links.push(preview_id, org_id=org_id))
+        except LinkError as error:
+            raise HTTPException(error.status, str(error)) from error
+
+
+def _agent_id(connection: psycopg.Connection, org_id: str, name: str) -> UUID:
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "select id from public.agents where org_id = %s and name = %s", (org_id, name)
+        )
+        row = cursor.fetchone()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"No agent {name!r}")
+    return row["id"]

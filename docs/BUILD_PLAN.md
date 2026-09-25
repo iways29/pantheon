@@ -303,6 +303,13 @@ agent doc are each retrievable only by the right agents (RLS test with two orgs 
 two scopes); a URL can be previewed without touching the brain and then pushed as a
 separate action; a page with a planted injection never reaches the preview as clean.
 
+**Status (2026-09-26):** done. Owner decisions: document scopes company,
+department and agent (7); plain HTTP fetch (9); real embeddings
+(`openai/text-embedding-3-small`) through the gateway. ADRs 013 (embeddings),
+014 (agent creation), 015 (documents), 016 (links). Live: apply the Step 5
+and Step 6 migrations, run `scripts.agent seed` and `scripts.brain reembed`,
+and set `SUPABASE_SERVICE_ROLE_KEY` and `TYPESAFE_API_KEY` in Vercel.
+
 ## Step 7: The agent platform (L, six parts)
 
 Formerly the first half of Step 6, expanded. Design and reasoning:
@@ -558,9 +565,9 @@ configured.
 4. **Checkpointer connection mode** through the Supabase pooler. ~~Open.~~ Decided: transaction pooler, checkpoints in a private `langgraph` schema. See ADR 005; verified against the live pooler.
 5. **How the hierarchy is built.** Options: (A) deepagents subagents only, which is one level, in-process and blocking, so it cannot express Chief of Staff, heads and workers; (B) a LangGraph supervisor, also in-process, which holds a run open while children work and fits serverless badly; (C) **durable database tasks for the tree, deepagents only for a worker's temporary helpers** (recommended: survives serverless limits, every step auditable, budgets and limits enforceable in SQL, resumable). Cost of C: a tasks table and scheduler extension to build (Step 7.3). Record in an ADR at 7.4.
 6. **UI framework:** decided at Step 10.
-7. **Document scopes:** company, department and agent (recommended) vs company and agent only. Owner leaned toward the recommendation; confirm at Step 6.
+7. **Document scopes:** ~~company, department and agent vs company and agent only.~~ **Decided (owner, 2026-09-26): company, department and agent.** See ADR 015.
 8. **When to do prompts-in-database:** ~~now vs with the rest.~~ Decided and done ahead of Step 4. See ADR 007.
-9. **Scraping:** plain HTTP fetch (free, no JavaScript rendering) vs a paid scraping service (needs owner approval).
+9. **Scraping:** ~~plain HTTP fetch vs a paid scraping service.~~ **Decided (owner, 2026-09-26): plain HTTP fetch, free.** A paid service needs owner approval later. See ADR 016.
 10. **How to call TypeSafe.** **Decided (owner, 2026-09-25): (A), see ADR 009.** (A) **Our own thin `httpx` transport to `api.typesafe.ai`** (recommended: no new dependency, matches the gateway's style, keeps kill switch, cost logging and events in one place; uses the `TYPESAFE_API_KEY` already in the plan). (B) The official `typesafe-sdk` package (retries and typed responses built in; a new dependency to approve). (C) Through OpenRouter as `~typesafe/jev-latest` (one key and one bill, but the alias moves, which ADR 003 forbids; a versioned id would be needed). (D) Through Vercel's AI Gateway (another moving part). Do not adopt `langchain-typesafe` (experimental, new dependency); copy its patterns.
 11. **Sensitive data and TypeSafe.** **Decided (owner, 2026-09-25): not allowed; a per-gate switch, off by default. See ADR 009.** Recommended: **not allowed** until TypeSafe confirms request retention in writing (their terms are silent on it and zero retention is enterprise-only). Sensitive items go to a person or to a zero-retention LLM judge through the gateway. The owner may email privacy@typesafe.ai; the answer is reported at the Step 5 Milestone.
 12. **Which departments first.** Decided in part: Executive Office, Research and Intelligence, then **Marketing and Content** as the first revenue department (owner, 2026-09-25); Sales and Outreach follows. The business, channels (Reddit, Instagram, X, newsletter, site blog every two weeks or as needed) and voice are in `docs/business/the-unreal-lab.md`. Still owed: sample content in the right voice, once there is any.

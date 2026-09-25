@@ -99,7 +99,8 @@ class _TextParser(HTMLParser):
     def handle_comment(self, data: str) -> None:
         # Comments are invisible to people but not to models: keep them, so
         # the screening sees an injection hidden in one (ADR 011).
-        if not self._skipping and data.strip():
+        # Framework markers such as `<!-- $ -->` carry no words; skip them.
+        if not self._skipping and sum(ch.isalpha() for ch in data) >= 3:
             self.parts.append(f"\n\n<!-- {data.strip()} -->\n\n")
 
 

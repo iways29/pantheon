@@ -7,15 +7,15 @@ owner's working preferences.
 
 ## The one-paragraph state
 
-Steps 0 to 4 are **done and live**. **Step 5 (TypeSafe Jev) is built and
-tested but not live** (2026-09-25, ADRs 009 to 012): the judge core (5.1),
-the brain write gate (5.2; no fact enters the brain unjudged), content
-screening and guardrails (5.3), and the calibration harness with 42 labelled
-cases (5.4). 295 tests pass. Decisions 10 and 11 were confirmed by the owner.
-**We are at the Step 5 Milestone**: the owner must say go before Step 6.
-Not yet done: the live smoke test and the first live eval run (the cloud
-session that built Step 5 had no `TYPESAFE_API_KEY`), and applying the four
-new migrations to Supabase.
+Steps 0 to 4 are **done and live**. **Step 5** (TypeSafe Jev: judge core,
+brain write gate, screening and guardrails, calibration; ADRs 009 to 012)
+and **Step 6** (real embeddings, agent creation API, scoped documents, links
+preview then push; ADRs 013 to 016) are **built and tested but not live**.
+The owner said go past the Step 5 Milestone on 2026-09-26, with the live
+eval still owed. The right-hand design (`docs/design/right-hand.md`, seven
+ideas) is folded into Steps 7.5 to 11. Owner content rule (2026-09-26):
+English only everywhere except the website's vetted verses. Next is **Step
+7.1** (gateway tool calling). 365 tests pass.
 
 ## Working agreement with the owner (keep to it)
 
@@ -58,7 +58,7 @@ those; the API's 401 versus 503 answers reveal whether `TRIGGER_SECRET` is set.
 - Docker container `pantheon-testdb` (pgvector, Postgres 16): port **55432**,
   databases `pantheon_test` and `pantheon_dev`, app login `pantheon`/`pantheon`,
   superuser `postgres`/`postgres`. Start it with `docker start pantheon-testdb`.
-- Tests (297 passing after Step 5):
+- Tests (365 passing after Step 6):
   `cd api && DATABASE_URL=postgresql://pantheon:pantheon@127.0.0.1:55432/pantheon_test uv run pytest -q`
   then `uv run ruff check .` and `uv run ruff format --check .`.
 - **New migrations must be applied by hand** to both local databases, as the
@@ -101,20 +101,18 @@ those; the API's 401 versus 503 answers reveal whether `TRIGGER_SECRET` is set.
 
 ## What to do next
 
-1. **With the owner's go-ahead**, apply the Step 5 migrations to Supabase
-   (`20260925050000` to `20260925080000`) through the Supabase MCP, then run
-   `scripts.agent seed` against the pooler to publish the five starter gates
-   and the Jev price for the live org, and `scripts.judge_eval import`.
-2. In a session with the key: `uv run python -m scripts.jev_smoke`, then
-   `uv run python -m scripts.judge_eval run all --repeats 3`. Report the
-   numbers to the owner; the owner sets thresholds with `scripts.judge gate set`.
-3. Put `TYPESAFE_API_KEY` in the Vercel `pantheon-api` project, or the
-   research agent answers but stores no facts (`fact_writes: not_judged`).
-4. Open decision 14 (label sources) before building the frontier-model
-   labeller. Decisions 5, 12 and 13 come at Steps 7 and 8.
-5. Deleting an org used to fail when it had a model tier assignment (the
-   audit trigger wrote an event for the deleted org). Fixed by migration
-   `20260925080000`; apply it to Supabase with the Step 5 ones.
+1. **With the owner's go-ahead**, apply every migration from
+   `20260925050000` to `20260926040000` to Supabase through the Supabase MCP.
+   Then, against the pooler: `scripts.agent seed` (starter gates, Jev price,
+   embedding model), `scripts.brain reembed` (moves old facts to the real
+   embedding model; until then they are invisible to search), and
+   `scripts.judge_eval import`.
+2. Vercel `pantheon-api` needs `TYPESAFE_API_KEY` and
+   `SUPABASE_SERVICE_ROLE_KEY` (legacy key or a new `sb_secret_...` key).
+3. In a session with the TypeSafe key: `scripts.jev_smoke`, then
+   `scripts.judge_eval run all --repeats 3`, and report the numbers.
+4. Open decision 14 (label sources) before building the labeller. Step 7
+   next: 7.1 gateway tool calling, then 7.2 to 7.6 with the right-hand ideas.
 
 ## Prompt to paste into the new chat
 

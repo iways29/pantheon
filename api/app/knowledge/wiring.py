@@ -5,11 +5,13 @@ from uuid import UUID
 import psycopg
 
 from app.brain import Brain, GatewayEmbedder
+from app.brain.write_gate import BrainWriter
 from app.config import Settings
 from app.gateway import gateway_from
 from app.judge import Judge
 from app.judge.screening import Screener
 from app.knowledge.library import Library
+from app.knowledge.links import Links
 from app.knowledge.storage import SupabaseStorage
 
 
@@ -24,3 +26,20 @@ def library_from(
     screener = Screener(connection, Judge(connection, gateway), Brain(connection, embedder))
     files = SupabaseStorage(settings.supabase_url or "", settings.supabase_service_role_key or "")
     return Library(connection, embedder=embedder, screener=screener, files=files)
+
+
+def links_from(
+    connection: psycopg.Connection, settings: Settings, *, agent_id: UUID | str
+) -> Links:
+    """The agent reads the page, proposes its claims, and pays for both."""
+    if not settings.typesafe_api_key:
+        raise ValueError("TYPESAFE_API_KEY is not set: pages cannot be screened")
+    gateway = gateway_from(connection, settings)
+    judge = Judge(connection, gateway)
+    brain = Brain(connection, GatewayEmbedder(gateway, agent_id=agent_id))
+    return Links(
+        connection,
+        gateway=gateway,
+        screener=Screener(connection, judge, brain),
+        writer=BrainWriter(connection, brain, judge),
+    )

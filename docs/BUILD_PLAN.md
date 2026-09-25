@@ -103,7 +103,7 @@ Build:
 
 Done when: changing an agent's prompt takes effect on its next run with no code change or redeploy, and the run records which version it used; an agent can be created through the API and starts disabled; a company doc, a department doc and an agent doc are each retrievable only by the right agents (RLS test with two orgs and two scopes); a URL can be previewed without touching the brain and then pushed as a separate action.
 
-Timing note: prompt versioning is the piece worth doing earliest (before more agents are written), because every new agent should load its prompt from the database from day one. Decide whether to pull it ahead of Step 4.
+Progress: the prompt-versioning part is done ahead of Step 4 (ADR 007): versioned `agent_prompts`, per-run pinning, audit events, rollback, and a CLI (`scripts.agent prompt`). Still to do in this step: the agent creation API, documents with scopes, and link scraping.
 
 ## Step 6: Approval queue and first HOD (L)
 
@@ -154,7 +154,7 @@ Done when: the owner can see real cost per agent per day and has budget alerts c
 5. **HOD pattern:** deepagents subagents vs LangGraph supervisor.
 6. **UI framework:** decided at Step 7.
 7. **Document scopes:** company, department and agent (recommended) vs company and agent only. Owner leaned toward the recommendation; confirm at Step 5b.
-8. **When to do prompts-in-database:** now, before Step 4 (recommended, cheap and every later agent benefits) vs with the rest of Step 5b.
+8. **When to do prompts-in-database:** ~~now vs with Step 5b.~~ Decided and done ahead of Step 4. See ADR 007.
 9. **Scraping:** plain HTTP fetch (free, no JavaScript rendering) vs a paid scraping service (needs owner approval).
 
 ## Explicitly out of scope for phase 1

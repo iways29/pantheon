@@ -123,9 +123,10 @@ those; the API's 401 versus 503 answers reveal whether `TRIGGER_SECRET` is set.
 3. In a session with the TypeSafe key: `scripts.jev_smoke`, then
    `scripts.judge_eval run all --repeats 3`, and report the numbers.
 4. Open decision 14 (label sources) before building the labeller.
-5. Step 8.1 live: with the API deployed from Steps 5 to 8,
-   `scripts.department sources research --topic ... --source https://...`,
-   then `apply research`, then `enable research`; after five weekday mornings,
+5. Step 8.1 live: research charter v2 (live, 2026-09-26) has the owner's first
+   topic, space tech VC investment, and five checked sources (SpaceNews business,
+   Payload, TechCrunch space, Space Capital publications, Space Insider). With the
+   API deployed from Steps 5 to 8: `apply research`, then `enable research`; after five weekday mornings,
    `scripts.department report research` is the Milestone report.
 6. MCP (Step 7.7): set `PUBLIC_API_URL` in Vercel to the API's address, deploy,
    then `scripts.mcp add higgsfield <its MCP URL>` and `scripts.mcp connect

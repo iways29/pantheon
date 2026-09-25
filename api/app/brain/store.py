@@ -18,7 +18,7 @@ from app.brain.embeddings import Embedder
 _FACT_COLUMNS = """
     id, org_id, claim, source, source_ref, confidence, status,
     superseded_by, created_by_run_id, created_at, updated_at,
-    admitted_by, review_after, visibility, quote, embedding_model
+    admitted_by, review_after, visibility, quote, embedding_model, document_id
 """
 
 
@@ -35,6 +35,8 @@ class Admission:
     review_after: date | None = None
     visibility: str = "internal"
     quote: str | None = None
+    #: The document the claim was taken from, when it was (ADR 015).
+    document_id: UUID | str | None = None
 
 
 @dataclass(frozen=True)
@@ -55,6 +57,7 @@ class Fact:
     visibility: str = "internal"
     quote: str | None = None
     embedding_model: str | None = None
+    document_id: UUID | None = None
 
     @classmethod
     def from_row(cls, row: dict[str, Any]) -> "Fact":
@@ -75,6 +78,7 @@ class Fact:
             visibility=row["visibility"],
             quote=row["quote"],
             embedding_model=row["embedding_model"],
+            document_id=row["document_id"],
         )
 
 
@@ -140,8 +144,8 @@ class Brain:
                 insert into public.facts
                     (org_id, claim, source, source_ref, confidence,
                      created_by_run_id, embedding, admitted_by, status,
-                     review_after, visibility, quote, embedding_model)
-                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                     review_after, visibility, quote, embedding_model, document_id)
+                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 returning {_FACT_COLUMNS}
                 """,
                 (
@@ -158,6 +162,7 @@ class Brain:
                     admission.visibility,
                     admission.quote,
                     self._embedder.name,
+                    str(admission.document_id) if admission.document_id else None,
                 ),
             )
             row = cursor.fetchone()

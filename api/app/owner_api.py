@@ -10,7 +10,7 @@ from dataclasses import asdict
 from typing import Annotated, Any
 
 import psycopg
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 
 from app.agents.admin import (
     AgentAdminError,
@@ -22,7 +22,10 @@ from app.agents.admin import (
 )
 from app.auth import OwnerPrincipal
 from app.config import Settings, get_settings
-from app.db import as_service_role, connect
+from app.db import acting_as, as_service_role, connect
+from app.knowledge.extract import UnsupportedContent
+from app.knowledge.library import DocumentError, Library
+from app.knowledge.wiring import library_from
 
 router = APIRouter(tags=["owner"])
 
@@ -106,3 +109,73 @@ def _switch(name: str, on: bool, user_id: str, connection: psycopg.Connection) -
     except AgentAdminError as error:
         raise _refuse(error) from error
     return _json(summary)
+
+
+def get_library_factory(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> Any:  # noqa: ANN401 - a factory; overridden in tests
+    return lambda connection, agent_id: library_from(
+        connection, settings, processor_agent_id=agent_id
+    )
+
+
+LibraryFactory = Annotated[Any, Depends(get_library_factory)]
+
+
+@router.post("/documents", status_code=status.HTTP_201_CREATED)
+async def post_document(
+    request: Request,
+    principal: OwnerPrincipal,
+    connection: Connection,
+    make_library: LibraryFactory,
+    response: Response,
+    title: Annotated[str, Query(min_length=1)],
+    filename: Annotated[str, Query(min_length=1)],
+    scope: Annotated[str, Query(pattern="^(company|department|agent)$")],
+    processed_by: Annotated[str, Query(description="Agent whose budget pays for screening")],
+    department: str | None = None,
+    agent: str | None = None,
+) -> dict[str, Any]:
+    """Upload a document as the raw request body, typed by Content-Type.
+
+    Screened before it is chunked (ADR 015). Uploading the same file to the
+    same scope again returns the existing document (200).
+    """
+    org_id = owner_org(connection, principal.user_id)
+    content = await request.body()
+    content_type = request.headers.get("content-type", "application/octet-stream")
+    with acting_as(connection, user_id=principal.user_id) as conn, conn.cursor() as cursor:
+        cursor.execute(
+            "select id from public.agents where org_id = %s and name = %s",
+            (org_id, processed_by),
+        )
+        row = cursor.fetchone()
+        if row is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, f"No agent {processed_by!r}")
+        library: Library = make_library(conn, row["id"])
+        try:
+            result = library.add(
+                org_id=org_id,
+                content=content,
+                filename=filename,
+                content_type=content_type,
+                title=title,
+                scope=scope,  # type: ignore[arg-type]
+                department=department,
+                agent=agent,
+                processor_agent_id=row["id"],
+            )
+        except DocumentError as error:
+            raise HTTPException(error.status, str(error)) from error
+        except UnsupportedContent as error:
+            raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, str(error)) from error
+    if not result.created:
+        response.status_code = status.HTTP_200_OK
+    return {
+        "id": str(result.id),
+        "status": result.status,
+        "chunks": result.chunks,
+        "created": result.created,
+        "reasons": list(result.reasons),
+        "approval_id": str(result.approval_id) if result.approval_id else None,
+    }

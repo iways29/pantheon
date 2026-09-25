@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     supabase_jwks_url: str | None = None
     supabase_jwt_audience: str = "authenticated"
 
+    # Server-side Supabase key for Storage uploads (documents, ADR 015). The
+    # legacy `service_role` JWT or a new `sb_secret_...` key. Never sent to
+    # the browser.
+    supabase_service_role_key: str | None = None
+
     # Phase 1 has exactly one operator. Any other authenticated subject is
     # rejected, so a stray Supabase signup cannot reach the API.
     owner_user_id: str | None = None

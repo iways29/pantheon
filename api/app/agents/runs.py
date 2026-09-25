@@ -385,7 +385,8 @@ def _next_step_blocked(
 
 @contextmanager
 def _session(runtime: Runtime, connection: psycopg.Connection, run: _Run) -> Iterator[Session]:
-    with acting_as(connection, user_id=str(run.requested_by)) as conn:
+    # The run acts for its agent: document scopes (ADR 015) apply to it.
+    with acting_as(connection, user_id=str(run.requested_by), agent_id=str(run.agent_id)) as conn:
         gateway = Gateway(
             conn, runtime.transport, runtime.tiers, runtime.tracer, systemone=runtime.systemone
         )

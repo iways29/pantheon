@@ -60,6 +60,8 @@ class FactCandidate:
     #: held for a person instead.
     sensitive: bool = False
     visibility: Literal["internal", "public"] = "internal"
+    #: The document the claim was taken from (ADR 015); the fact links back.
+    document_id: UUID | str | None = None
 
 
 @dataclass(frozen=True)
@@ -260,6 +262,7 @@ class BrainWriter:
             review_after=_review_after(verdict, settings),
             visibility=candidate.visibility,
             quote=candidate.quote,
+            document_id=candidate.document_id,
         )
         fact = self._brain.insert_fact(
             org_id=org_id,

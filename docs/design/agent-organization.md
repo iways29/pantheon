@@ -226,7 +226,7 @@ what "working" means (metrics). Start with three departments, not seven.
 | **Executive Office** | intake, the daily brief, keeping the owner in control | Chief of Staff | Brief writer, Approvals clerk | brain search, create task, read costs and approvals | compile the morning brief (overnight results, approvals waiting, yesterday's cost) | nothing external |
 | **Research & Intelligence** (exists) | learn things and keep the brain accurate | Research Lead | Web researcher, Fact curator, Competitor analyst | web fetch, brain propose, read documents | overnight news on the owner's topics; competitor watch; brain hygiene (find stale or disputed facts) | nothing external |
 | **Marketing & Content** (**chosen first revenue department**, 2026-09-25; charter in 8.1) | produce content that builds audience and demand | Content Lead | Topic researcher, Writer, Editor and fact-checker, Distribution scheduler | web fetch, brain, document read, draft save | three topic ideas, one drafted piece, checked and ready for approval | **all** publishes and sends |
-| **Founder Relations** (candidate, early addition; the studio's deal flow) | read inbound founder applications, score them, draft replies within the promised week | Founder Relations Lead | Application reader, Reply drafter | brain, document read, email draft | overnight applications summarised and scored; drafts ready | **all** replies |
+| Founder Relations (**deferred**: nothing arrives yet; the studio's deal flow later) | read inbound founder applications, score them, draft replies within the promised week | Founder Relations Lead | Application reader, Reply drafter | brain, document read, email draft | overnight applications summarised and scored; drafts ready | **all** replies |
 | Sales & Outreach (later, if the studio sells advisory or partnerships) | find and warm leads | Sales Lead | Lead researcher, Outreach drafter | web fetch, brain, email draft | shortlist of leads; drafts | **all** sends |
 | Product & Engineering (later) | build and maintain the product | Eng Lead | Spec writer, Implementer, Reviewer, Docs writer | GitHub read, branch and PR | triage issues, review open PRs | every change to code |
 | Finance & Cost (later) | watch spend, protect the budget | Controller | Cost analyst, Budget sentinel | read costs, read budgets | cost and budget alert summary | any change to a budget |
@@ -243,8 +243,9 @@ about $1 a day, and the owner raises limits as results justify.
 
 Chosen by the owner on 2026-09-25. Audience, positioning and voice come from the
 company brief (`docs/business/the-unreal-lab.md`): young founders and
-high-net-worth backers, a myth-coded, restrained voice. Channels are still
-marked **Owner**.
+high-net-worth backers, a myth-coded, restrained voice. Channels are
+Reddit, Instagram, X, a newsletter, and site blog posts every two weeks or as
+needed, all on the owner's own accounts.
 
 | Field | Proposal |
 | --- | --- |
@@ -255,18 +256,20 @@ marked **Owner**.
 | Worker: **Editor and fact-checker** | Checks every claim in a draft against brain facts, and scores voice and quality (below). Sends fixes back to the Writer or marks the draft ready. Runner `pipeline`, cheap tier plus Jev. |
 | Worker: **Distribution scheduler** | Makes channel-specific versions and a posting queue. **Publishing is an approval, always.** Until the owner creates channel accounts, the output is a ready-to-post draft the owner publishes by hand. Runner `pipeline`, cheap tier. |
 | Later worker: **Analytics reader** | Reads engagement and feeds what worked back to the Content Lead. Needs owner-created accounts. |
+| Channels and cadence | A blog post every two weeks (or as needed) is the anchor. From it the department derives an X post or thread, a Reddit version written for the community, Instagram carousel text and a newsletter section, plus small items as needed. **The owner publishes by hand in phase 1**; agents hold no accounts or keys. Visuals are code-drawn, never paid generation. Platform rules on automation, disclosure and self-promotion are checked before any channel is automated. |
+| Personality | The studio's temperament, in the owner's brief: composed control, strategic and long-game, few words chosen well, loyal to its people, dry and understated, earned confidence, decisive. **Never quote, name or reuse anything from the fictional characters the owner used as references.** Full description: brief section 6. |
 | Voice and hard rules (from the owner's own notes, `docs/business/the-unreal-lab.md` section 4) | Restraint, no hype. "We partner" stays forward-looking and no employer is ever named. **Verses only from a vetted verse library** with chapter and verse and an approved translation; an agent never writes or corrects Sanskrit. Anything about the fund, LPs, returns or investing is **always held for the owner** and screened by a guardrail (fund solicitation can be regulated; owner to confirm with counsel). Image and video generation is a spending (R4) tool, approved per deliverable. |
 | Provenance | Each draft records the brain facts it relied on (`artifact_claims`), so if a fact turns out wrong, every piece that used it can be found. Public content may only use facts cleared for a **public visibility tier**. Idea taken from the owner's earlier `unreal-lab-os` sketch. |
 | Tools | `brain_search`, `web_fetch_preview` (R2, screened), `read_document` (brand voice, product docs, past content, as company documents), `save_draft` (R1), `publish_post` per channel (R4, later), `analytics_read` (later). |
 | Autonomy | L0 draft only for at least the first 30 pieces. The owner edits and approves; every edit is stored as a labelled example of the owner's voice. |
-| Morning routine (fixed, America/New_York, time **Owner**) | 1. Three topic ideas from overnight research and the department goals (cheap). 2. One draft from the approved idea queue (standard). 3. Editor pass. The morning brief lists the draft as ready for approval. Nothing else runs until the owner gives an order. |
+| Morning routine (fixed, America/New_York, time **Owner**) | 1. Three topic ideas from overnight research and the department goals (cheap). 2. One draft, of the smallest piece due that day (a social post, or the next stage of the blog cycle), from the approved idea queue (standard). 3. Editor pass. The morning brief lists it as ready for approval. The two-week blog runs as stages across the routine: idea, outline, draft, edit, channel versions. Nothing else runs until the owner gives an order. |
 | Jev gates | Write gate on research facts (5.2). Screening of fetched pages (5.3). Output guardrails on drafts: unsupported or prohibited claims, personal data, tone (5.3). **Claim check:** each factual claim in the draft against brain facts, using the citation-check pattern (`supported`, `contradicted`, `not in the brain`); an unsupported claim blocks the draft. **Voice and quality:** composite scoring with weights held in config (on-brand, clear, specific, not hype). **Repeat check:** is this too close to something already published (three-level alignment Score). **Cascade (Step 9):** a cheap draft that fails a check is re-written on a stronger tier. |
 | Approvals | Every publish and every send. The first drafts of every new format. |
 | Knowledge needed (Step 6 uploads) | Brand-voice guide, product and pricing documents, audience notes, past content, banned claims. Company-scoped documents, so every worker in the department can read them. |
 | Working means | Approval rate without edits rising; edits shrinking; zero unsupported claims reaching the owner; cost per approved piece; time from idea to approval. |
 | Starting budget | $0.25 a day, raised only on results. Measured cost per piece is reported at the Step 8 milestone. |
 | Risks and answers | Invented statistics: the claim check. Copied text from a fetched page: a repeat check plus a rule to paraphrase and cite. Instructions hidden in a page: screening, and fetched text is only ever quoted data. Off-brand output: voice score plus owner approval. |
-| **Owner** provides | The channels (the earlier sketch used X); two or three pieces in exactly the right voice; any further words or claims never to use; the morning time. The business itself is now described in the company brief. |
+| **Owner** provides | Two or three pieces in exactly the right voice once there are any; any further words or claims never to use; emoji and Sanskrit preferences; the newsletter cadence; the morning time. The business, channels and personality are in the company brief. |
 
 ## 9. Build order
 

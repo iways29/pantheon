@@ -9,7 +9,7 @@ Work in order. Each step lists what to build and the acceptance criteria ("done 
 - [ ] OpenRouter account with credit and a management/provisioning key if per-agent keys are supported
 - [ ] TypeSafe API key (`TYPESAFE_API_KEY` is currently empty in `.env`; needed to run Step 5 live; create at https://console.typesafe.ai/keys and set it in `.env` and the Vercel `pantheon-api` project)
 - [ ] Ask TypeSafe (privacy@typesafe.ai) how long request content is retained; needed before any sensitive data is sent to it (open decision 11)
-- [ ] Describe the business and choose the channels for Marketing and Content (open decision 12); create any outside accounts a department needs (email, social, GitHub) yourself when its step starts
+- [x] Business described and channels chosen (Reddit, Instagram, X, newsletter, site blog; the owner owns the accounts). Phase 1 posting is by hand, so no accounts or keys are needed by agents yet; any later automation needs accounts created by the owner when that step starts
 - [ ] Langfuse Cloud account (free Hobby tier) and a project for tracing; see ADR 004
 - [ ] All secrets placed in Vercel env vars and a local `.env` (never committed)
 
@@ -426,10 +426,10 @@ The proposal, charters and starting budgets are in
   voice they want, the channels, and any banned claims. Sales and Outreach follows it.
 - **8.4 Product and Engineering (L).** Any change to code is an approval, always.
 - **8.5 Finance and Cost controller (M).** Read-only on money; feeds Step 12.
-- **8.6 Founder Relations (candidate, early).** Inbound founder applications read and
-  scored with Jev, reply drafts for approval, honouring "we answer within a week".
-  Owner to confirm (open decision 16).
-- **8.7 Later (phase 2).** Support, Legal or Compliance, LP and partner relations
+- **8.6 Founder Relations (deferred).** Inbound founder applications read and scored
+  with Jev, reply drafts for approval, honouring "we answer within a week". Built when
+  applications start arriving (open decision 16).
+- **8.7 Later.** Support, Legal or Compliance, LP and partner relations
   (sensitive; see the brief's rule on fund language).
 
 Done when, for each department: its morning routine runs unattended five mornings
@@ -524,11 +524,11 @@ configured.
 9. **Scraping:** plain HTTP fetch (free, no JavaScript rendering) vs a paid scraping service (needs owner approval).
 10. **How to call TypeSafe.** (A) **Our own thin `httpx` transport to `api.typesafe.ai`** (recommended: no new dependency, matches the gateway's style, keeps kill switch, cost logging and events in one place; uses the `TYPESAFE_API_KEY` already in the plan). (B) The official `typesafe-sdk` package (retries and typed responses built in; a new dependency to approve). (C) Through OpenRouter as `~typesafe/jev-latest` (one key and one bill, but the alias moves, which ADR 003 forbids; a versioned id would be needed). (D) Through Vercel's AI Gateway (another moving part). Do not adopt `langchain-typesafe` (experimental, new dependency); copy its patterns.
 11. **Sensitive data and TypeSafe.** Recommended: **not allowed** until TypeSafe confirms request retention in writing (their terms are silent on it and zero retention is enterprise-only). Sensitive items go to a person or to a zero-retention LLM judge through the gateway. The owner may email privacy@typesafe.ai; the answer is reported at the Step 5 Milestone.
-12. **Which departments first.** Decided in part: Executive Office, Research and Intelligence, then **Marketing and Content** as the first revenue department (owner, 2026-09-25); Sales and Outreach follows. The business is described in `docs/business/the-unreal-lab.md` (learned from the owner's own materials, awaiting their corrections). Still owed: the channels, and sample content in the right voice.
+12. **Which departments first.** Decided in part: Executive Office, Research and Intelligence, then **Marketing and Content** as the first revenue department (owner, 2026-09-25); Sales and Outreach follows. The business, channels (Reddit, Instagram, X, newsletter, site blog every two weeks or as needed) and voice are in `docs/business/the-unreal-lab.md`. Still owed: sample content in the right voice, once there is any.
 13. **Delegation limits.** Recommended defaults: tree depth 3, four children per task, 50 tasks per department per day. The owner can set others; enforced in the database.
 14. **Where labels come from** for calibration: the owner's approval decisions (best, slow to accumulate), a frontier-model ensemble (fast, costs a few cents, needs spot checks), and the owner's spot checks. Recommended: start with the ensemble, verify a sample by hand, add approvals as they accumulate.
-15. **Entity and relationship layer.** The owner's earlier `unreal-lab-os` sketch models companies, people and investors with `FOUNDED`, `INVESTED_IN`, `ADVISES` and `COMPETES_WITH` edges and warm-introduction paths. Our brain holds facts only. Recommended: add `entities` and `relationships` tables in **Postgres** (not the graph database, which is outside the locked stack), starting with Research and Intelligence at Step 8.1; short paths are recursive queries. Owner to confirm.
-16. **How Pantheon relates to The Unreal Lab** (the studio's own operating system, a separate product for other companies in phase 2, or both), and whether **Founder Relations** (scoring inbound founder applications) joins early. See the open questions in `docs/business/the-unreal-lab.md`.
+15. **Entity and relationship layer.** The owner's earlier `unreal-lab-os` sketch models companies, people and investors with `FOUNDED`, `INVESTED_IN`, `ADVISES` and `COMPETES_WITH` edges and warm-introduction paths. Our brain holds facts only. ~~Now or later?~~ **Decided: later** (owner, 2026-09-25). When it is time: `entities` and `relationships` tables in **Postgres** (not the graph database, which is outside the locked stack); short paths are recursive queries.
+16. **How Pantheon relates to The Unreal Lab.** ~~Open.~~ **Decided (owner, 2026-09-25): Pantheon is for the owner to operate The Unreal Lab.** Expanding to onboarded companies is a possible future and not fixed, so only the multi-tenant groundwork is built. **Founder Relations is deferred** (nothing arrives yet; applications come by email).
 
 ## Explicitly out of scope for phase 1
 

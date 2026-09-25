@@ -109,7 +109,7 @@ those; the API's 401 versus 503 answers reveal whether `TRIGGER_SECRET` is set.
   (the graph), `runs.py` (leased, resumable runs), `prompts.py`, `triggers.py`,
   `starter_prompts.py`. `api/app/internal.py` the endpoint the scheduler calls.
 - `supabase/migrations/` versioned SQL (RLS on every table). `docs/adr/` ADRs
-  0001 to 0026. `docs/BUILD_PLAN.md` is the source of truth for order.
+  0001 to 0027. `docs/BUILD_PLAN.md` is the source of truth for order.
 
 ## What to do next
 

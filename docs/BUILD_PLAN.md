@@ -506,6 +506,9 @@ The proposal, charters and starting budgets are in
   owner as a question; overnight items are ranked by urgency, impact and "needs
   the owner" so the brief leads with the top five; every order is checked
   against the owner's earlier decisions.
+  **Status (2026-09-26):** built and tested (ADR 027), with the owner's go while
+  8.1's mornings are pending. Executive charter final (Chief of Staff, brief
+  writer, 07:15 Monday to Saturday); `POST /orders`, `scripts.order`.
 - **8.3 Marketing and Content (L).** The owner's first revenue department (chosen
   2026-09-25). Content Lead, topic researcher, writer, editor and fact-checker,
   distribution scheduler. Drafts only; every publish is an approval. Claims in drafts

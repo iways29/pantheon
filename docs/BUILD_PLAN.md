@@ -200,8 +200,10 @@ Every fact write passes it; `brain.insert_fact` has no bypass.
    supersede (old fact marked `superseded_by`); skip as duplicate; reject; or
    send to review (an approval, Step 7.5). The uncertain band always goes to
    review.
-5. `facts` records the judgment that admitted it and a review-after date for
-   facts likely to change. The research agent's store step moves onto this path.
+5. `facts` records the judgment that admitted it, a review-after date for
+   facts likely to change, and a **visibility tier** (`public` or `internal`) so
+   public content can only use facts cleared for it (an idea from the owner's
+   earlier `unreal-lab-os` sketch). The research agent's store step moves onto this path.
 
 Done when: a new fact is checked before insertion; a duplicate is skipped; a
 contradiction becomes disputed or goes to review; a fabricated quote is rejected
@@ -416,12 +418,19 @@ The proposal, charters and starting budgets are in
   2026-09-25). Content Lead, topic researcher, writer, editor and fact-checker,
   distribution scheduler. Drafts only; every publish is an approval. Claims in drafts
   are checked against the brain with Jev, and the owner's edits are stored as
-  examples of their voice. Charter and morning routine: design doc, section 8.1.
+  examples of their voice. Charter and morning routine: design doc, section 8.1; the business, voice and
+  hard content rules: `docs/business/the-unreal-lab.md`. Each draft records the
+  facts it relied on (`artifact_claims`) so a wrong fact can be traced to every
+  piece that used it.
   Needs from the owner: what the business sells and to whom, example content in the
   voice they want, the channels, and any banned claims. Sales and Outreach follows it.
 - **8.4 Product and Engineering (L).** Any change to code is an approval, always.
 - **8.5 Finance and Cost controller (M).** Read-only on money; feeds Step 12.
-- **8.6 Later (phase 2).** Support and Legal or Compliance.
+- **8.6 Founder Relations (candidate, early).** Inbound founder applications read and
+  scored with Jev, reply drafts for approval, honouring "we answer within a week".
+  Owner to confirm (open decision 16).
+- **8.7 Later (phase 2).** Support, Legal or Compliance, LP and partner relations
+  (sensitive; see the brief's rule on fund language).
 
 Done when, for each department: its morning routine runs unattended five mornings
 in a row inside its budget, no external action happened without an approval, and
@@ -515,9 +524,11 @@ configured.
 9. **Scraping:** plain HTTP fetch (free, no JavaScript rendering) vs a paid scraping service (needs owner approval).
 10. **How to call TypeSafe.** (A) **Our own thin `httpx` transport to `api.typesafe.ai`** (recommended: no new dependency, matches the gateway's style, keeps kill switch, cost logging and events in one place; uses the `TYPESAFE_API_KEY` already in the plan). (B) The official `typesafe-sdk` package (retries and typed responses built in; a new dependency to approve). (C) Through OpenRouter as `~typesafe/jev-latest` (one key and one bill, but the alias moves, which ADR 003 forbids; a versioned id would be needed). (D) Through Vercel's AI Gateway (another moving part). Do not adopt `langchain-typesafe` (experimental, new dependency); copy its patterns.
 11. **Sensitive data and TypeSafe.** Recommended: **not allowed** until TypeSafe confirms request retention in writing (their terms are silent on it and zero retention is enterprise-only). Sensitive items go to a person or to a zero-retention LLM judge through the gateway. The owner may email privacy@typesafe.ai; the answer is reported at the Step 5 Milestone.
-12. **Which departments first.** Decided in part: Executive Office, Research and Intelligence, then **Marketing and Content** as the first revenue department (owner, 2026-09-25); Sales and Outreach follows. Still owed: a few sentences describing the business, the audience and the voice, which shape the Step 8.3 charter.
+12. **Which departments first.** Decided in part: Executive Office, Research and Intelligence, then **Marketing and Content** as the first revenue department (owner, 2026-09-25); Sales and Outreach follows. The business is described in `docs/business/the-unreal-lab.md` (learned from the owner's own materials, awaiting their corrections). Still owed: the channels, and sample content in the right voice.
 13. **Delegation limits.** Recommended defaults: tree depth 3, four children per task, 50 tasks per department per day. The owner can set others; enforced in the database.
 14. **Where labels come from** for calibration: the owner's approval decisions (best, slow to accumulate), a frontier-model ensemble (fast, costs a few cents, needs spot checks), and the owner's spot checks. Recommended: start with the ensemble, verify a sample by hand, add approvals as they accumulate.
+15. **Entity and relationship layer.** The owner's earlier `unreal-lab-os` sketch models companies, people and investors with `FOUNDED`, `INVESTED_IN`, `ADVISES` and `COMPETES_WITH` edges and warm-introduction paths. Our brain holds facts only. Recommended: add `entities` and `relationships` tables in **Postgres** (not the graph database, which is outside the locked stack), starting with Research and Intelligence at Step 8.1; short paths are recursive queries. Owner to confirm.
+16. **How Pantheon relates to The Unreal Lab** (the studio's own operating system, a separate product for other companies in phase 2, or both), and whether **Founder Relations** (scoring inbound founder applications) joins early. See the open questions in `docs/business/the-unreal-lab.md`.
 
 ## Explicitly out of scope for phase 1
 

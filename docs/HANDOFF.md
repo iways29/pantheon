@@ -101,7 +101,9 @@ those; the API's 401 versus 503 answers reveal whether `TRIGGER_SECRET` is set.
 
 ## What to do next
 
-1. **Read** `docs/research/typesafe-jev.md` and Step 5 of the plan, then re-read
+1. **Read** `docs/business/the-unreal-lab.md` (the business: The Unreal Lab, a venture
+   studio; voice; hard content rules; open questions for the owner),
+   `docs/research/typesafe-jev.md` and Step 5 of the plan, then re-read
    the live TypeSafe docs for the API and SDK pages before writing code.
 2. **Confirm two decisions with the owner** (they gate Step 5.1; recommended
    defaults are in the plan, the owner has not explicitly answered):
@@ -128,8 +130,8 @@ those; the API's 401 versus 503 answers reveal whether `TRIGGER_SECRET` is set.
 ```
 Continue the Pantheon project on branch step-3 (do not open a PR or push; I will
 push everything together later). Read, in order: CLAUDE.md, docs/HANDOFF.md,
-docs/BUILD_PLAN.md (Step 5 onward), docs/research/typesafe-jev.md and
-docs/design/agent-organization.md. Then re-read the live TypeSafe docs
+docs/BUILD_PLAN.md (Step 5 onward), docs/research/typesafe-jev.md,
+docs/design/agent-organization.md and docs/business/the-unreal-lab.md. Then re-read the live TypeSafe docs
 (https://docs.typesafe.ai/llms.txt) and use the typesafe:typesafe-ai skill before
 coding. Start Step 5.1 (judge core). First ask me to confirm open decisions 10
 (thin httpx transport to TypeSafe) and 11 (no sensitive data to TypeSafe for now)

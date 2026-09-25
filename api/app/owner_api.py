@@ -942,3 +942,57 @@ def post_agent_tools(
     except AgentAdminError as error:
         raise _refuse(error) from error
     return {"name": name, "allowed_tools": tools}
+
+
+# --- Orders to the Chief of Staff (Step 8.2, ADR 027) ---------------------------------
+
+
+class OrderText(BaseModel):
+    #: The order in plain words. The Chief of Staff decides who does it.
+    text: str
+    max_cost_usd: float | None = None
+
+
+def give_order(
+    connection: psycopg.Connection,
+    user_id: str,
+    org_id: str,
+    text: str,
+    max_cost_usd: float | None = None,
+) -> Any:  # noqa: ANN401 - a tasks.Task
+    from decimal import Decimal
+
+    from app.tasks import order
+
+    text = text.strip()
+    first = text.splitlines()[0] if text else ""
+    title = first if len(first) <= 120 else first[:117] + "..."
+    return order(
+        connection,
+        user_id=user_id,
+        org_id=org_id,
+        agent="chief-of-staff",
+        title=title or "Order",
+        instructions=text,
+        max_cost_usd=None if max_cost_usd is None else Decimal(str(max_cost_usd)),
+    )
+
+
+@router.post("/orders", status_code=status.HTTP_201_CREATED)
+def post_plain_order(
+    body: OrderText, principal: OwnerPrincipal, connection: Connection, response: Response
+) -> dict[str, Any]:
+    """Give an order in plain words. The Chief of Staff routes it on the next tick,
+    or comes back with a question."""
+    from app.tasks import TaskError
+
+    if not body.text.strip():
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "The order is empty")
+    org_id = owner_org(connection, principal.user_id)
+    try:
+        task = give_order(connection, principal.user_id, org_id, body.text, body.max_cost_usd)
+    except TaskError as error:
+        raise HTTPException(error.status, str(error)) from error
+    if not task.created:
+        response.status_code = status.HTTP_200_OK
+    return {"id": str(task.id), "status": task.status, "created": task.created}

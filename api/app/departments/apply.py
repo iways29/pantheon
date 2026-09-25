@@ -174,7 +174,7 @@ def _agent(
         prompts=plan.prompts,
         allowed_tools=plan.allowed_tools,
         parent=None if is_head else charter.head.name,
-        role_type="head" if is_head else "worker",
+        role_type=plan.role_type or ("head" if is_head else "worker"),
         runner=plan.runner,
         autonomy_level=plan.autonomy_level or charter.autonomy_level,
         max_children=plan.max_children,

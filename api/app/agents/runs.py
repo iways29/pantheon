@@ -278,10 +278,10 @@ def _execute(runtime: Runtime, connection: psycopg.Connection, run: _Run, deadli
         return _Stop("cancelled", "task_cancelled")
 
     # Which code runs this agent is data (ADR 020): its runner.
+    if run.runner in ("router", "digest"):
+        return _decide(runtime, connection, run)
     if run.runner not in ("pipeline", "deep"):
-        return _Stop(
-            "failed", "runner_not_built", error=f"The {run.runner!r} runner arrives in Step 8.2"
-        )
+        return _Stop("failed", "runner_not_built", error=f"No {run.runner!r} runner")
     slots = deep.PROMPT_SLOTS if run.runner == "deep" else PROMPT_SLOTS
     try:
         prompts = resolve_for_run(
@@ -413,6 +413,28 @@ def _execute(runtime: Runtime, connection: psycopg.Connection, run: _Run, deadli
             stop = _Stop("succeeded", "completed", summarise(graph.get_state(config).values))
         recorder.stopped(status=stop.status, stop_reason=stop.reason, output=stop.output)
         return stop
+
+
+def _decide(runtime: Runtime, connection: psycopg.Connection, run: _Run) -> _Stop:
+    """The Chief of Staff's router and the brief writer's digest (ADR 027):
+    one short transaction of judgments and at most one model call, no graph."""
+    from app.agents import digest, router
+
+    code = router if run.runner == "router" else digest
+    _lifecycle_event(connection, run, "run_invoked", {"runner": run.runner})
+    try:
+        with _session(runtime, connection, run) as session:
+            result = code.run(session, run)
+    except GatewayError as error:
+        reason = _PAUSING_REFUSALS.get(error.code)
+        if reason is not None:
+            return _Stop("paused", reason, error=str(error))
+        if isinstance(error, UpstreamError):
+            return _Stop("paused", "upstream_error", error=str(error))
+        return _Stop("failed", "error", error=f"{error.code}: {error}")
+    except Exception as error:  # recorded, not raised: the run must end in a known state
+        return _Stop("failed", "error", error=f"{type(error).__name__}: {error}"[:2000])
+    return _Stop(result["status"], result["reason"], result["output"], result["error"])
 
 
 def _next_step_blocked(

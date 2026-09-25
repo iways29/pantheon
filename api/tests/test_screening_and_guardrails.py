@@ -312,3 +312,73 @@ def test_an_unknown_profile_is_refused(
         with acting_as(db, user_id=str(tenants.user_a)):
             guard(db, jev).check("hi", side="input", agent_id=agent, profile="lax")
     assert jev.calls == []
+
+
+# --- The owner's language rule (2026-09-26) --------------------------------------
+
+
+@pytest.mark.parametrize("profile", ["strict", "normal"])
+def test_sanskrit_in_agent_output_is_blocked_under_every_profile(
+    db: psycopg.Connection, tenants: Tenants, agent: UUID, profile: str
+) -> None:
+    jev = ScriptedJev(nouls={"sanskrit": 0.9})
+
+    with acting_as(db, user_id=str(tenants.user_a)):
+        decision = guard(db, jev).check(
+            "karmanye vadhikaraste ma phaleshu kadachana",
+            side="output",
+            agent_id=agent,
+            profile=profile,
+        )
+
+    assert decision.outcome == "block"
+    assert "Contains Sanskrit; all content is in English" in [r.text for r in decision.reasons]
+
+
+def test_english_mythology_passes(db: psycopg.Connection, tenants: Tenants, agent: UUID) -> None:
+    text = (
+        "Before the battle at Kurukshetra, Arjuna lowered his bow. Krishna did not "
+        "argue him into fighting; he helped him see the field."
+    )
+    with acting_as(db, user_id=str(tenants.user_a)):
+        decision = guard(db, ScriptedJev()).check(text, side="output", agent_id=agent)
+
+    assert decision.outcome == "pass"
+
+
+def test_a_quoted_verse_is_held_for_the_owner(
+    db: psycopg.Connection, tenants: Tenants, agent: UUID
+) -> None:
+    jev = ScriptedJev(nouls={"quoted_verse": 0.8})
+
+    with acting_as(db, user_id=str(tenants.user_a)):
+        decision = guard(db, jev).check(
+            '"You have a right to your work, never to its fruits." (Gita 2.47)',
+            side="output",
+            agent_id=agent,
+            profile="normal",
+        )
+
+    assert decision.outcome == "review"
+    assert "Always held for the owner: quoted verse" in [r.text for r in decision.reasons]
+
+
+def test_devanagari_is_blocked_in_code_even_if_jev_misses_it(
+    db: psycopg.Connection, tenants: Tenants, agent: UUID
+) -> None:
+    missed = ScriptedJev(nouls={"sanskrit": 0.01})
+
+    with acting_as(db, user_id=str(tenants.user_a)):
+        g = guard(db, missed)
+        decision = g.check("Our motto: कर्मण्येवाधिकारस्ते", side="output", agent_id=agent)
+        rerouted, _ = g.reroute(decision, org_id=tenants.org_a, profile="normal")
+
+    assert decision.outcome == "block"
+    assert decision.reasons[0].text.startswith("code check: Devanagari")
+    assert rerouted == "block", "a code block survives a change of profile"
+    blocked = rows(
+        db,
+        "select payload from public.events where type = 'guardrail_code_block' and agent_id = %s",
+        str(agent),
+    )
+    assert blocked[0]["payload"]["judged"] == "pass"

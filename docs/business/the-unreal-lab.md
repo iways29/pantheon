@@ -75,7 +75,12 @@ make something that inspires both". Every piece of copy should address both.
 - **Recurring themes:** the chariot, the field, the bow, forts, swarajya
   (self-reliance), access and depth over fundraising narrative, real execution.
 - **Verses** are quoted in Devanagari with a translation and a chapter and verse
-  citation (for example Bhagavad Gita 18.78, 2.3, 2.47).
+  citation (for example Bhagavad Gita 18.78, 2.3, 2.47) **on the Unreal Lab
+  website only** (owner, 2026-09-26).
+- **Language: everything else is in English** (owner, 2026-09-26). The
+  newsletter, blog, X, Reddit and Instagram carry no Sanskrit: the daily
+  audience would not follow it. Mahabharata and other mythological themes are
+  welcome, told in English; names such as Arjuna and Krishna are fine.
 - **Look** (for anything visual): ink `#100c08`, paper `#f4efe4`, body
   `#eadfc4`, gold `#e6c76a`; Libre Caslon Display italic, Archivo, Tiro
   Devanagari Sanskrit; radius 0, no shadows; "bold restraint".
@@ -87,9 +92,14 @@ rules** (design doc 8.1) and Jev guardrail questions (Step 5.3):
 
 1. **"We partner" stays forward-looking.** Never present it as an existing
    deployment pipeline, and never name an employer. (Design handoff, copy note.)
-2. **Verses come only from a vetted verse library**, each with its chapter and
-   verse and an owner-approved translation. Models garble Sanskrit, and Jev
-   cannot check it, so an agent may never write or "correct" a verse itself.
+2. **Sanskrit appears only on the website, and only from a vetted verse
+   library**, each verse with its chapter and verse and an owner-approved
+   translation. Models garble Sanskrit, so an agent never writes, translates or
+   "corrects" a verse. In every other channel, content is in English only:
+   agent-written text containing Sanskrit or Devanagari is **blocked** by the
+   output guardrail (and by a code check for Devanagari), and a quoted verse,
+   even in English, is held for the owner. Mythological themes told in English
+   are encouraged. (Owner, 2026-09-26.)
 3. **No hype.** No superlatives, guarantees or hustle language.
 4. **Fund and LP language is regulated.** Text that solicits investment, promises
    returns, or describes fund performance can raise securities rules on
@@ -148,7 +158,7 @@ How this sits with the site's restraint: the personality is the *person*; the
 writing stays measured. Composure, not bravado. **Do not** write swagger,
 trash talk, threats, "crush the competition", hustle-bro language, catchphrases,
 role-play or fake dialogue, or anything that sounds like a quote from a show.
-Emoji use and the Sanskrit-verse ratio per channel are for the owner to set.
+Emoji use per channel is for the owner to set. Sanskrit: website only (rule 2).
 
 Writing rules for the agents: short sentences; one idea per paragraph; concrete
 numbers and named things; state the recommendation; no filler openers; cut
@@ -205,7 +215,8 @@ or as needed.** The owner owns all the accounts.
 
 1. **Voice samples.** Two or three pieces the owner considers exactly right, once
    there are any; and the banned words and claims beyond the rules above.
-2. **Emoji and Sanskrit use** per channel, and the newsletter's cadence.
+2. **Emoji use** per channel, and the newsletter's cadence. (Sanskrit is
+   decided: website only, rule 2.)
 3. **Fund and LP content:** whether counsel's guidance is wanted before anything
    about the fund is published (the rule in section 4 holds meanwhile).
 4. **Morning time** (America/New_York) and how much the owner wants in the brief.

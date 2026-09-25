@@ -390,15 +390,30 @@ Formerly the approval half of Step 6. The `approvals` table already exists.
   sensitive content. R4 calls are always held; below R4, high-confidence low-risk
   calls pass, and the uncertain band goes to a person. Thresholds scale with risk.
 - Every decision is stored as a labelled example for Step 5.4.
+- **Jev as the owner's right hand** (`docs/design/right-hand.md`, owner
+  2026-09-26):
+  - **Decision desk (idea 1).** Each held action gets a recommendation
+    (approve, reject, look closer) with its probability, the brain facts
+    checked, the most similar past decisions and how the owner decided, and a
+    short cheap-model explanation. Stored with the approval.
+  - **Agreement tracking (idea 2).** Per action type, how often the
+    recommendation matched the owner's verdict.
+  - **Decisions become facts (idea 4).** Each owner decision and standing
+    policy is written to the brain (source `owner`, through the write gate),
+    and new proposals are checked against them; a conflict is shown on the card.
 
 Done when: an R4 action is held and approve or reject resumes or cancels it; a
-low-risk call auto-passes only above its threshold; the full trail is in `events`.
+low-risk call auto-passes only above its threshold; the full trail is in `events`;
+every held action carries a recommendation, and a proposal that conflicts with
+an earlier owner decision says so.
 
 ### Step 7.6: Autonomy and safety limits (S)
 
 - The autonomy ladder per agent (L0 draft only, L1 default, L2, L3), set only by
   the owner; the system can recommend a promotion from approval history but never
-  makes one.
+  makes one. **Right-hand idea 2:** the recommendation is per action type, from
+  agreement between Jev and the owner (starting rule: 30 decisions at 95%),
+  reversible actions only.
 - Loop detection (the same tool with the same arguments three times), a
   stuck-task reaper, per-agent task rate limits, and the kill switch stopping
   tasks as well as runs.
@@ -430,11 +445,17 @@ The proposal, charters and starting budgets are in
   departments (descriptions read from the database) plus a complexity Score, giving
   the department, the model tier, or a person. An order endpoint and CLI so the
   owner can give an order at any time. The morning brief and the approvals digest.
+  **Right-hand ideas 5, 6 and 4:** a low-confidence routing comes back to the
+  owner as a question; overnight items are ranked by urgency, impact and "needs
+  the owner" so the brief leads with the top five; every order is checked
+  against the owner's earlier decisions.
 - **8.3 Marketing and Content (L).** The owner's first revenue department (chosen
   2026-09-25). Content Lead, topic researcher, writer, editor and fact-checker,
   distribution scheduler. Drafts only; every publish is an approval. Claims in drafts
   are checked against the brain with Jev, and the owner's edits are stored as
-  examples of their voice. Charter and morning routine: design doc, section 8.1; the business, voice and
+  examples of their voice. **Right-hand idea 3:** the same claim check runs on
+  everything any department sends out, and an unsupported claim blocks the draft
+  and names the sentence. Charter and morning routine: design doc, section 8.1; the business, voice and
   hard content rules: `docs/business/the-unreal-lab.md`. Each draft records the
   facts it relied on (`artifact_claims`) so a wrong fact can be traced to every
   piece that used it.
@@ -463,7 +484,7 @@ Step 8.1 is running.
   question's premise, stale).
 - **Run and output scoring** for quality tracking, and cheap-versus-frontier
   comparisons for Step 12.
-- Measure against always using the standard tier.
+- Measure against always using the standard tier. (Right-hand idea 7.)
 
 Done when: on the labelled set the cascade costs less per task than always-standard
 with no drop in quality, and the numbers are in a report.
@@ -507,8 +528,10 @@ configurable, with no code edits. Screens over the Step 6 backend and the Step 7
 6. **Morning routine.** Add, edit, enable and disable the scheduled tasks: what each
    agent does each morning, at what time, on which days. Shows what fired and what it
    cost.
-7. **Tools and approvals.** Which agent may use which tool, the approval queue, and
-   the autonomy ladder.
+7. **Tools and approvals.** Which agent may use which tool, the approval queue as
+   the **decision desk** (right-hand idea 1: one card per decision with Jev's
+   recommendation, the facts checked and similar past decisions; one tap to
+   decide), agreement per action type, and the autonomy ladder.
 8. **Judge.** Gates, question wording, thresholds and policies, with the calibration
    report beside them.
 9. **Tasks.** Every task tree with status, cost and who created it.

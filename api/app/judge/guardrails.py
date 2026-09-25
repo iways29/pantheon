@@ -9,8 +9,16 @@ cookbook. The gates `guard_input` and `guard_output` map the answers to
 
 A policy is only numbers over the same answers, so `reroute` decides a stored
 assessment under another policy with no new model call.
+
+One rule is also checked in code, because it is exact and Jev need not guess
+it: agent-written output containing Devanagari script is blocked (owner,
+2026-09-26: all content is in English; verses appear only on the website,
+from the vetted library). The block survives a reroute.
 """
 
+import dataclasses
+import json
+import re
 from typing import Any, Literal
 from uuid import UUID
 
@@ -24,6 +32,11 @@ from app.judge.store import load_gate
 Side = Literal["input", "output"]
 GATES: dict[str, str] = {"input": "guard_input", "output": "guard_output"}
 DEFAULT_PROFILE = "strict"
+
+_DEVANAGARI = re.compile(r"[\u0900-\u097F\uA8E0-\uA8FF]")
+#: Marks a reason that came from a code check rather than from Jev's answers.
+CODE_CHECK = "code check: "
+DEVANAGARI_REASON = f"{CODE_CHECK}Devanagari script in the output; all content is in English"
 
 
 class Guard:
@@ -46,7 +59,7 @@ class Guard:
         state: dict[str, Any] = {"text": text}
         if context is not None:
             state["context"] = context
-        return self._judge.run(
+        decision = self._judge.run(
             GATES[side],
             state,
             agent_id=agent_id,
@@ -54,6 +67,39 @@ class Guard:
             sensitive=sensitive,
             profile=profile,
         )
+        if side == "output" and _DEVANAGARI.search(text):
+            overridden = decision.outcome
+            decision = dataclasses.replace(
+                decision,
+                outcome="block",
+                reasons=(Reason(None, "block", DEVANAGARI_REASON), *decision.reasons),
+            )
+            # The judgment_made event holds Jev's outcome; this one records
+            # that code overrode it, so the trail matches what happened.
+            with self._connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    insert into public.events (org_id, run_id, agent_id, type, payload)
+                    select a.org_id, %s, a.id, 'guardrail_code_block', %s
+                    from public.agents a where a.id = %s
+                    """,
+                    (
+                        str(run_id) if run_id else None,
+                        json.dumps(
+                            {
+                                "gate": decision.gate,
+                                "request_id": str(decision.request_id)
+                                if decision.request_id
+                                else None,
+                                "judged": overridden,
+                                "outcome": "block",
+                                "reason": DEVANAGARI_REASON,
+                            }
+                        ),
+                        str(agent_id),
+                    ),
+                )
+        return decision
 
     def reroute(
         self, decision: Decision, *, org_id: UUID | str, profile: str
@@ -66,4 +112,8 @@ class Guard:
         if decision.failed:
             return decision.outcome, list(decision.reasons)
         gate = load_gate(self._connection, org_id=org_id, gate=decision.gate)
-        return gate.policy.decide(decision.answers, profile)
+        outcome, reasons = gate.policy.decide(decision.answers, profile)
+        coded = [r for r in decision.reasons if r.text.startswith(CODE_CHECK)]
+        if coded:
+            return "block", [*coded, *reasons]
+        return outcome, reasons

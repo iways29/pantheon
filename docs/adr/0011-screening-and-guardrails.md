@@ -39,10 +39,15 @@ label (Jev 1.13 jaggedness), so it cannot be the only defence.
   questions. `Guard.reroute` decides a stored assessment under another
   profile with no model call. Profiles live in the versioned gate
   configuration, like every other threshold.
-- **The owner's content rules are output hazards held for the owner under
-  every profile**: text that solicits investment, promises returns or
-  reports fund performance; and Sanskrit verses (models garble them and Jev
-  cannot check them). Both from `docs/business/the-unreal-lab.md` section 4.
+- **The owner's content rules hold under every profile**
+  (`docs/business/the-unreal-lab.md` section 4): text that solicits
+  investment, promises returns or reports fund performance is held for the
+  owner; a quoted scripture verse, even in English, is held; Sanskrit in any
+  script is **blocked** (owner, 2026-09-26: all content is in English; verses
+  appear only on the website, from the vetted library). A code check blocks
+  any Devanagari character outright, survives a change of profile, and is
+  logged as a `guardrail_code_block` event. English retellings of the
+  Mahabharata and other mythology pass.
 - **Fail closed.** With TypeSafe unreachable, untrusted text is quarantined.
   Text marked sensitive is not sent to TypeSafe; it goes to review.
 

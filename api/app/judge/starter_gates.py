@@ -378,9 +378,10 @@ CONTENT_SCREEN = StarterGate(
 # State: {"text": ..., "context": ...}. Hazard Nouls plus one severity Score,
 # after TypeSafe's LLM guardrails cookbook. `strict` is the default rule set;
 # `normal` is looser. The owner's business rules (docs/business/
-# the-unreal-lab.md section 4) are output hazards that always go to a person:
-# fund or investment language, and Sanskrit verses (models garble them and
-# Jev cannot check them).
+# the-unreal-lab.md section 4) apply under every profile: Sanskrit or
+# Devanagari in agent-written text is blocked (all content is in English;
+# verses appear only on the website, from the owner's vetted library); fund
+# or investment language and quoted verses always go to the owner.
 
 _SEVERITY = StarterQuestion(
     key="severity",
@@ -464,7 +465,26 @@ GUARD_INPUT = StarterGate(
 )
 
 _OUTPUT_HAZARDS = ["broke_policy", "harmful_content", "leaks_secret"]
-_OUTPUT_HELD = ["fund_solicitation", "sanskrit_verse"]
+_OUTPUT_HELD = ["fund_solicitation", "quoted_verse"]
+
+
+def _sanskrit_rules() -> list:
+    """Owner, 2026-09-26: no Sanskrit in any agent-written content."""
+    return [
+        {
+            "question": "sanskrit",
+            "noul_at_least": 0.3,
+            "outcome": "review",
+            "reason": "May contain Sanskrit; all content is in English",
+        },
+        {
+            "question": "sanskrit",
+            "noul_at_least": 0.6,
+            "outcome": "block",
+            "reason": "Contains Sanskrit; all content is in English",
+        },
+    ]
+
 
 GUARD_OUTPUT = StarterGate(
     gate="guard_output",
@@ -513,21 +533,54 @@ GUARD_OUTPUT = StarterGate(
             },
         ),
         StarterQuestion(
-            key="sanskrit_verse",
+            key="sanskrit",
             type="noul",
             instructions=(
-                "Does `text` contain a verse or quotation in Sanskrit, text in Devanagari "
-                "script, or a translation of a Sanskrit verse?"
+                "Does `text` contain words, phrases or verses in the Sanskrit language, "
+                "in Devanagari script or transliterated into Latin letters?"
             ),
+            criteria={
+                "true": (
+                    "It contains Sanskrit text, for example a shloka, a mantra, or a "
+                    "Sanskrit phrase written out, in any script."
+                ),
+                "false": (
+                    "It is in English. English text about the Mahabharata, the Gita or "
+                    "other mythology, and names such as Arjuna or Krishna, are not "
+                    "Sanskrit text."
+                ),
+            },
+        ),
+        StarterQuestion(
+            key="quoted_verse",
+            type="noul",
+            instructions=(
+                "Does `text` quote a verse from a scripture or epic, such as the "
+                "Bhagavad Gita or the Mahabharata, as a quotation or with a chapter and "
+                "verse reference?"
+            ),
+            criteria={
+                "true": "It presents lines as a quotation of a scripture or epic verse.",
+                "false": (
+                    "It retells or refers to stories and characters in its own words "
+                    "without quoting a verse."
+                ),
+            },
         ),
         _SEVERITY,
     ),
     policy={
         "outcomes": ["pass", "review", "block"],
-        "rules": _hazard_rules(_OUTPUT_HAZARDS, 0.35, 0.70, 2.0) + _held_rules(_OUTPUT_HELD),
+        "rules": _hazard_rules(_OUTPUT_HAZARDS, 0.35, 0.70, 2.0)
+        + _held_rules(_OUTPUT_HELD)
+        + _sanskrit_rules(),
         "profiles": {
-            "strict": _hazard_rules(_OUTPUT_HAZARDS, 0.35, 0.70, 2.0) + _held_rules(_OUTPUT_HELD),
-            "normal": _hazard_rules(_OUTPUT_HAZARDS, 0.5, 0.85, 2.5) + _held_rules(_OUTPUT_HELD),
+            "strict": _hazard_rules(_OUTPUT_HAZARDS, 0.35, 0.70, 2.0)
+            + _held_rules(_OUTPUT_HELD)
+            + _sanskrit_rules(),
+            "normal": _hazard_rules(_OUTPUT_HAZARDS, 0.5, 0.85, 2.5)
+            + _held_rules(_OUTPUT_HELD)
+            + _sanskrit_rules(),
         },
     },
 )

@@ -14,13 +14,16 @@ text and has no tool calling, and a fixed graph is easier to audit than a
 model choosing its own next step. Deepagents is reconsidered for the head of
 department in Step 6.
 
+Prompt text is not in this file: it is configuration the owner edits, read
+from the database and pinned per run (see prompts.py).
+
 Each node does its database work in its own transaction, acting as the user
 the run was requested by, so RLS applies to the agent exactly as to them.
 """
 
 import json
 import re
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from typing import Any, TypedDict
@@ -44,18 +47,9 @@ ANSWER_MAX_TOKENS = 800
 EXTRACT_MAX_TOKENS = 800
 MAX_CLAIMS = 5
 
-ANSWER_SYSTEM = (
-    "You are a research assistant. Answer the question concisely, in at most "
-    "five sentences. Use the known facts where they are relevant. If they do "
-    "not cover the question, answer from general knowledge and say so."
-)
-EXTRACT_SYSTEM = (
-    "Extract standalone factual claims from the text. Each claim must make "
-    "sense on its own, without the question or the other claims. Leave out "
-    "opinions, hedges and anything the text says it is unsure of. Reply with "
-    f'JSON only, of the form {{"claims": ["..."]}}, with at most {MAX_CLAIMS} '
-    "claims. Reply with an empty list if there are none."
-)
+#: The prompts this agent needs, by slot. Their text lives in the database
+#: (ADR 007) and is handed to the graph through RunScope.
+PROMPT_SLOTS = ("answer", "extract")
 
 
 class ResearchState(TypedDict, total=False):
@@ -79,6 +73,8 @@ class RunScope:
     run_id: UUID
     org_id: UUID
     agent_id: UUID
+    #: Prompt text by slot, as resolved and pinned for this run.
+    prompts: Mapping[str, str]
     #: Opens a transaction acting as the run's user and yields the gateway and
     #: brain bound to it. Committed when the block exits cleanly.
     session: Callable[[], AbstractContextManager[Session]]
@@ -105,7 +101,7 @@ def build_graph(
                 run_id=scope.run_id,
                 max_tokens=ANSWER_MAX_TOKENS,
                 messages=[
-                    {"role": "system", "content": ANSWER_SYSTEM},
+                    {"role": "system", "content": scope.prompts["answer"]},
                     {
                         "role": "user",
                         "content": f"Known facts:\n{facts}\n\nQuestion: {state['question']}",
@@ -123,7 +119,7 @@ def build_graph(
                 run_id=scope.run_id,
                 max_tokens=EXTRACT_MAX_TOKENS,
                 messages=[
-                    {"role": "system", "content": EXTRACT_SYSTEM},
+                    {"role": "system", "content": scope.prompts["extract"]},
                     {"role": "user", "content": state["answer"]},
                 ],
             )

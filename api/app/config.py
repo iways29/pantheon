@@ -59,6 +59,17 @@ class Settings(BaseSettings):
     # https://us.cloud.langfuse.com (US).
     langfuse_base_url: str | None = None
 
+    # --- Scheduled runs (ADR 008) ------------------------------------------
+    # The database the API's runs live in. On Vercel this is Supabase's
+    # transaction pooler (ADR 005), the only endpoint reachable over IPv4.
+    database_url: str | None = None
+
+    # Shared secret the database's scheduler presents when it asks this API to
+    # advance a run. The same value is stored in Supabase Vault as
+    # `pantheon_trigger_secret`. Unset means the endpoint refuses every
+    # request, so a missing secret can never leave it open.
+    trigger_secret: str | None = None
+
     # Comma-separated browser origins allowed to call this API.
     cors_allow_origins: str = ""
 

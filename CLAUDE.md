@@ -36,6 +36,7 @@ supabase/migrations/  versioned SQL, RLS on every table
 
 ## Hard rules
 
+- **Configurable things live in the database, not in code.** Agent prompts, agent definitions, model tiers, budgets, thresholds and knowledge sources must be changeable by the owner without editing the repo or redeploying. Do not add a hardcoded prompt, model slug or per-agent setting to code; put it in a table with versioning and an audit event. See Step 5b and 7b in `docs/BUILD_PLAN.md`.
 - **All model calls go through `api/app/gateway/`.** Never call OpenRouter or any provider directly from an agent. The gateway enforces per-agent budgets, tier routing, provider restrictions for sensitive data, the global kill switch, and logs tokens and cost per call.
 - **Kill switch.** A flag in Postgres checked before every model call and every run start. When on, nothing runs.
 - **Every table has `org_id` and Row Level Security from day one**, even though phase 1 has one org. Never write a table without it.

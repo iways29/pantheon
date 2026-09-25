@@ -27,8 +27,10 @@ from langfuse import Langfuse
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
-from app.agents.research import EXTRACT_SYSTEM, RunScope, Session, build_graph
+from app.agents import prompts
+from app.agents.research import RunScope, Session, build_graph
 from app.agents.runs import RunBusy, Runtime, advance_run, report, start_run
+from app.agents.starter_prompts import STARTER_PROMPTS
 from app.brain import Brain
 from app.brain.embeddings import HashingEmbedder
 from app.db import acting_as, as_service_role, connect
@@ -55,10 +57,15 @@ class ScriptedModel:
     crash_on: str | None = None
     on_call: Any = None
     calls: list[str] = field(default_factory=list)
+    #: The system prompt each call was sent, in order, whatever the call was.
+    systems: list[str] = field(default_factory=list)
 
     def complete(self, *, model: str, messages: list[dict[str, Any]], **_: object) -> ModelResponse:
-        kind = "extract" if messages[0]["content"] == EXTRACT_SYSTEM else "answer"
+        # The extract step is handed the answer text; the answer step is handed
+        # the recalled facts. That tells them apart whatever the prompts say.
+        kind = "extract" if messages[-1]["content"] == ANSWER else "answer"
         self.calls.append(kind)
+        self.systems.append(messages[0]["content"])
         if self.crash_on == kind:
             self.crash_on = None
             raise Crash
@@ -111,6 +118,11 @@ def live(dsn: str) -> Iterator[LiveOrg]:
             "values (%s, %s, %s, 'researcher', 'research', 'cheap')",
             (str(ids.agent_id), str(ids.org_id), str(ids.department_id)),
         )
+        for slot, body in STARTER_PROMPTS["research"].items():
+            cursor.execute(
+                "select public.publish_agent_prompt(%s, %s, %s, 'Starting prompt')",
+                (str(ids.agent_id), slot, body),
+            )
     try:
         yield ids
     finally:
@@ -258,7 +270,7 @@ def test_a_repeated_store_step_does_not_duplicate_facts(dsn: str, live: LiveOrg)
             with acting_as(connection, user_id=str(live.user_id)) as conn:
                 yield Session(Gateway(conn, ScriptedModel(), TIERS), Brain(conn, HashingEmbedder()))
 
-        scope = RunScope(run_id, live.org_id, live.agent_id, session)
+        scope = RunScope(run_id, live.org_id, live.agent_id, STARTER_PROMPTS["research"], session)
         build_graph(scope).invoke({"question": QUESTION})
 
     assert (
@@ -459,3 +471,91 @@ def test_steps_wait_for_their_checkpoint_before_the_next_begins(
 
     assert (result.status, result.steps_taken) == ("succeeded", 4)
     assert model.calls == ["answer", "extract"]
+
+
+# --- Prompts are data: read from the database, pinned per run -----------------
+
+
+def publish(dsn: str, live: LiveOrg, slot: str, body: str) -> None:
+    with connect(dsn) as connection:
+        prompts.publish(
+            connection, user_id=live.user_id, agent_id=live.agent_id, slot=slot, body=body
+        )
+
+
+def test_a_run_uses_the_prompt_in_the_database_and_records_its_version(
+    dsn: str, live: LiveOrg
+) -> None:
+    publish(dsn, live, "answer", "Answer like a pirate.")
+    model = ScriptedModel()
+    run_id = new_run(dsn, live)
+
+    result = advance_run(runtime(dsn, model), run_id, deadline_seconds=60)
+
+    assert result.status == "succeeded"
+    assert model.systems == ["Answer like a pirate.", STARTER_PROMPTS["research"]["extract"]]
+    run = sql(dsn, "select prompt_versions from public.runs where id = %s", str(run_id))[0]
+    assert run["prompt_versions"] == {"answer": 2, "extract": 1}
+    invoked = sql(
+        dsn,
+        "select payload from public.events where run_id = %s and type = 'run_invoked'",
+        str(run_id),
+    )
+    assert invoked[0]["payload"]["prompt_versions"] == {"answer": 2, "extract": 1}
+
+
+def test_a_prompt_edit_applies_to_the_next_run_without_a_deploy(dsn: str, live: LiveOrg) -> None:
+    first_model, second_model = ScriptedModel(), ScriptedModel()
+    advance_run(runtime(dsn, first_model), new_run(dsn, live), deadline_seconds=60)
+
+    publish(dsn, live, "extract", "Extract claims, JSON only.")
+    advance_run(runtime(dsn, second_model), new_run(dsn, live), deadline_seconds=60)
+
+    assert first_model.systems[1] == STARTER_PROMPTS["research"]["extract"]
+    assert second_model.systems[1] == "Extract claims, JSON only."
+
+
+def test_a_resumed_run_keeps_the_prompts_it_started_with(dsn: str, live: LiveOrg) -> None:
+    model = ScriptedModel(on_call=lambda kind: set_kill_switch(dsn, live.org_id, on=True))
+    run_id = new_run(dsn, live)
+    paused = advance_run(runtime(dsn, model), run_id, deadline_seconds=60)
+    assert paused.stop_reason == "kill_switch"
+
+    # The owner edits the prompt while the run is paused. The run must not
+    # change under itself: it finishes on the version it began with.
+    publish(dsn, live, "extract", "A different extract prompt.")
+    set_kill_switch(dsn, live.org_id, on=False)
+    model.on_call = None
+    resumed = advance_run(runtime(dsn, model), run_id, deadline_seconds=60)
+
+    assert resumed.status == "succeeded"
+    assert model.systems[-1] == STARTER_PROMPTS["research"]["extract"]
+    run = sql(dsn, "select prompt_versions from public.runs where id = %s", str(run_id))[0]
+    assert run["prompt_versions"] == {"answer": 1, "extract": 1}
+
+
+def test_a_run_pauses_rather_than_guesses_when_a_prompt_is_missing(dsn: str, live: LiveOrg) -> None:
+    sql(
+        dsn,
+        "update public.agent_prompts set active = false "
+        "where agent_id = %s and slot = 'extract' returning id",
+        str(live.agent_id),
+    )
+    model = ScriptedModel()
+    run_id = new_run(dsn, live)
+
+    result = advance_run(runtime(dsn, model), run_id, deadline_seconds=60)
+
+    assert (result.status, result.stop_reason, result.steps_taken) == (
+        "paused",
+        "prompt_missing",
+        0,
+    )
+    assert "extract" in (result.error or "")
+    assert model.calls == []
+
+    with connect(dsn) as connection:
+        prompts.activate(
+            connection, user_id=live.user_id, agent_id=live.agent_id, slot="extract", version=1
+        )
+    assert advance_run(runtime(dsn, model), run_id, deadline_seconds=60).status == "succeeded"

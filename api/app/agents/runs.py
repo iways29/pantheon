@@ -14,6 +14,7 @@ What stops a run, and what that leaves it as:
 | max_steps, max_tokens | failed | no: a cap is a hard stop |
 | deadline | paused | yes: the next invocation continues |
 | kill_switch, budget_exceeded, agent_disabled, department_disabled | paused | yes, once lifted |
+| prompt_missing | paused | yes, once the agent has an active prompt for each slot |
 | upstream_error | paused | yes: provider failures are often transient |
 | error | failed | no: a bug, recorded with its message |
 
@@ -43,7 +44,8 @@ from uuid import UUID
 import psycopg
 
 from app.agents.checkpointer import checkpointer
-from app.agents.research import RunScope, Session, build_graph
+from app.agents.prompts import PromptMissing, resolve_for_run
+from app.agents.research import PROMPT_SLOTS, RunScope, Session, build_graph
 from app.brain import Brain
 from app.brain.embeddings import Embedder
 from app.db import acting_as, as_service_role, connect
@@ -107,6 +109,7 @@ class _Run:
     steps_taken: int
     max_steps: int
     max_tokens: int
+    prompt_versions: dict[str, int]
 
 
 @dataclass(frozen=True)
@@ -171,6 +174,41 @@ def start_run(
     return existing["id"]
 
 
+def retry_run(connection: psycopg.Connection, run_id: UUID | str) -> None:
+    """Put a run that failed on an error back to where it can be resumed.
+
+    Only runs that failed with `error` qualify: a hit cap is a decision, not a
+    fault, and stays final. The run keeps its checkpoint, so resuming it
+    re-runs only the step that failed, and every side effect in a step is
+    idempotent (facts are keyed by run and claim), so the retry cannot repeat
+    an action that already happened.
+    """
+    with as_service_role(connection) as conn, conn.cursor() as cursor:
+        cursor.execute(
+            """
+            update public.runs
+               set status = 'paused', stop_reason = 'retry', error = null,
+                   ended_at = null, lease_expires_at = null, wake_count = 0
+             where id = %s and status = 'failed' and stop_reason = 'error'
+            returning org_id, agent_id
+            """,
+            (str(run_id),),
+        )
+        row = cursor.fetchone()
+        if row is None:
+            cursor.execute(
+                "select status, stop_reason from public.runs where id = %s", (str(run_id),)
+            )
+            current = cursor.fetchone()
+            if current is None:
+                raise RunNotFound(str(run_id))
+            raise RunBusy(
+                f"Run {run_id} is {current['status']} ({current['stop_reason']}); "
+                "only a run that failed on an error can be retried"
+            )
+        _event(cursor, row["org_id"], run_id, row["agent_id"], "run_retry_requested", {})
+
+
 def advance_run(runtime: Runtime, run_id: UUID | str, *, deadline_seconds: float) -> RunReport:
     """Advance a run as far as it will go within `deadline_seconds`."""
     deadline = time.monotonic() + deadline_seconds
@@ -215,10 +253,22 @@ def _execute(runtime: Runtime, connection: psycopg.Connection, run: _Run, deadli
     if _kill_switch_on(connection, run.org_id):
         return _Stop("paused", "kill_switch")
 
+    try:
+        prompts = resolve_for_run(
+            connection,
+            run_id=run.id,
+            agent_id=run.agent_id,
+            slots=PROMPT_SLOTS,
+            pinned=run.prompt_versions,
+        )
+    except PromptMissing as error:
+        return _Stop("paused", "prompt_missing", error=str(error))
+
     scope = RunScope(
         run_id=run.id,
         org_id=run.org_id,
         agent_id=run.agent_id,
+        prompts={slot: prompt.body for slot, prompt in prompts.items()},
         session=lambda: _session(runtime, connection, run),
     )
     steps = run.steps_taken
@@ -228,7 +278,11 @@ def _execute(runtime: Runtime, connection: psycopg.Connection, run: _Run, deadli
             agent_name="research-agent",
             user_id=str(run.requested_by),
             input=run.input,
-            context={"run_id": str(run.id), "agent_id": str(run.agent_id)},
+            context={
+                "run_id": str(run.id),
+                "agent_id": str(run.agent_id),
+                "prompt_versions": ",".join(f"{s}={p.version}" for s, p in prompts.items()),
+            },
             tags=[f"agent:{run.agent_name}"],
         ) as recorder,
         checkpointer(runtime.dsn) as saver,
@@ -246,7 +300,16 @@ def _execute(runtime: Runtime, connection: psycopg.Connection, run: _Run, deadli
             recorder.stopped(status=stop.status, stop_reason=stop.reason, output=stop.output)
             return stop
 
-        _lifecycle_event(connection, run, "run_invoked", {"resumed": started, "step": steps})
+        _lifecycle_event(
+            connection,
+            run,
+            "run_invoked",
+            {
+                "resumed": started,
+                "step": steps,
+                "prompt_versions": {slot: p.version for slot, p in prompts.items()},
+            },
+        )
         stop = None
         try:
             if steps >= run.max_steps:
@@ -330,7 +393,8 @@ def _claim(connection: psycopg.Connection, run_id: UUID | str, lease_seconds: in
                and r.status in ('pending', 'running', 'paused')
                and (r.lease_expires_at is null or r.lease_expires_at < now())
             returning r.id, r.org_id, r.agent_id, a.name as agent_name, r.requested_by,
-                      r.status, r.input, r.steps_taken, r.max_steps, r.max_tokens
+                      r.status, r.input, r.steps_taken, r.max_steps, r.max_tokens,
+                      r.prompt_versions
             """,
             (lease_seconds, str(run_id)),
         )

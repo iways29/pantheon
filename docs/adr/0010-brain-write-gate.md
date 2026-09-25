@@ -66,5 +66,5 @@ patterns in front of every write, with thresholds held as data (ADR 009).
 - Facts written before this step have no `admitted_by`; they stay as they are.
 - Found while testing: deleting an org fails when it has a model tier
   assignment, because that audit trigger writes an event for the org being
-  deleted. The new price audit trigger avoids it; the existing one is a
-  separate fix.
+  deleted. The new price audit trigger avoids it; the tier trigger is fixed
+  by migration `20260925080000`.

@@ -58,7 +58,7 @@ those; the API's 401 versus 503 answers reveal whether `TRIGGER_SECRET` is set.
 - Docker container `pantheon-testdb` (pgvector, Postgres 16): port **55432**,
   databases `pantheon_test` and `pantheon_dev`, app login `pantheon`/`pantheon`,
   superuser `postgres`/`postgres`. Start it with `docker start pantheon-testdb`.
-- Tests (295 passing after Step 5):
+- Tests (297 passing after Step 5):
   `cd api && DATABASE_URL=postgresql://pantheon:pantheon@127.0.0.1:55432/pantheon_test uv run pytest -q`
   then `uv run ruff check .` and `uv run ruff format --check .`.
 - **New migrations must be applied by hand** to both local databases, as the
@@ -101,8 +101,8 @@ those; the API's 401 versus 503 answers reveal whether `TRIGGER_SECRET` is set.
 
 ## What to do next
 
-1. **With the owner's go-ahead**, apply the four Step 5 migrations to Supabase
-   (`20260925050000` to `20260925070000`) through the Supabase MCP, then run
+1. **With the owner's go-ahead**, apply the Step 5 migrations to Supabase
+   (`20260925050000` to `20260925080000`) through the Supabase MCP, then run
    `scripts.agent seed` against the pooler to publish the five starter gates
    and the Jev price for the live org, and `scripts.judge_eval import`.
 2. In a session with the key: `uv run python -m scripts.jev_smoke`, then
@@ -112,8 +112,9 @@ those; the API's 401 versus 503 answers reveal whether `TRIGGER_SECRET` is set.
    research agent answers but stores no facts (`fact_writes: not_judged`).
 4. Open decision 14 (label sources) before building the frontier-model
    labeller. Decisions 5, 12 and 13 come at Steps 7 and 8.
-5. A suggested separate fix: deleting an org fails when it has a model tier
-   assignment (the audit trigger writes an event for the deleted org).
+5. Deleting an org used to fail when it had a model tier assignment (the
+   audit trigger wrote an event for the deleted org). Fixed by migration
+   `20260925080000`; apply it to Supabase with the Step 5 ones.
 
 ## Prompt to paste into the new chat
 

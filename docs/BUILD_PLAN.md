@@ -462,6 +462,11 @@ The proposal, charters and starting budgets are in
   overnight brief, and brain hygiene (stale or disputed facts). Every fact passes 5.2.
   **Milestone: stop and report** (five unattended mornings, cost, facts admitted and
   rejected, what the owner would change).
+  **Status (2026-09-26):** 8.0 and 8.1 built and tested (ADR 024): charters are
+  versioned rows applied by `scripts.department`; Research and Intelligence runs a
+  full morning end to end in tests. Charters are stored live; the department is not
+  applied or switched on live yet. The five unattended mornings need the owner's
+  topics and sources, the API deployed with Steps 5 to 8, and the owner's go.
 - **8.2 Executive Office and Chief of Staff (M).** Intake: a Jev Choice over the
   departments (descriptions read from the database) plus a complexity Score, giving
   the department, the model tier, or a person. An order endpoint and CLI so the

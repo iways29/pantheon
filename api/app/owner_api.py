@@ -599,3 +599,113 @@ def kill(body: KillRequest, principal: OwnerPrincipal, connection: Connection) -
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, 'A kill needs "confirm": "KILL"')
     org_id = owner_org(connection, principal.user_id)
     return kill_everything(connection, user_id=principal.user_id, org_id=org_id, note=body.note)
+
+
+# --- Departments and charters (Step 8.0, ADR 024) -------------------------------
+
+
+@router.get("/departments/{department}/charter")
+def get_charter(
+    department: str, principal: OwnerPrincipal, connection: Connection
+) -> dict[str, Any]:
+    from app.departments.charter import CharterError, load
+
+    org_id = owner_org(connection, principal.user_id)
+    try:
+        with acting_as(connection, user_id=principal.user_id) as conn:
+            version, charter = load(conn, org_id=org_id, department=department)
+    except CharterError as error:
+        raise HTTPException(error.status, str(error)) from error
+    return {"version": version, "charter": charter.model_dump(mode="json")}
+
+
+class CharterRequest(BaseModel):
+    charter: dict[str, Any]
+    note: str | None = None
+
+
+@router.post("/departments/{department}/charter", status_code=status.HTTP_201_CREATED)
+def post_charter(
+    department: str, body: CharterRequest, principal: OwnerPrincipal, connection: Connection
+) -> dict[str, Any]:
+    """Publish a new version of a charter. `apply` makes it take effect."""
+    from pydantic import ValidationError
+
+    from app.departments.charter import Charter, publish
+
+    org_id = owner_org(connection, principal.user_id)
+    try:
+        charter = Charter.model_validate(body.charter)
+    except ValidationError as error:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT, error.errors(include_url=False)
+        ) from error
+    version = publish(
+        connection,
+        user_id=principal.user_id,
+        org_id=org_id,
+        department=department,
+        charter=charter,
+        note=body.note,
+    )
+    return {"department": department, "version": version}
+
+
+@router.post("/departments/{department}/apply")
+def post_apply(department: str, principal: OwnerPrincipal, connection: Connection) -> dict:
+    from app.departments.apply import apply_charter
+    from app.departments.charter import CharterError
+
+    org_id = owner_org(connection, principal.user_id)
+    try:
+        return apply_charter(
+            connection, user_id=principal.user_id, org_id=org_id, department=department
+        ).summary()
+    except CharterError as error:
+        raise HTTPException(error.status, str(error)) from error
+
+
+class EnableRequest(BaseModel):
+    on: bool = True
+
+
+@router.post("/departments/{department}/enable")
+def post_enable(
+    department: str, body: EnableRequest, principal: OwnerPrincipal, connection: Connection
+) -> dict[str, Any]:
+    from app.departments.apply import enable
+    from app.departments.charter import CharterError
+
+    org_id = owner_org(connection, principal.user_id)
+    try:
+        changed = enable(
+            connection,
+            user_id=principal.user_id,
+            org_id=org_id,
+            department=department,
+            on=body.on,
+        )
+    except CharterError as error:
+        raise HTTPException(error.status, str(error)) from error
+    return {"changed": changed}
+
+
+@router.get("/departments/{department}/report")
+def get_department_report(
+    department: str, principal: OwnerPrincipal, connection: Connection, days: int = 5
+) -> dict[str, Any]:
+    from app.departments.charter import CharterError
+    from app.departments.report import department_report
+
+    org_id = owner_org(connection, principal.user_id)
+    try:
+        report = department_report(
+            connection,
+            user_id=principal.user_id,
+            org_id=org_id,
+            department=department,
+            days=max(1, min(days, 31)),
+        )
+    except CharterError as error:
+        raise HTTPException(error.status, str(error)) from error
+    return report

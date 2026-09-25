@@ -370,6 +370,12 @@ def _seed(
     print(f"tools configured: {', '.join(tools) or 'none (already present)'}")
     print(f"org {org_id}: department '{DEPARTMENT}' at ${budget:.2f}/day, agent '{AGENT}'")
     print(f"judge gates seeded: {', '.join(seeded) or 'none (already present)'}")
+    # Department charters (ADR 024): stored for review; nothing is applied.
+    from app.departments.charter import seed_charters
+    from app.departments.starter_charters import STARTER_CHARTERS
+
+    charters = seed_charters(connection, user_id=user_id, org_id=org_id, charters=STARTER_CHARTERS)
+    print(f"charters seeded: {', '.join(charters) or 'none (already present)'}")
 
 
 def _setup(connection: psycopg.Connection) -> tuple[str, str, str]:

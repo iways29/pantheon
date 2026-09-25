@@ -8,7 +8,7 @@ this file. Editing it changes only agents created afterwards.
 
 from typing import Final
 
-_EXPLAIN = (
+EXPLAIN = (
     "An action you proposed is waiting for the owner's approval. In at most three "
     "short sentences of plain English, say what the action would do, why it helps "
     "the task, and anything in the facts given that argues against it. Do not argue "
@@ -42,7 +42,7 @@ STARTER_PROMPTS: Final[dict[str, dict[str, str]]] = {
         ),
         # Read by the decision desk (ADR 021) when one of this agent's actions
         # is held: a short note for the owner, not part of the run.
-        "explain": _EXPLAIN,
+        "explain": EXPLAIN,
     },
     "worker": {
         "system": (
@@ -54,6 +54,6 @@ STARTER_PROMPTS: Final[dict[str, dict[str, str]]] = {
         ),
         # Read by the decision desk (ADR 021) when one of this agent's actions
         # is held: a short note for the owner, not part of the run.
-        "explain": _EXPLAIN,
+        "explain": EXPLAIN,
     },
 }

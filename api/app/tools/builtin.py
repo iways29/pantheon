@@ -236,3 +236,100 @@ register(
         handler=_report_result,
     )
 )
+
+
+# --- Research department (Step 8.1) --------------------------------------------
+
+
+class PushArgs(_Args):
+    preview_id: str = Field(min_length=36, max_length=36)
+
+
+def _web_push_preview(ctx: ToolContext, args: PushArgs) -> dict[str, Any]:
+    if ctx.links is None:
+        raise RuntimeError("Web access is not available in this session")
+    preview = ctx.links.push(args.preview_id, org_id=ctx.org_id)
+    return {
+        "preview_id": str(preview.id),
+        "status": preview.status,
+        "results": [
+            {"claim": r["claim"], "outcome": r["outcome"], "reasons": r["reasons"]}
+            for r in (preview.results or [])
+        ],
+    }
+
+
+register(
+    ToolSpec(
+        name="web_push_preview",
+        description=(
+            "Send the facts of a page you previewed, and that was screened clean, through "
+            "the brain's write gate. Each fact is checked against the page and the brain; "
+            "some may be rejected or held for the owner."
+        ),
+        args=PushArgs,
+        risk_class="R1",
+        side_effect=True,
+        handler=_web_push_preview,
+    )
+)
+
+
+class HygieneArgs(_Args):
+    limit: int = Field(default=20, ge=1, le=50)
+
+
+def _brain_hygiene_scan(ctx: ToolContext, args: HygieneArgs) -> dict[str, Any]:
+    """Facts that need a look: past their review date, or disputed."""
+    with ctx.connection.cursor() as cursor:
+        cursor.execute(
+            """
+            select id, claim, source, source_ref, status, review_after, created_at
+            from public.facts
+            where org_id = %s
+              and (status = 'disputed'
+                   or (status = 'active' and review_after is not null
+                       and review_after <= current_date))
+            order by status = 'disputed' desc, review_after nulls last, created_at
+            limit %s
+            """,
+            (str(ctx.org_id), args.limit),
+        )
+        rows = cursor.fetchall()
+        cursor.execute(
+            "select count(*) filter (where status = 'active') as active, "
+            "count(*) filter (where status = 'disputed') as disputed, "
+            "count(*) filter (where status = 'superseded') as superseded "
+            "from public.facts where org_id = %s",
+            (str(ctx.org_id),),
+        )
+        totals = cursor.fetchone()
+    return {
+        "totals": dict(totals),
+        "needs_a_look": [
+            {
+                "fact_id": str(r["id"]),
+                "claim": r["claim"],
+                "source": r["source"],
+                "source_ref": r["source_ref"],
+                "why": "disputed" if r["status"] == "disputed" else "past its review date",
+                "review_after": str(r["review_after"]) if r["review_after"] else None,
+            }
+            for r in rows
+        ],
+    }
+
+
+register(
+    ToolSpec(
+        name="brain_hygiene_scan",
+        description=(
+            "List facts in the brain that need a look: disputed ones, and ones past their "
+            "review date (prices, headcounts, titles and other things that change). "
+            "Changes nothing."
+        ),
+        args=HygieneArgs,
+        risk_class="R0",
+        handler=_brain_hygiene_scan,
+    )
+)

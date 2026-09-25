@@ -115,6 +115,8 @@ def test_the_starting_tools_are_seeded_as_data(
         "brain_search": "R0",
         "read_document": "R0",
         "web_fetch_preview": "R2",
+        "web_push_preview": "R1",
+        "brain_hygiene_scan": "R0",
     }
 
 

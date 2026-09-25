@@ -32,6 +32,10 @@ class ModelCatalogue(Protocol):
     def model_ids(self) -> frozenset[str]: ...
 
 
+class ToolCatalogue(Protocol):
+    def supports_tools(self, model: str) -> bool: ...
+
+
 class OpenRouterCatalogue:
     """OpenRouter's public model list. Needs no key; fetched once per instance.
 
@@ -50,13 +54,21 @@ class OpenRouterCatalogue:
         self._url = f"{base_url.rstrip('/')}/{path}"
         self._client = client or httpx.Client(timeout=30.0)
         self._ids: frozenset[str] | None = None
+        self._params: dict[str, frozenset[str]] = {}
 
     def model_ids(self) -> frozenset[str]:
         if self._ids is None:
             response = self._client.get(self._url)
             response.raise_for_status()
-            self._ids = frozenset(m["id"] for m in response.json()["data"])
+            data = response.json()["data"]
+            self._ids = frozenset(m["id"] for m in data)
+            self._params = {m["id"]: frozenset(m.get("supported_parameters") or []) for m in data}
         return self._ids
+
+    def supports_tools(self, model: str) -> bool:
+        """Whether the catalogue lists `tools` among the model's parameters."""
+        self.model_ids()
+        return "tools" in self._params.get(model, frozenset())
 
 
 def assign_model(

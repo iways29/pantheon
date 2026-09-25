@@ -106,12 +106,20 @@ class Gateway:
         sensitive: bool = False,
         run_id: UUID | str | None = None,
         max_tokens: int | None = None,
+        tools: list[dict[str, Any]] | None = None,
+        tool_choice: str | dict[str, Any] | None = None,
     ) -> ModelResponse:
         """Run one model call on behalf of an agent.
 
         `sensitive=True` restricts routing to providers that will not retain or
         train on the input. It is opt-in per call rather than a property of the
         agent, because the same agent may handle both kinds of work.
+
+        `tools` (OpenAI function format) lets the model ask for tool calls,
+        returned on the response; running them is the caller's job, through
+        the tool runtime. Every turn of a tool loop is a separate call here,
+        so the kill switch and budgets are checked before each one. Routing
+        then requires providers that support tools (`require_parameters`).
         """
         agent = self._load_agent(agent_id)
         run = str(run_id) if run_id else None
@@ -133,11 +141,16 @@ class Gateway:
             sensitive=sensitive,
         ) as recorder:
             try:
+                extra: dict[str, Any] = {}
+                if tools:
+                    extra = {"tools": tools, "tool_choice": tool_choice}
+                    preferences = {**(preferences or {}), "require_parameters": True}
                 response = self._transport.complete(
                     model=model,
                     messages=messages,
                     max_tokens=max_tokens,
                     provider_preferences=preferences,
+                    **extra,
                 )
             except UpstreamError as error:
                 recorder.failed(code=error.code, message=str(error))
@@ -176,6 +189,8 @@ class Gateway:
                 "cost_usd": response.cost_usd,
                 "latency_ms": response.latency_ms,
                 "sensitive": sensitive,
+                "tools_offered": len(tools or []),
+                "tool_calls": [call.name for call in response.tool_calls],
             },
         )
         return response

@@ -53,6 +53,11 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--org", help="org id; defaults to the only org in phase 1")
     parser.add_argument("--clear", action="store_true", help="remove the mapping instead")
     parser.add_argument("--show", action="store_true", help="print the effective mapping")
+    parser.add_argument(
+        "--check-tools",
+        action="store_true",
+        help="check each tier's model supports tool calling (Step 7.1)",
+    )
     args = parser.parse_args(argv)
 
     with connect(_Env().database_url) as connection, as_service_role(connection):
@@ -63,6 +68,8 @@ def main(argv: list[str]) -> int:
         if args.show:
             _show(connection, org_id)
             return 0
+        if args.check_tools:
+            return _check_tools(connection, org_id)
         if not args.tier or (not args.model and not args.clear):
             parser.error("give a tier and a model, or a tier with --clear, or --show")
 
@@ -83,6 +90,26 @@ def main(argv: list[str]) -> int:
                 return 1
         _show(connection, org_id)
     return 0
+
+
+def _check_tools(connection: psycopg.Connection, org_id: str) -> int:
+    """Agents with tools need models that accept them (OpenRouter's catalogue)."""
+    defaults = tier_map_from(Settings(_env_file=ROOT_ENV)).models  # type: ignore[call-arg]
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "select tier, model from public.model_tier_assignments "
+            "where org_id = %s and tier <> 'embedding'",
+            (org_id,),
+        )
+        assigned = [(row["tier"], row["model"]) for row in cursor.fetchall()]
+    catalogue = OpenRouterCatalogue()
+    models = sorted({*assigned, *defaults.items()})
+    ok = True
+    for tier, model in models:
+        supported = catalogue.supports_tools(model)
+        ok &= supported
+        print(f"{tier:<9} {model:<40} {'tools ok' if supported else 'NO TOOL CALLING'}")
+    return 0 if ok else 1
 
 
 def _only_org(cursor: psycopg.Cursor) -> str:

@@ -47,6 +47,7 @@ from app.gateway.transport import (
     EmbeddingTransport,
     ModelResponse,
     OpenRouterTransport,
+    ToolCall,
     Transport,
 )
 
@@ -79,6 +80,7 @@ __all__ = [
     "SystemOneTransport",
     "TierMap",
     "TierNotConfigured",
+    "ToolCall",
     "Transport",
     "TypeSafeTransport",
     "UnknownModel",

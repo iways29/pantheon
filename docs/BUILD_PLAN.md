@@ -437,6 +437,8 @@ mid-flight when the kill switch is switched on.
 **Status (2026-09-26):** done (ADR 022). The ladder is data (`autonomy_rules`,
 defaults in `tool_mode`); limits are in `delegation_limits`. Runs stopped by
 the kill switch wait for the owner to resume them (`scripts.approvals resume`).
+Until Step 11 gives them a screen (item 10), they are changed through the owner
+API and `scripts.approvals`, never by editing the database or code.
 
 ### Milestone after Step 7 (stop and report)
 
@@ -552,10 +554,26 @@ configurable, with no code edits. Screens over the Step 6 backend and the Step 7
 8. **Judge.** Gates, question wording, thresholds and policies, with the calibration
    report beside them.
 9. **Tasks.** Every task tree with status, cost and who created it.
-10. **More to come.** The owner will add further features; the tab is a list of
+10. **Autonomy and safety limits** (owner, 2026-09-26: no database or code edits
+    for these). Everything Step 7.6 keeps as data, editable here:
+    - each agent's autonomy level (L0 to L3), with the promotion suggestions
+      beside it and one tap to accept or ignore one;
+    - the ladder itself: for each level and risk class R0 to R3, run, check
+      with Jev, or always ask (`autonomy_rules`; R4 shown as always ask, not
+      editable);
+    - each tool's risk class, approval policy, on/off switch, timeout and
+      output cap (`tools`);
+    - the limits in `delegation_limits`: depth, sub-tasks per task, tasks per
+      department per day, tasks per agent per hour, the loop limit, when a task
+      counts as stuck, and the promotion bar (decisions and agreement);
+    - the tool-risk gate's thresholds per risk class (with the Judge screen);
+    - the kill switch, and "resume paused runs" once it is off;
+    - standing rules for the decision desk (right-hand idea 4), listed and
+      addable in plain English.
+11. **More to come.** The owner will add further features; the tab is a list of
     sections so a new one is a new section, not a redesign.
 
-Done when: the owner can do items 1 to 6 entirely from the browser, every change is
+Done when: the owner can do items 1 to 6 and 10 entirely from the browser, every change is
 audited to `events`, and none of them needed a code change or redeploy.
 
 ## Step 12: Cost review (S)

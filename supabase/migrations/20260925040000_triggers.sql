@@ -268,7 +268,14 @@ begin
   select decrypted_secret into secret
     from vault.decrypted_secrets where name = 'pantheon_trigger_secret';
   if base_url is null or secret is null then
-    raise warning 'pantheon: runs are waiting but the Vault secrets pantheon_api_url and pantheon_trigger_secret are not both set';
+    -- Say so only when something is actually waiting, not every minute.
+    if exists (
+      select 1 from public.runs
+       where trigger = 'schedule' and wake_count < 5
+         and status in ('pending', 'paused', 'running')
+    ) then
+      raise warning 'pantheon: runs are waiting but the Vault secrets pantheon_api_url and pantheon_trigger_secret are not both set';
+    end if;
     return 0;
   end if;
 

@@ -238,6 +238,9 @@ Done when: a page carrying a planted injection is quarantined and a normal page 
 `clean`; the same assessment routes differently under `strict` and `normal` with
 no new model call; every screening is a judgment row.
 
+**Status (2026-09-25):** done (ADR 011), tested with a scripted TypeSafe.
+How well Jev itself labels the injection samples is measured live in 5.4.
+
 ### Step 5.4: Calibration and the labelled set (M)
 
 - A `judge_cases` set per gate (state, expected outcome, where the label came

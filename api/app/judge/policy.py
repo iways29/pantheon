@@ -149,6 +149,10 @@ class Policy(BaseModel):
     #: the fail-open outcome; the last is the fail-closed outcome.
     outcomes: list[str] = Field(min_length=2)
     rules: list[Rule] = Field(default_factory=list)
+    #: Named alternative rule sets over the same questions and outcomes, such
+    #: as `strict` and `normal` guardrails. The same answers can be decided
+    #: under any of them with no new model call. `rules` is the default.
+    profiles: dict[str, list[Rule]] = Field(default_factory=dict)
     #: Gate-specific numbers the calling code reads (length limits, how many
     #: neighbours to compare, how long until a volatile fact is rechecked).
     #: Here so they are data like the thresholds, not constants in code.
@@ -167,15 +171,29 @@ class Policy(BaseModel):
         for outcome in self.outcomes:
             if not re.match(_OUTCOME_PATTERN, outcome):
                 raise ValueError(f"outcome {outcome!r} must be lower_snake_case")
-        unknown = sorted({rule.outcome for rule in self.rules} - set(self.outcomes))
+        named = {rule.outcome for rule in self._all_rules()}
+        unknown = sorted(named - set(self.outcomes))
         if unknown:
             raise ValueError(f"rules name outcomes not in `outcomes`: {unknown}")
+        for name in self.profiles:
+            if not re.match(_OUTCOME_PATTERN, name):
+                raise ValueError(f"profile {name!r} must be lower_snake_case")
         return self
+
+    def _all_rules(self) -> list[Rule]:
+        return [*self.rules, *(rule for rules in self.profiles.values() for rule in rules)]
+
+    def rules_for(self, profile: str | None) -> list[Rule]:
+        if profile is None:
+            return self.rules
+        if profile not in self.profiles:
+            raise KeyError(f"no profile {profile!r}; have {sorted(self.profiles)}")
+        return self.profiles[profile]
 
     def problems(self, questions: Mapping[str, Question]) -> list[str]:
         """Where the rules and the gate's live questions disagree."""
         found: list[str] = []
-        for index, rule in enumerate(self.rules):
+        for index, rule in enumerate(self._all_rules()):
             question = questions.get(rule.question)
             if question is None:
                 found.append(
@@ -196,11 +214,13 @@ class Policy(BaseModel):
                     found.append(f"rule {index} names options {missing} not in {rule.question!r}")
         return found
 
-    def decide(self, answers: Mapping[str, AnswerValue]) -> tuple[str, list[Reason]]:
+    def decide(
+        self, answers: Mapping[str, AnswerValue], profile: str | None = None
+    ) -> tuple[str, list[Reason]]:
         severity = {outcome: index for index, outcome in enumerate(self.outcomes)}
         reasons = [
             Reason(rule.question, rule.outcome, rule.describe(answers[rule.question]))
-            for rule in self.rules
+            for rule in self.rules_for(profile)
             if rule.question in answers and rule.matches(answers[rule.question])
         ]
         if not reasons:

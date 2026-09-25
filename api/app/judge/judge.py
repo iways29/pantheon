@@ -40,7 +40,13 @@ from app.gateway.systemone import (
     ScoreAnswer,
     SystemOneResponse,
 )
-from app.judge.errors import GateDisabled, JudgeError, SensitiveStateRefused, StateTooLarge
+from app.judge.errors import (
+    GateDisabled,
+    JudgeError,
+    SensitiveStateRefused,
+    StateTooLarge,
+    UnknownProfile,
+)
 from app.judge.policy import Reason
 from app.judge.store import Gate, load_gate
 
@@ -61,6 +67,8 @@ class Decision:
     request_id: UUID | None = None
     #: The versioned model that answered.
     model: str | None = None
+    #: The named rule set used, or None for the gate's default rules.
+    profile: str | None = None
     answers: Mapping[str, AnswerValue] = field(default_factory=dict)
     input_ref: str | None = None
     cost_usd: float = 0.0
@@ -79,6 +87,7 @@ class Decision:
             "failure": self.failure,
             "request_id": str(self.request_id) if self.request_id else None,
             "model": self.model,
+            "profile": self.profile,
             "input_ref": self.input_ref,
             "cost_usd": self.cost_usd,
             "latency_ms": self.latency_ms,
@@ -107,13 +116,15 @@ class Judge:
         run_id: UUID | str | None = None,
         input_ref: str | None = None,
         sensitive: bool = False,
+        profile: str | None = None,
     ) -> Decision:
+        """Judge `state` at `gate`. `profile` picks a named rule set, if any."""
         # The kill switch and budgets come before anything else, as they do
         # for every model call.
         agent = self._gateway.admit(agent_id, run_id=run_id)
         try:
             config = load_gate(self._connection, org_id=agent.org_id, gate=gate)
-            self._screen(config, state, sensitive=sensitive)
+            self._screen(config, state, sensitive=sensitive, profile=profile)
         except JudgeError as error:
             self._emit(agent, run_id, "judgment_refused", error.detail())
             raise
@@ -132,11 +143,11 @@ class Judge:
             )
             _check_answers(questions, response)
         except UpstreamError as error:
-            return self._failed(agent, run_id, config, reference, error)
+            return self._failed(agent, run_id, config, reference, error, profile)
 
         request_id = uuid4()
         self._record(agent, run_id, config, reference, request_id, response)
-        outcome, reasons = config.policy.decide(response.answers)
+        outcome, reasons = config.policy.decide(response.answers, profile)
         decision = Decision(
             gate=config.name,
             gate_version=config.version,
@@ -144,6 +155,7 @@ class Judge:
             reasons=tuple(reasons),
             request_id=request_id,
             model=response.model,
+            profile=profile,
             answers=response.answers,
             input_ref=reference,
             cost_usd=response.cost_usd,
@@ -152,7 +164,11 @@ class Judge:
         self._emit(agent, run_id, "judgment_made", decision.summary())
         return decision
 
-    def _screen(self, config: Gate, state: JsonText, *, sensitive: bool) -> None:
+    def _screen(
+        self, config: Gate, state: JsonText, *, sensitive: bool, profile: str | None
+    ) -> None:
+        if profile is not None and profile not in config.policy.profiles:
+            raise UnknownProfile(config.name, profile, sorted(config.policy.profiles))
         if not config.config.enabled:
             raise GateDisabled(config.name, config.version)
         if sensitive and not config.config.allow_sensitive:
@@ -168,6 +184,7 @@ class Judge:
         config: Gate,
         reference: str,
         error: UpstreamError,
+        profile: str | None,
     ) -> Decision:
         mode = config.config.fail_mode
         outcome = config.policy.failure_outcome(mode)
@@ -186,6 +203,7 @@ class Judge:
             failed=True,
             failure=failure,
             input_ref=reference,
+            profile=profile,
         )
         self._emit(
             agent,

@@ -81,3 +81,10 @@ class StateTooLarge(JudgeError):
 
     def detail(self) -> dict[str, Any]:
         return {**super().detail(), "size": self.size, "limit": self.limit}
+
+
+class UnknownProfile(JudgeError):
+    code = "unknown_profile"
+
+    def __init__(self, gate: str, profile: str, known: list[str]) -> None:
+        super().__init__(f"Gate {gate!r} has no profile {profile!r}; it has {known}", gate=gate)

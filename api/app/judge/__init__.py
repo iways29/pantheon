@@ -16,6 +16,7 @@ from app.judge.errors import (
     JudgeError,
     SensitiveStateRefused,
     StateTooLarge,
+    UnknownProfile,
 )
 from app.judge.judge import Decision, Judge
 from app.judge.policy import Policy, Reason, Rule
@@ -40,5 +41,6 @@ __all__ = [
     "Rule",
     "SensitiveStateRefused",
     "StateTooLarge",
+    "UnknownProfile",
     "judge_from",
 ]

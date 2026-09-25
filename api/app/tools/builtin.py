@@ -156,3 +156,83 @@ register(
         timeout_seconds=30,
     )
 )
+
+
+# --- Tasks (Step 7.3) ---------------------------------------------------------
+
+
+class CreateTaskArgs(_Args):
+    assign_to: str = Field(min_length=1, max_length=64, description="The agent's name")
+    title: str = Field(min_length=3, max_length=200)
+    instructions: str = Field(min_length=3, max_length=4000)
+    max_cost_usd: float | None = Field(default=None, ge=0, le=10)
+
+
+def _create_task(ctx: ToolContext, args: CreateTaskArgs) -> dict[str, Any]:
+    from decimal import Decimal
+
+    from app.tasks import delegate
+
+    task_id = ctx.extras.get("task_id")
+    if not task_id:
+        raise RuntimeError("create_task works only inside a task")
+    with ctx.connection.cursor() as cursor:
+        task = delegate(
+            cursor,
+            org_id=ctx.org_id,
+            parent_task_id=task_id,
+            by_agent_id=ctx.agent_id,
+            to_agent=args.assign_to,
+            title=args.title,
+            instructions=args.instructions,
+            max_cost_usd=None if args.max_cost_usd is None else Decimal(str(args.max_cost_usd)),
+        )
+    return {"task_id": str(task.id), "status": task.status, "new": task.created}
+
+
+register(
+    ToolSpec(
+        name="create_task",
+        description=(
+            "Hand part of your task to another agent as a sub-task. You stop after planning; "
+            "you are woken with their results when all your sub-tasks finish."
+        ),
+        args=CreateTaskArgs,
+        risk_class="R1",
+        side_effect=True,
+        handler=_create_task,
+    )
+)
+
+
+class ReportArgs(_Args):
+    summary: str = Field(min_length=3, max_length=4000)
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
+def _report_result(ctx: ToolContext, args: ReportArgs) -> dict[str, Any]:
+    from app.tasks import report_result
+
+    task_id = ctx.extras.get("task_id")
+    if not task_id:
+        raise RuntimeError("report_result works only inside a task")
+    with ctx.connection.cursor() as cursor:
+        report_result(
+            cursor,
+            task_id=task_id,
+            agent_id=ctx.agent_id,
+            result={"summary": args.summary, **args.details},
+        )
+    return {"recorded": True}
+
+
+register(
+    ToolSpec(
+        name="report_result",
+        description="Record the short result of the task you were given, for whoever asked.",
+        args=ReportArgs,
+        risk_class="R1",
+        side_effect=True,
+        handler=_report_result,
+    )
+)

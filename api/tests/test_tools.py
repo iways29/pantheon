@@ -109,6 +109,8 @@ def test_the_starting_tools_are_seeded_as_data(
         )
         rows = {r["name"]: r["risk_class"] for r in cursor.fetchall()}
     assert rows == {
+        "create_task": "R1",
+        "report_result": "R1",
         "brain_propose_fact": "R1",
         "brain_search": "R0",
         "read_document": "R0",

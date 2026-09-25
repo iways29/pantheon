@@ -277,3 +277,74 @@ def _agent_id(connection: psycopg.Connection, org_id: str, name: str) -> UUID:
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"No agent {name!r}")
     return row["id"]
+
+
+# --- Orders and task trees (Step 7.3, ADR 019) -------------------------------
+
+
+class OrderRequest(BaseModel):
+    agent: str
+    title: str
+    instructions: str = ""
+    input: dict[str, Any] = {}
+    max_cost_usd: float | None = None
+    #: Optional; by default the same order twice is one task.
+    idempotency_key: str | None = None
+
+
+@router.post("/tasks", status_code=status.HTTP_201_CREATED)
+def post_order(
+    body: OrderRequest, principal: OwnerPrincipal, connection: Connection, response: Response
+) -> dict[str, Any]:
+    """Give an agent an order. The scheduler starts it on its next tick."""
+    from decimal import Decimal
+
+    from app.tasks import TaskError, order
+
+    org_id = owner_org(connection, principal.user_id)
+    try:
+        task = order(
+            connection,
+            user_id=principal.user_id,
+            org_id=org_id,
+            agent=body.agent,
+            title=body.title,
+            instructions=body.instructions,
+            input=body.input,
+            max_cost_usd=None if body.max_cost_usd is None else Decimal(str(body.max_cost_usd)),
+            idempotency_key=body.idempotency_key,
+        )
+    except TaskError as error:
+        raise HTTPException(error.status, str(error)) from error
+    if not task.created:
+        response.status_code = status.HTTP_200_OK
+    return {"id": str(task.id), "status": task.status, "created": task.created}
+
+
+@router.get("/tasks/{task_id}")
+def get_task_tree(
+    task_id: UUID, principal: OwnerPrincipal, connection: Connection
+) -> list[dict[str, Any]]:
+    """The task, everything under it, and what each level cost."""
+    from app.tasks import tree
+
+    rows = tree(connection, user_id=principal.user_id, root_task_id=task_id)
+    if not rows:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"No task {task_id}")
+    return [
+        {
+            **row,
+            "id": str(row["id"]),
+            "parent_task_id": str(row["parent_task_id"]) if row["parent_task_id"] else None,
+            "own_cost_usd": str(row["own_cost_usd"]),
+            "tree_cost_usd": str(row["tree_cost_usd"]),
+        }
+        for row in rows
+    ]
+
+
+@router.post("/tasks/{task_id}/cancel")
+def cancel_task(task_id: UUID, principal: OwnerPrincipal, connection: Connection) -> dict[str, Any]:
+    from app.tasks import cancel
+
+    return {"cancelled": cancel(connection, user_id=principal.user_id, task_id=task_id)}

@@ -123,7 +123,7 @@ those; the API's 401 versus 503 answers reveal whether `TRIGGER_SECRET` is set.
 3. In a session with the TypeSafe key: `scripts.jev_smoke`, then
    `scripts.judge_eval run all --repeats 3`, and report the numbers.
 4. Open decision 14 (label sources) before building the labeller.
-5. Step 8.1 live: research charter v2 (live, 2026-09-26) has the owner's first
+5. Step 8.1 live: research charter v3 (live, 2026-09-26; v3 adds web search) has the owner's first
    topic, space tech VC investment, and five checked sources (SpaceNews business,
    Payload, TechCrunch space, Space Capital publications, Space Insider). With the
    API deployed from Steps 5 to 8: `apply research`, then `enable research`; after five weekday mornings,

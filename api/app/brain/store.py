@@ -18,7 +18,7 @@ from app.brain.embeddings import Embedder
 _FACT_COLUMNS = """
     id, org_id, claim, source, source_ref, confidence, status,
     superseded_by, created_by_run_id, created_at, updated_at,
-    admitted_by, review_after, visibility, quote
+    admitted_by, review_after, visibility, quote, embedding_model
 """
 
 
@@ -54,6 +54,7 @@ class Fact:
     review_after: date | None = None
     visibility: str = "internal"
     quote: str | None = None
+    embedding_model: str | None = None
 
     @classmethod
     def from_row(cls, row: dict[str, Any]) -> "Fact":
@@ -73,6 +74,7 @@ class Fact:
             review_after=row["review_after"],
             visibility=row["visibility"],
             quote=row["quote"],
+            embedding_model=row["embedding_model"],
         )
 
 
@@ -138,8 +140,8 @@ class Brain:
                 insert into public.facts
                     (org_id, claim, source, source_ref, confidence,
                      created_by_run_id, embedding, admitted_by, status,
-                     review_after, visibility, quote)
-                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                     review_after, visibility, quote, embedding_model)
+                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 returning {_FACT_COLUMNS}
                 """,
                 (
@@ -155,6 +157,7 @@ class Brain:
                     admission.review_after,
                     admission.visibility,
                     admission.quote,
+                    self._embedder.name,
                 ),
             )
             row = cursor.fetchone()
@@ -192,6 +195,33 @@ class Brain:
             )
             row = cursor.fetchone()
         return Fact.from_row(row) if row else None
+
+    def stale_embeddings(self, model: str, *, limit: int = 100) -> list[Fact]:
+        """Facts embedded by another model than `model`, oldest first."""
+        with self._connection.cursor() as cursor:
+            cursor.execute(
+                f"""
+                select {_FACT_COLUMNS} from public.facts
+                where embedding_model is distinct from %s
+                order by created_at
+                limit %s
+                """,
+                (model, limit),
+            )
+            return [Fact.from_row(row) for row in cursor.fetchall()]
+
+    def reembed(self, facts: list[Fact]) -> int:
+        """Re-embed facts with this brain's model. Text and history are unchanged."""
+        many = getattr(self._embedder, "embed_many", None)
+        claims = [f.claim for f in facts]
+        vectors = many(claims) if many else [self._embedder.embed(c) for c in claims]
+        with self._connection.cursor() as cursor:
+            for fact, vector in zip(facts, vectors, strict=True):
+                cursor.execute(
+                    "update public.facts set embedding = %s, embedding_model = %s where id = %s",
+                    (vector, self._embedder.name, str(fact.id)),
+                )
+        return len(facts)
 
     def claims_from_run(self, run_id: UUID | str) -> list[str]:
         """Every claim a run has already stored, in insertion order.
@@ -231,11 +261,12 @@ class Brain:
                 select {_FACT_COLUMNS}, embedding <=> %s::vector as distance
                 from public.facts
                 where embedding is not null
+                  and embedding_model = %s
                   and (%s::text is null or status = %s::text)
                 order by embedding <=> %s::vector
                 limit %s
                 """,
-                (embedding, status, status, embedding, limit),
+                (embedding, self._embedder.name, status, status, embedding, limit),
             )
             rows = cursor.fetchall()
 

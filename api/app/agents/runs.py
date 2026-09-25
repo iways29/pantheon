@@ -46,7 +46,7 @@ import psycopg
 from app.agents.checkpointer import checkpointer
 from app.agents.prompts import PromptMissing, resolve_for_run
 from app.agents.research import PROMPT_SLOTS, RunScope, Session, build_graph
-from app.brain import Brain
+from app.brain import Brain, GatewayEmbedder
 from app.brain.embeddings import Embedder
 from app.brain.write_gate import BrainWriter
 from app.db import acting_as, as_service_role, connect
@@ -86,7 +86,9 @@ class Runtime:
     dsn: str
     transport: Transport
     tiers: TierMap
-    embedder: Embedder
+    #: None: embed through the gateway with the org's assigned model (ADR 013),
+    #: costed to the run's agent. Tests pass the free HashingEmbedder.
+    embedder: Embedder | None
     tracer: Tracer
     #: TypeSafe, for the brain write gate. None means no fact can be written.
     systemone: SystemOneTransport | None = None
@@ -387,7 +389,10 @@ def _session(runtime: Runtime, connection: psycopg.Connection, run: _Run) -> Ite
         gateway = Gateway(
             conn, runtime.transport, runtime.tiers, runtime.tracer, systemone=runtime.systemone
         )
-        brain = Brain(conn, runtime.embedder)
+        embedder = runtime.embedder or GatewayEmbedder(
+            gateway, agent_id=run.agent_id, run_id=run.id
+        )
+        brain = Brain(conn, embedder)
         writer = BrainWriter(conn, brain, Judge(conn, gateway)) if runtime.systemone else None
         yield Session(gateway=gateway, brain=brain, writer=writer)
 

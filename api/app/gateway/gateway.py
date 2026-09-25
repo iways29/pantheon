@@ -10,6 +10,7 @@ both come before any money is spent, because a blocked call should cost
 nothing.
 """
 
+import dataclasses
 import json
 from dataclasses import dataclass
 from decimal import Decimal
@@ -26,6 +27,7 @@ from app.gateway.errors import (
     GatewayError,
     KillSwitchEngaged,
     PriceNotConfigured,
+    TierNotConfigured,
     UpstreamError,
 )
 from app.gateway.systemone import (
@@ -37,8 +39,13 @@ from app.gateway.systemone import (
     SystemOneResponse,
     SystemOneTransport,
 )
-from app.gateway.tiers import TierMap
-from app.gateway.transport import SENSITIVE_PROVIDER_PREFERENCES, ModelResponse, Transport
+from app.gateway.tiers import EMBEDDING_DIMENSIONS, EMBEDDING_TIER, TierMap
+from app.gateway.transport import (
+    SENSITIVE_PROVIDER_PREFERENCES,
+    EmbeddingResponse,
+    ModelResponse,
+    Transport,
+)
 from app.tracing import NullTracer, Tracer
 
 
@@ -172,6 +179,121 @@ class Gateway:
             },
         )
         return response
+
+    def embed(
+        self,
+        *,
+        agent_id: UUID | str,
+        texts: list[str],
+        run_id: UUID | str | None = None,
+        sensitive: bool = False,
+    ) -> EmbeddingResponse:
+        """Turn texts into vectors with the org's embedding model (ADR 013).
+
+        Same guarantees as `complete`: kill switch and budgets first, one
+        `model_calls` row with OpenRouter's reported cost, a `model_call`
+        event. The model is data (`model_tier_assignments`, tier
+        `embedding`); with none assigned the call is refused, never guessed.
+        Every vector must be exactly as wide as the vector columns.
+        """
+        if not texts:
+            raise ValueError("Nothing to embed")
+        embed = getattr(self._transport, "embed", None)
+        if embed is None:
+            raise RuntimeError("This gateway's transport cannot embed")
+
+        agent = self._load_agent(agent_id)
+        self._admit(agent, run_id)
+        model = self._assigned_model(agent, EMBEDDING_TIER)
+        if model is None:
+            error = TierNotConfigured(EMBEDDING_TIER)
+            self._emit_event(agent, run_id, "model_call_blocked", error.detail())
+            raise error
+
+        run = str(run_id) if run_id else None
+        preferences = dict(SENSITIVE_PROVIDER_PREFERENCES) if sensitive else None
+        with self._tracer.model_call(
+            context=_trace_context(agent, run),
+            tags=[f"department:{agent.department_name}", f"tier:{EMBEDDING_TIER}"],
+            run_id=run,
+            model=model,
+            messages=[{"role": "user", "content": f"<{len(texts)} texts to embed>"}],
+            max_tokens=None,
+            sensitive=sensitive,
+        ) as recorder:
+            try:
+                response = embed(
+                    model=model,
+                    inputs=texts,
+                    dimensions=EMBEDDING_DIMENSIONS,
+                    provider_preferences=preferences,
+                )
+            except UpstreamError as error:
+                recorder.failed(code=error.code, message=str(error))
+                raise
+            response = dataclasses.replace(response, requested_model=model)
+            recorder.succeeded(
+                text=f"<{len(response.vectors)} vectors>",
+                served_model=response.model,
+                provider=response.provider,
+                tokens_in=response.tokens_in,
+                tokens_out=0,
+                cost_usd=response.cost_usd,
+                latency_ms=response.latency_ms,
+            )
+
+        self._record_call(
+            agent,
+            run_id,
+            model=response.model,
+            provider=response.provider,
+            tokens_in=response.tokens_in,
+            tokens_out=0,
+            cost_usd=response.cost_usd,
+            latency_ms=response.latency_ms,
+        )
+        self._emit_event(
+            agent,
+            run_id,
+            "model_call",
+            {
+                "tier": EMBEDDING_TIER,
+                "requested_model": model,
+                "model": response.model,
+                "provider": response.provider,
+                "texts": len(texts),
+                "tokens_in": response.tokens_in,
+                "tokens_out": 0,
+                "cost_usd": response.cost_usd,
+                "latency_ms": response.latency_ms,
+                "sensitive": sensitive,
+            },
+        )
+        # After the call is on the ledger: a wrong width was still paid for.
+        wrong = {len(v) for v in response.vectors} - {EMBEDDING_DIMENSIONS}
+        if wrong:
+            raise UpstreamError(
+                f"{response.model} returned vectors of width {sorted(wrong)}; "
+                f"the brain stores {EMBEDDING_DIMENSIONS}",
+                reason="malformed",
+            )
+        return response
+
+    def _assigned_model(self, agent: AgentRecord, tier: str) -> str | None:
+        """The model assigned to `tier` for this agent: department first, then org."""
+        with self._connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select model from public.model_tier_assignments
+                where org_id = %s and tier = %s
+                  and (department_id = %s or department_id is null)
+                order by department_id nulls last
+                limit 1
+                """,
+                (str(agent.org_id), tier, str(agent.department_id)),
+            )
+            row = cursor.fetchone()
+        return row["model"] if row else None
 
     def admit(self, agent_id: UUID | str, *, run_id: UUID | str | None = None) -> AgentRecord:
         """Load an agent and apply every call gate, without making a call.

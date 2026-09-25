@@ -43,7 +43,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from app.agents import prompts, triggers
 from app.agents.runs import RunReport, Runtime, advance_run, report, retry_run, start_run
 from app.agents.starter_prompts import STARTER_PROMPTS
-from app.brain.embeddings import HashingEmbedder
 from app.config import Settings
 from app.db import as_service_role, connect
 from app.gateway.factory import systemone_transport_from, tier_map_from, transport_from
@@ -150,7 +149,7 @@ def main(argv: list[str]) -> int:
         dsn=dsn,
         transport=transport_from(settings),
         tiers=tier_map_from(settings),
-        embedder=HashingEmbedder(),
+        embedder=None,
         tracer=tracer_from(settings),
         systemone=systemone_transport_from(settings) if settings.typesafe_api_key else None,
     )
@@ -304,6 +303,14 @@ def _seed(
             )
         # Jev's published price (ADR 009), for an org created after the
         # migration that seeded it. Never overwrites a price the owner set.
+        # The embedding model (ADR 013), for an org created after the
+        # migration that assigned it. Never overwrites the owner's choice.
+        cursor.execute(
+            "insert into public.model_tier_assignments (org_id, department_id, tier, model) "
+            "values (%s, null, 'embedding', 'openai/text-embedding-3-small') "
+            "on conflict on constraint model_tier_assignments_scope_key do nothing",
+            (org_id,),
+        )
         cursor.execute(
             "insert into public.model_prices (org_id, provider, model, input_usd_per_mtok, "
             "output_usd_per_mtok) values (%s, 'typesafe', 'jev-1.13.0', 0.042, 0) "

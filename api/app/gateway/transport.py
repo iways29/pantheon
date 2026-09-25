@@ -36,6 +36,32 @@ class ModelResponse:
     raw: dict[str, Any] = field(default_factory=dict, repr=False)
 
 
+@dataclass(frozen=True)
+class EmbeddingResponse:
+    model: str
+    vectors: list[list[float]]
+    tokens_in: int
+    cost_usd: float
+    latency_ms: int
+    provider: str | None = None
+    #: The model the gateway asked for (the org's assignment). `model` is what
+    #: the provider reports serving; the brain records this one, which is stable.
+    requested_model: str | None = None
+
+
+class EmbeddingTransport(Protocol):
+    """What the gateway needs to turn text into vectors."""
+
+    def embed(
+        self,
+        *,
+        model: str,
+        inputs: list[str],
+        dimensions: int | None = None,
+        provider_preferences: dict[str, Any] | None = None,
+    ) -> EmbeddingResponse: ...
+
+
 class Transport(Protocol):
     """Everything the gateway needs from a model provider."""
 
@@ -107,6 +133,73 @@ class OpenRouterTransport:
 
         body = response.json()
         return _parse(body, model=model, latency_ms=latency_ms)
+
+    def embed(
+        self,
+        *,
+        model: str,
+        inputs: list[str],
+        dimensions: int | None = None,
+        provider_preferences: dict[str, Any] | None = None,
+    ) -> EmbeddingResponse:
+        """`POST /embeddings` (OpenRouter API reference, read 2026-09-26).
+
+        Body `{model, input: [...], dimensions?, encoding_format}`; the reply
+        carries `data[].embedding` with `index`, and `usage.prompt_tokens`
+        and `usage.cost`, OpenRouter's own charge, as for chat.
+        """
+        payload: dict[str, Any] = {"model": model, "input": inputs, "encoding_format": "float"}
+        if dimensions is not None:
+            payload["dimensions"] = dimensions
+        if provider_preferences:
+            payload["provider"] = provider_preferences
+
+        started = time.monotonic()
+        try:
+            response = self._client.post(
+                f"{self._base_url}/embeddings",
+                headers={"Authorization": f"Bearer {self._api_key}"},
+                json=payload,
+            )
+        except httpx.HTTPError as error:
+            raise UpstreamError(f"OpenRouter embeddings request failed: {error}") from error
+        latency_ms = int((time.monotonic() - started) * 1000)
+        if response.status_code >= 400:
+            raise UpstreamError(
+                f"OpenRouter embeddings returned {response.status_code}: {response.text[:500]}",
+                status=response.status_code,
+            )
+        return _parse_embeddings(
+            response.json(), model=model, count=len(inputs), latency_ms=latency_ms
+        )
+
+
+def _parse_embeddings(
+    body: dict[str, Any], *, model: str, count: int, latency_ms: int
+) -> EmbeddingResponse:
+    items = body.get("data") or []
+    if len(items) != count:
+        raise UpstreamError(
+            f"OpenRouter returned {len(items)} embeddings for {count} inputs", reason="malformed"
+        )
+    ordered = sorted(items, key=lambda item: item.get("index", 0))
+    vectors = []
+    for item in ordered:
+        vector = item.get("embedding")
+        if not isinstance(vector, list):
+            raise UpstreamError(
+                "OpenRouter returned an embedding that is not a list", reason="malformed"
+            )
+        vectors.append([float(v) for v in vector])
+    usage = body.get("usage") or {}
+    return EmbeddingResponse(
+        model=body.get("model") or model,
+        vectors=vectors,
+        tokens_in=int(usage.get("prompt_tokens") or 0),
+        cost_usd=float(usage.get("cost") or 0.0),
+        latency_ms=latency_ms,
+        provider=body.get("provider"),
+    )
 
 
 def _parse(body: dict[str, Any], *, model: str, latency_ms: int) -> ModelResponse:

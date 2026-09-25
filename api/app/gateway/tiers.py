@@ -18,6 +18,12 @@ from app.gateway.errors import TierNotConfigured
 #: which compares what a task cost against what a cheaper tier would have.
 TIERS: tuple[str, ...] = ("cheap", "standard", "frontier")
 
+#: Not a tier agents choose: the model the gateway embeds text with, assigned
+#: in `model_tier_assignments` like a tier (ADR 013). No MODEL_TIERS fallback.
+EMBEDDING_TIER = "embedding"
+#: The width of every vector column. A model must produce exactly this many.
+EMBEDDING_DIMENSIONS = 1536
+
 
 @dataclass(frozen=True)
 class TierMap:

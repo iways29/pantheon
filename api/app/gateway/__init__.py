@@ -40,15 +40,19 @@ from app.gateway.systemone import (
     SystemOneTransport,
     TypeSafeTransport,
 )
-from app.gateway.tiers import TIERS, TierMap
+from app.gateway.tiers import EMBEDDING_DIMENSIONS, EMBEDDING_TIER, TIERS, TierMap
 from app.gateway.transport import (
     SENSITIVE_PROVIDER_PREFERENCES,
+    EmbeddingResponse,
+    EmbeddingTransport,
     ModelResponse,
     OpenRouterTransport,
     Transport,
 )
 
 __all__ = [
+    "EMBEDDING_DIMENSIONS",
+    "EMBEDDING_TIER",
     "SENSITIVE_PROVIDER_PREFERENCES",
     "TIERS",
     "AgentDisabled",
@@ -58,6 +62,8 @@ __all__ = [
     "ChoiceAnswer",
     "CircuitBreaker",
     "DepartmentDisabled",
+    "EmbeddingResponse",
+    "EmbeddingTransport",
     "Gateway",
     "GatewayError",
     "KillSwitchEngaged",

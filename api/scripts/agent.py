@@ -18,11 +18,11 @@ would: start_run, then advance_run in bounded invocations until it stops.
     uv run python -m scripts.agent prompt activate <slot> <version>
 
 `seed` creates, idempotently, the org, the user's membership, a `research`
-department with a daily budget, a `researcher` agent on the cheap tier, and
-that agent's starting prompts. `trigger` manages the morning routine: fixed
-tasks at fixed times, once a day, created switched off. `prompt` reads and
-changes the prompts in the database: a `set` takes effect on the next run,
-with no code change.
+department with a daily budget, a `researcher` agent on the cheap tier, that
+agent's starting prompts, and the price of TypeSafe's Jev model. `trigger`
+manages the morning routine: fixed tasks at fixed times, once a day, created
+switched off. `prompt` reads and changes the prompts in the database: a `set`
+takes effect on the next run, with no code change.
 The user must already exist in auth.users; on a local database with no
 Supabase Auth, `--create-local-user` adds a stand-in row.
 
@@ -298,6 +298,14 @@ def _seed(
                 "where agent_id = %s and slot = %s)",
                 (org_id, agent_id, slot, body, agent_id, slot),
             )
+        # Jev's published price (ADR 009), for an org created after the
+        # migration that seeded it. Never overwrites a price the owner set.
+        cursor.execute(
+            "insert into public.model_prices (org_id, provider, model, input_usd_per_mtok, "
+            "output_usd_per_mtok) values (%s, 'typesafe', 'jev-1.13.0', 0.042, 0) "
+            "on conflict (org_id, provider, model) do nothing",
+            (org_id,),
+        )
     print(f"org {org_id}: department '{DEPARTMENT}' at ${budget:.2f}/day, agent '{AGENT}'")
 
 

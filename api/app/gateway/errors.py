@@ -101,13 +101,47 @@ class TierNotConfigured(GatewayError):
 
 
 class UpstreamError(GatewayError):
-    """The provider refused or failed. Never silently retried here."""
+    """The provider refused or failed.
+
+    `reason` says which way, for callers that react differently to each (the
+    judge applies a gate's fail mode to any of them): `timeout`,
+    `unreachable`, `rate_limited`, `overloaded`, `server_error`, `rejected`
+    (a 4xx the provider will not change its mind about), `circuit_open`
+    (recent failures, so this call was not attempted) and `malformed` (an
+    answer that does not match the contract). None where not classified.
+    """
 
     code = "upstream_error"
 
-    def __init__(self, message: str, *, status: int | None = None) -> None:
+    def __init__(
+        self, message: str, *, status: int | None = None, reason: str | None = None
+    ) -> None:
         super().__init__(message)
         self.status = status
+        self.reason = reason
+        #: (model, tokens_in, tokens_out) when the provider answered and billed
+        #: but the answer was unusable; None otherwise.
+        self.billed: tuple[str, int, int] | None = None
 
     def detail(self) -> dict[str, Any]:
-        return {**super().detail(), "status": self.status}
+        return {**super().detail(), "status": self.status, "reason": self.reason}
+
+
+class PriceNotConfigured(GatewayError):
+    """A provider that does not report cost, with no price in model_prices.
+
+    Refused rather than logged at zero: an unpriced call would slip past the
+    department budget.
+    """
+
+    code = "price_not_configured"
+
+    def __init__(self, provider: str, model: str) -> None:
+        super().__init__(
+            f"No price for {provider} model {model!r} in model_prices; add one before calling it"
+        )
+        self.provider = provider
+        self.model = model
+
+    def detail(self) -> dict[str, Any]:
+        return {**super().detail(), "provider": self.provider, "model": self.model}

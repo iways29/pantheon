@@ -50,6 +50,18 @@ class Settings(BaseSettings):
     # refuses loudly rather than falling back to something expensive.
     model_tiers: str = ""
 
+    # --- TypeSafe Jev, the judge (ADR 009) ----------------------------------
+    # Server-side only. The model each gate uses is pinned in the database
+    # (judge_gates.model), not here.
+    typesafe_api_key: str | None = None
+    typesafe_base_url: str = "https://api.typesafe.ai"
+
+    @field_validator("typesafe_base_url", mode="after")
+    @classmethod
+    def _default_typesafe_url(cls, value: str) -> str:
+        # A blank TYPESAFE_BASE_URL= line in .env means "the default".
+        return value.strip() or "https://api.typesafe.ai"
+
     # --- Tracing (ADR 004) -----------------------------------------------
     # Langfuse Cloud. Tracing is off unless both keys are set. Server-side
     # only, like every other credential here.

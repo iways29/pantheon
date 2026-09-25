@@ -179,6 +179,10 @@ unreachable produces each gate's configured failure mode; a state marked
 sensitive is refused. Tests use a scripted transport, plus one live smoke test
 that the owner runs once `TYPESAFE_API_KEY` is set.
 
+**Status (2026-09-25):** code, migration and tests done (ADR 009). Live smoke
+test `python -m scripts.jev_smoke` waits for the owner's run; the migration
+is not yet applied to Supabase.
+
 ### Step 5.2: Brain write gate (M)
 
 The recipe combines TypeSafe's citation-check and entity-alignment cookbooks.
@@ -522,8 +526,8 @@ configured.
 7. **Document scopes:** company, department and agent (recommended) vs company and agent only. Owner leaned toward the recommendation; confirm at Step 6.
 8. **When to do prompts-in-database:** ~~now vs with the rest.~~ Decided and done ahead of Step 4. See ADR 007.
 9. **Scraping:** plain HTTP fetch (free, no JavaScript rendering) vs a paid scraping service (needs owner approval).
-10. **How to call TypeSafe.** (A) **Our own thin `httpx` transport to `api.typesafe.ai`** (recommended: no new dependency, matches the gateway's style, keeps kill switch, cost logging and events in one place; uses the `TYPESAFE_API_KEY` already in the plan). (B) The official `typesafe-sdk` package (retries and typed responses built in; a new dependency to approve). (C) Through OpenRouter as `~typesafe/jev-latest` (one key and one bill, but the alias moves, which ADR 003 forbids; a versioned id would be needed). (D) Through Vercel's AI Gateway (another moving part). Do not adopt `langchain-typesafe` (experimental, new dependency); copy its patterns.
-11. **Sensitive data and TypeSafe.** Recommended: **not allowed** until TypeSafe confirms request retention in writing (their terms are silent on it and zero retention is enterprise-only). Sensitive items go to a person or to a zero-retention LLM judge through the gateway. The owner may email privacy@typesafe.ai; the answer is reported at the Step 5 Milestone.
+10. **How to call TypeSafe.** **Decided (owner, 2026-09-25): (A), see ADR 009.** (A) **Our own thin `httpx` transport to `api.typesafe.ai`** (recommended: no new dependency, matches the gateway's style, keeps kill switch, cost logging and events in one place; uses the `TYPESAFE_API_KEY` already in the plan). (B) The official `typesafe-sdk` package (retries and typed responses built in; a new dependency to approve). (C) Through OpenRouter as `~typesafe/jev-latest` (one key and one bill, but the alias moves, which ADR 003 forbids; a versioned id would be needed). (D) Through Vercel's AI Gateway (another moving part). Do not adopt `langchain-typesafe` (experimental, new dependency); copy its patterns.
+11. **Sensitive data and TypeSafe.** **Decided (owner, 2026-09-25): not allowed; a per-gate switch, off by default. See ADR 009.** Recommended: **not allowed** until TypeSafe confirms request retention in writing (their terms are silent on it and zero retention is enterprise-only). Sensitive items go to a person or to a zero-retention LLM judge through the gateway. The owner may email privacy@typesafe.ai; the answer is reported at the Step 5 Milestone.
 12. **Which departments first.** Decided in part: Executive Office, Research and Intelligence, then **Marketing and Content** as the first revenue department (owner, 2026-09-25); Sales and Outreach follows. The business, channels (Reddit, Instagram, X, newsletter, site blog every two weeks or as needed) and voice are in `docs/business/the-unreal-lab.md`. Still owed: sample content in the right voice, once there is any.
 13. **Delegation limits.** Recommended defaults: tree depth 3, four children per task, 50 tasks per department per day. The owner can set others; enforced in the database.
 14. **Where labels come from** for calibration: the owner's approval decisions (best, slow to accumulate), a frontier-model ensemble (fast, costs a few cents, needs spot checks), and the owner's spot checks. Recommended: start with the ensemble, verify a sample by hand, add approvals as they accumulate.

@@ -1,6 +1,6 @@
 """Point a tier at a different model, with no redeploy.
 
-The owner's tool until the control centre ships in Step 7 (ADR 003). The slug
+The owner's tool until the control centre ships in Step 11 (ADR 003). The slug
 is checked against OpenRouter's live catalogue before it is saved, and the
 change lands in `events` through the table's audit trigger.
 
@@ -9,6 +9,10 @@ change lands in `events` through the table's audit trigger.
     uv run python -m scripts.set_tier_model cheap deepseek/deepseek-v4-flash-0731
     uv run python -m scripts.set_tier_model standard some/model --department research
     uv run python -m scripts.set_tier_model standard --clear --department research
+    uv run python -m scripts.set_tier_model embedding openai/text-embedding-3-small
+
+The `embedding` tier is the model the brain embeds with (ADR 013). After
+changing it, run `python -m scripts.brain reembed` so old facts stay findable.
 
 Connects with DATABASE_URL from the repository's .env and acts as the service
 role, so it is for the owner's machine only, never for a request handler.
@@ -23,7 +27,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.config import Settings
 from app.db import as_service_role, connect
-from app.gateway import TIERS, OpenRouterCatalogue, UnknownModel, assign_model, clear_assignment
+from app.gateway import (
+    EMBEDDING_TIER,
+    TIERS,
+    OpenRouterCatalogue,
+    UnknownModel,
+    assign_model,
+    clear_assignment,
+)
 from app.gateway.factory import tier_map_from
 
 ROOT_ENV = Path(__file__).resolve().parents[2] / ".env"
@@ -36,12 +47,17 @@ class _Env(BaseSettings):
 
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("tier", nargs="?", choices=TIERS)
+    parser.add_argument("tier", nargs="?", choices=[*TIERS, EMBEDDING_TIER])
     parser.add_argument("model", nargs="?")
     parser.add_argument("--department", help="department name; omit for the org-wide mapping")
     parser.add_argument("--org", help="org id; defaults to the only org in phase 1")
     parser.add_argument("--clear", action="store_true", help="remove the mapping instead")
     parser.add_argument("--show", action="store_true", help="print the effective mapping")
+    parser.add_argument(
+        "--check-tools",
+        action="store_true",
+        help="check each tier's model supports tool calling (Step 7.1)",
+    )
     args = parser.parse_args(argv)
 
     with connect(_Env().database_url) as connection, as_service_role(connection):
@@ -52,6 +68,8 @@ def main(argv: list[str]) -> int:
         if args.show:
             _show(connection, org_id)
             return 0
+        if args.check_tools:
+            return _check_tools(connection, org_id)
         if not args.tier or (not args.model and not args.clear):
             parser.error("give a tier and a model, or a tier with --clear, or --show")
 
@@ -64,7 +82,7 @@ def main(argv: list[str]) -> int:
                     org_id=org_id,
                     tier=args.tier,
                     model=args.model,
-                    catalogue=OpenRouterCatalogue(),
+                    catalogue=OpenRouterCatalogue(embeddings=args.tier == EMBEDDING_TIER),
                     department_id=department_id,
                 )
             except UnknownModel as error:
@@ -72,6 +90,26 @@ def main(argv: list[str]) -> int:
                 return 1
         _show(connection, org_id)
     return 0
+
+
+def _check_tools(connection: psycopg.Connection, org_id: str) -> int:
+    """Agents with tools need models that accept them (OpenRouter's catalogue)."""
+    defaults = tier_map_from(Settings(_env_file=ROOT_ENV)).models  # type: ignore[call-arg]
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "select tier, model from public.model_tier_assignments "
+            "where org_id = %s and tier <> 'embedding'",
+            (org_id,),
+        )
+        assigned = [(row["tier"], row["model"]) for row in cursor.fetchall()]
+    catalogue = OpenRouterCatalogue()
+    models = sorted({*assigned, *defaults.items()})
+    ok = True
+    for tier, model in models:
+        supported = catalogue.supports_tools(model)
+        ok &= supported
+        print(f"{tier:<9} {model:<40} {'tools ok' if supported else 'NO TOOL CALLING'}")
+    return 0 if ok else 1
 
 
 def _only_org(cursor: psycopg.Cursor) -> str:
@@ -115,6 +153,11 @@ def _show(connection: psycopg.Connection, org_id: str) -> None:
         for row in rows:
             if row["tier"] == tier:
                 print(f"{tier:<9} {row['scope']:<16} {row['model']}")
+    embedding = [row for row in rows if row["tier"] == EMBEDDING_TIER]
+    for row in embedding or [
+        {"scope": "(org-wide)", "model": "- NOT SET: no facts can be embedded"}
+    ]:
+        print(f"{EMBEDDING_TIER:<9} {row['scope']:<16} {row['model']}")
 
 
 if __name__ == "__main__":

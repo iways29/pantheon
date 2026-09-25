@@ -12,6 +12,7 @@ from dataclasses import dataclass
 import psycopg
 import pytest
 
+from app.brain import Admission
 from app.db import as_service_role, connect
 
 DEFAULT_DSN = "postgresql://pantheon:pantheon@127.0.0.1:5432/pantheon_dev"
@@ -86,3 +87,23 @@ def tenants(db: psycopg.Connection) -> Tenants:
         )
 
     return Tenants()
+
+
+def admit(connection: psycopg.Connection, org_id: uuid.UUID | str) -> Admission:
+    """A stand-in brain_claim judgment, for tests of fact storage itself.
+
+    Real facts are admitted by the write gate (app/brain/write_gate.py); the
+    database refuses any fact that names no such judgment. Tests about how
+    facts are stored and searched record one directly instead.
+    """
+    request_id = uuid.uuid4()
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            insert into public.judgments
+                (org_id, gate, question_id, question_version, output, request_id)
+            values (%s, 'brain_claim', 'test', '1', '{}'::jsonb, %s)
+            """,
+            (str(org_id), str(request_id)),
+        )
+    return Admission(request_id=request_id)

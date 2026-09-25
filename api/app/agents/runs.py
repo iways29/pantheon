@@ -34,6 +34,7 @@ inside each step runs as the user the run was requested by, under RLS.
 
 import json
 import time
+from collections import Counter
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -43,13 +44,23 @@ from uuid import UUID
 
 import psycopg
 
+from app.agents import deep
 from app.agents.checkpointer import checkpointer
 from app.agents.prompts import PromptMissing, resolve_for_run
 from app.agents.research import PROMPT_SLOTS, RunScope, Session, build_graph
-from app.brain import Brain
+from app.brain import Brain, GatewayEmbedder
 from app.brain.embeddings import Embedder
+from app.brain.write_gate import BrainWriter
 from app.db import acting_as, as_service_role, connect
-from app.gateway import Gateway, GatewayError, TierMap, Transport, UpstreamError
+from app.gateway import (
+    Gateway,
+    GatewayError,
+    SystemOneTransport,
+    TierMap,
+    Transport,
+    UpstreamError,
+)
+from app.judge import Judge
 from app.tracing import Tracer
 
 #: Gateway refusals that pause a run until the condition is lifted.
@@ -58,6 +69,8 @@ _PAUSING_REFUSALS = {
     "budget_exceeded": "budget_exceeded",
     "agent_disabled": "agent_disabled",
     "department_disabled": "department_disabled",
+    # A tool call held for the owner (Step 7.5): the run waits at that call.
+    "awaiting_approval": "awaiting_approval",
 }
 _TERMINAL = ("succeeded", "failed", "cancelled")
 
@@ -77,8 +90,15 @@ class Runtime:
     dsn: str
     transport: Transport
     tiers: TierMap
-    embedder: Embedder
+    #: None: embed through the gateway with the org's assigned model (ADR 013),
+    #: costed to the run's agent. Tests pass the free HashingEmbedder.
+    embedder: Embedder | None
     tracer: Tracer
+    #: TypeSafe, for the brain write gate. None means no fact can be written.
+    systemone: SystemOneTransport | None = None
+    #: Extra services for agents' tools (ADR 020): `fetcher` (a URL to a
+    #: page) and `links` (a session to a Links). Absent: those tools say so.
+    services: dict[str, Any] | None = None
     #: How long a claim lasts without renewal. Renewed after every step, so it
     #: only needs to cover one step plus slack.
     lease_seconds: int = 300
@@ -110,6 +130,8 @@ class _Run:
     max_steps: int
     max_tokens: int
     prompt_versions: dict[str, int]
+    runner: str = "pipeline"
+    task_id: UUID | None = None
 
 
 @dataclass(frozen=True)
@@ -252,30 +274,64 @@ def report(connection: psycopg.Connection, run_id: UUID | str) -> RunReport:
 def _execute(runtime: Runtime, connection: psycopg.Connection, run: _Run, deadline: float) -> _Stop:
     if _kill_switch_on(connection, run.org_id):
         return _Stop("paused", "kill_switch")
+    if _task_cancelled(connection, run):
+        return _Stop("cancelled", "task_cancelled")
 
+    # Which code runs this agent is data (ADR 020): its runner.
+    if run.runner not in ("pipeline", "deep"):
+        return _Stop(
+            "failed", "runner_not_built", error=f"The {run.runner!r} runner arrives in Step 8.2"
+        )
+    slots = deep.PROMPT_SLOTS if run.runner == "deep" else PROMPT_SLOTS
     try:
         prompts = resolve_for_run(
             connection,
             run_id=run.id,
             agent_id=run.agent_id,
-            slots=PROMPT_SLOTS,
+            slots=slots,
             pinned=run.prompt_versions,
         )
     except PromptMissing as error:
         return _Stop("paused", "prompt_missing", error=str(error))
 
-    scope = RunScope(
-        run_id=run.id,
-        org_id=run.org_id,
-        agent_id=run.agent_id,
-        prompts={slot: prompt.body for slot, prompt in prompts.items()},
-        session=lambda: _session(runtime, connection, run),
-    )
+    session = lambda: _session(runtime, connection, run)  # noqa: E731
+    if run.runner == "deep":
+        deep_scope = deep.DeepScope(
+            run_id=run.id,
+            org_id=run.org_id,
+            agent_id=run.agent_id,
+            agent_name=run.agent_name,
+            task_id=run.task_id,
+            system_prompt=prompts["system"].body,
+            session=session,
+            services=runtime.services,
+        )
+        build = lambda saver: deep.build_deep_graph(deep_scope, checkpointer=saver)  # noqa: E731
+        first_input = lambda: deep.first_message(deep_scope, run.input)  # noqa: E731
+        summarise = deep.output
+    else:
+        scope = RunScope(
+            run_id=run.id,
+            org_id=run.org_id,
+            agent_id=run.agent_id,
+            prompts={slot: prompt.body for slot, prompt in prompts.items()},
+            session=session,
+        )
+        build = lambda saver: build_graph(scope, checkpointer=saver)  # noqa: E731
+        # A task given to the research pipeline carries its question as the
+        # task's instructions or title.
+        first_input = lambda: {  # noqa: E731
+            **run.input,
+            "question": run.input.get("question")
+            or run.input.get("instructions")
+            or run.input.get("title", ""),
+        }
+        summarise = _output
     steps = run.steps_taken
     with (
         runtime.tracer.agent_run(
             run_id=str(run.id),
-            agent_name="research-agent",
+            agent_name=f"{run.runner}-agent",
             user_id=str(run.requested_by),
             input=run.input,
             context={
@@ -287,7 +343,7 @@ def _execute(runtime: Runtime, connection: psycopg.Connection, run: _Run, deadli
         ) as recorder,
         checkpointer(runtime.dsn) as saver,
     ):
-        graph = build_graph(scope, checkpointer=saver)
+        graph = build(saver)
         config: dict[str, Any] = {
             "configurable": {"thread_id": str(run.id)},
             "callbacks": runtime.tracer.callbacks(),
@@ -296,7 +352,7 @@ def _execute(runtime: Runtime, connection: psycopg.Connection, run: _Run, deadli
         snapshot = graph.get_state(config)
         started = bool(snapshot.values)
         if started and not snapshot.next:
-            stop = _Stop("succeeded", "completed", _output(snapshot.values))
+            stop = _Stop("succeeded", "completed", summarise(snapshot.values))
             recorder.stopped(status=stop.status, stop_reason=stop.reason, output=stop.output)
             return stop
 
@@ -311,12 +367,13 @@ def _execute(runtime: Runtime, connection: psycopg.Connection, run: _Run, deadli
             },
         )
         stop = None
+        loop_limit = _loop_limit(connection, run.org_id)
         try:
             if steps >= run.max_steps:
                 stop = _Stop("failed", "max_steps")
             else:
                 for update in graph.stream(
-                    None if started else run.input,
+                    None if started else first_input(),
                     config,
                     stream_mode="updates",
                     # LangGraph's default, "async", saves a step's checkpoint
@@ -333,9 +390,12 @@ def _execute(runtime: Runtime, connection: psycopg.Connection, run: _Run, deadli
                         node=next(iter(update)),
                         lease_seconds=runtime.lease_seconds,
                     )
-                    if not graph.get_state(config).next:
+                    state = graph.get_state(config)
+                    if not state.next:
                         break  # the graph is finished; nothing left to cap
-                    stop = _next_step_blocked(connection, run, steps, tokens, deadline)
+                    stop = _next_step_blocked(connection, run, steps, tokens, deadline) or _looping(
+                        state.values, loop_limit
+                    )
                     if stop is not None:
                         break
         except GatewayError as error:
@@ -350,7 +410,7 @@ def _execute(runtime: Runtime, connection: psycopg.Connection, run: _Run, deadli
             stop = _Stop("failed", "error", error=f"{type(error).__name__}: {error}"[:2000])
 
         if stop is None:
-            stop = _Stop("succeeded", "completed", _output(graph.get_state(config).values))
+            stop = _Stop("succeeded", "completed", summarise(graph.get_state(config).values))
         recorder.stopped(status=stop.status, stop_reason=stop.reason, output=stop.output)
         return stop
 
@@ -365,17 +425,57 @@ def _next_step_blocked(
         return _Stop("failed", "max_tokens")
     if _kill_switch_on(connection, run.org_id):
         return _Stop("paused", "kill_switch")
+    if _task_cancelled(connection, run):
+        return _Stop("cancelled", "task_cancelled")
     if time.monotonic() >= deadline:
         return _Stop("paused", "deadline")
     return None
 
 
+def _looping(values: dict[str, Any], limit: int) -> _Stop | None:
+    """Stop a run that asks for the same tool with the same arguments `limit`
+    times (ADR 022). Checked after the model asks and before the tool runs,
+    so the repeat that trips it never runs."""
+    seen: Counter[tuple[str, str]] = Counter()
+    for message in values.get("messages") or []:
+        for call in getattr(message, "tool_calls", None) or []:
+            key = (call["name"], json.dumps(call.get("args") or {}, sort_keys=True, default=str))
+            seen[key] += 1
+            if seen[key] >= limit:
+                return _Stop(
+                    "failed",
+                    "loop_detected",
+                    error=f"{call['name']} asked for {seen[key]} times with the same arguments",
+                )
+    return None
+
+
+def _loop_limit(connection: psycopg.Connection, org_id: UUID) -> int:
+    with as_service_role(connection) as conn, conn.cursor() as cursor:
+        cursor.execute("select (public.org_limits(%s)).loop_repeat_limit as n", (str(org_id),))
+        return int(cursor.fetchone()["n"])
+
+
 @contextmanager
 def _session(runtime: Runtime, connection: psycopg.Connection, run: _Run) -> Iterator[Session]:
-    with acting_as(connection, user_id=str(run.requested_by)) as conn:
+    # The run acts for its agent: document scopes (ADR 015) apply to it.
+    with acting_as(connection, user_id=str(run.requested_by), agent_id=str(run.agent_id)) as conn:
+        gateway = Gateway(
+            conn, runtime.transport, runtime.tiers, runtime.tracer, systemone=runtime.systemone
+        )
+        embedder = runtime.embedder or GatewayEmbedder(
+            gateway, agent_id=run.agent_id, run_id=run.id
+        )
+        brain = Brain(conn, embedder)
+        judge = Judge(conn, gateway) if runtime.systemone else None
+        writer = BrainWriter(conn, brain, judge) if judge else None
         yield Session(
-            gateway=Gateway(conn, runtime.transport, runtime.tiers, runtime.tracer),
-            brain=Brain(conn, runtime.embedder),
+            gateway=gateway,
+            brain=brain,
+            writer=writer,
+            connection=conn,
+            embedder=embedder,
+            judge=judge,
         )
 
 
@@ -394,7 +494,7 @@ def _claim(connection: psycopg.Connection, run_id: UUID | str, lease_seconds: in
                and (r.lease_expires_at is null or r.lease_expires_at < now())
             returning r.id, r.org_id, r.agent_id, a.name as agent_name, r.requested_by,
                       r.status, r.input, r.steps_taken, r.max_steps, r.max_tokens,
-                      r.prompt_versions
+                      r.prompt_versions, a.runner, r.task_id
             """,
             (lease_seconds, str(run_id)),
         )
@@ -466,11 +566,14 @@ def _finish(connection: psycopg.Connection, run: _Run, stop: _Stop) -> None:
         cursor.execute(
             """
             update public.runs
-               set status = %s,
-                   stop_reason = %s,
-                   error = %s,
+               -- A run killed while this invocation was working stays
+               -- cancelled (ADR 023): nothing an invocation reports undoes it.
+               set status = case when status = 'cancelled' then status else %s end,
+                   stop_reason = case when status = 'cancelled' then stop_reason else %s end,
+                   error = case when status = 'cancelled' then error else %s end,
                    output = coalesce(%s::jsonb, output),
-                   ended_at = case when %s in ('succeeded', 'failed', 'cancelled')
+                   ended_at = case when status = 'cancelled' then coalesce(ended_at, now())
+                                   when %s in ('succeeded', 'failed', 'cancelled')
                                    then now() end,
                    lease_expires_at = null
              where id = %s
@@ -510,6 +613,19 @@ def _kill_switch_on(connection: psycopg.Connection, org_id: UUID) -> bool:
     return bool(row and row["engaged"])
 
 
+def _task_cancelled(connection: psycopg.Connection, run: _Run) -> bool:
+    """A run stops when it, or its task, was cancelled: by the owner, a
+    decision, or the kill (ADR 023)."""
+    with as_service_role(connection) as conn, conn.cursor() as cursor:
+        cursor.execute(
+            "select r.status = 'cancelled' or coalesce(t.status = 'cancelled', false) as stop "
+            "from public.runs r left join public.tasks t on t.id = r.task_id where r.id = %s",
+            (str(run.id),),
+        )
+        row = cursor.fetchone()
+    return bool(row and row["stop"])
+
+
 def _lifecycle_event(
     connection: psycopg.Connection, run: _Run, event_type: str, payload: dict[str, Any]
 ) -> None:
@@ -537,5 +653,6 @@ def _output(values: dict[str, Any]) -> dict[str, Any]:
         "answer": values.get("answer"),
         "claims": values.get("claims", []),
         "stored_fact_ids": values.get("stored_fact_ids", []),
+        "fact_writes": values.get("fact_writes", []),
         "recalled_fact_ids": [f["id"] for f in values.get("recalled", [])],
     }

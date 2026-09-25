@@ -9,7 +9,7 @@
 The research agent's two prompts were string constants in
 `api/app/agents/research.py`. Changing one meant a code change and a redeploy.
 Prompts are the setting the owner will tune most often, and the plan's
-principle (Step 5b) is that nothing configurable lives in code. Model tiers
+principle (Step 5b, now Step 6) is that nothing configurable lives in code. Model tiers
 already work this way (ADR 003). Doing prompts before Step 4 means every agent
 built from here on loads its prompt from the database from day one.
 
@@ -41,7 +41,7 @@ built from here on loads its prompt from the database from day one.
   agent begins with (`scripts.agent seed` uses it; the Control Center intake
   form will offer it). Nothing reads it at run time. The migration writes the
   same text as version 1 for existing research agents, as a snapshot.
-- **Until the Control Center exists** (Step 7b), prompts are managed with
+- **Until the Control Center exists** (Step 11), prompts are managed with
   `python -m scripts.agent prompt list | set | activate`.
 
 ## Consequences

@@ -1,6 +1,6 @@
 """Run the research agent from the command line.
 
-The owner's way to drive Step 3 until triggers (Step 4) and the UI (Step 7)
+The owner's way to drive Step 3 until triggers (Step 4) and the UI (Step 10)
 exist. Every run goes through the same lifecycle a serverless invocation
 would: start_run, then advance_run in bounded invocations until it stops.
 
@@ -16,13 +16,17 @@ would: start_run, then advance_run in bounded invocations until it stops.
     uv run python -m scripts.agent prompt list [--slot answer]
     uv run python -m scripts.agent prompt set <slot> --file prompt.txt [--note "why"]
     uv run python -m scripts.agent prompt activate <slot> <version>
+    uv run python -m scripts.agent agents list
+    uv run python -m scripts.agent agents create --file agent.json
+    uv run python -m scripts.agent agents enable|disable <name>
 
 `seed` creates, idempotently, the org, the user's membership, a `research`
-department with a daily budget, a `researcher` agent on the cheap tier, and
-that agent's starting prompts. `trigger` manages the morning routine: fixed
-tasks at fixed times, once a day, created switched off. `prompt` reads and
-changes the prompts in the database: a `set` takes effect on the next run,
-with no code change.
+department with a daily budget, a `researcher` agent on the cheap tier, that
+agent's starting prompts, the price of TypeSafe's Jev model and the starter
+judge gates. `trigger` manages the morning routine: fixed tasks at fixed
+times, once a day, created switched off. `prompt` reads and changes the
+prompts in the database: a `set` takes effect on the next run, with no code
+change.
 The user must already exist in auth.users; on a local database with no
 Supabase Auth, `--create-local-user` adds a stand-in row.
 
@@ -39,13 +43,16 @@ from pathlib import Path
 import psycopg
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from app.agents import prompts, triggers
+from app.agents import admin, prompts, triggers
 from app.agents.runs import RunReport, Runtime, advance_run, report, retry_run, start_run
 from app.agents.starter_prompts import STARTER_PROMPTS
-from app.brain.embeddings import HashingEmbedder
 from app.config import Settings
 from app.db import as_service_role, connect
-from app.gateway.factory import tier_map_from, transport_from
+from app.gateway.factory import systemone_transport_from, tier_map_from, transport_from
+from app.judge.starter_gates import STARTER_GATES
+from app.judge.store import seed_gates
+from app.knowledge.wiring import agent_services
+from app.tools import seed_tools
 from app.tracing import tracer_from
 
 ROOT_ENV = Path(__file__).resolve().parents[2] / ".env"
@@ -92,6 +99,14 @@ def main(argv: list[str]) -> int:
     prompt_activate.add_argument("slot")
     prompt_activate.add_argument("version", type=int)
 
+    agents = commands.add_parser("agents", help="create, list, enable or disable agents")
+    agent_commands = agents.add_subparsers(dest="agents_command", required=True)
+    agent_commands.add_parser("list")
+    agents_create = agent_commands.add_parser("create", help="from a JSON description")
+    agents_create.add_argument("--file", required=True, type=Path)
+    for verb in ("enable", "disable"):
+        agent_commands.add_parser(verb).add_argument("name")
+
     retry = commands.add_parser("retry", help="resume a run that failed on an error")
     retry.add_argument("run_id")
 
@@ -128,6 +143,10 @@ def main(argv: list[str]) -> int:
         with connect(dsn) as connection:
             return _prompt(connection, args)
 
+    if args.command == "agents":
+        with connect(dsn) as connection:
+            return _agents(connection, args)
+
     if args.command == "trigger":
         with connect(dsn) as connection:
             return _trigger(connection, args)
@@ -147,8 +166,10 @@ def main(argv: list[str]) -> int:
         dsn=dsn,
         transport=transport_from(settings),
         tiers=tier_map_from(settings),
-        embedder=HashingEmbedder(),
+        embedder=None,
         tracer=tracer_from(settings),
+        systemone=systemone_transport_from(settings) if settings.typesafe_api_key else None,
+        services=agent_services(),
     )
     if args.command == "ask":
         with connect(dsn) as connection:
@@ -211,6 +232,32 @@ def _trigger(connection: psycopg.Connection, args: argparse.Namespace) -> int:
         print(f"Could not do that: {error}", file=sys.stderr)
         return 1
     return 0
+
+
+def _agents(connection: psycopg.Connection, args: argparse.Namespace) -> int:
+    org_id, user_id, _ = _setup(connection)
+    command = args.agents_command
+    try:
+        if command == "list":
+            for a in admin.list_agents(connection, user_id=user_id, org_id=org_id):
+                state = "on " if a.enabled else "OFF"
+                tools = ", ".join(a.allowed_tools) or "no tools"
+                print(f"{state} {a.name:<20} {a.department:<12} {a.role:<10} {a.tier:<9} {tools}")
+            return 0
+        if command == "create":
+            spec = admin.AgentSpec.model_validate_json(args.file.read_text())
+            a = admin.create_agent(connection, user_id=user_id, org_id=org_id, spec=spec)
+            state = "on" if a.enabled else "switched off"
+            print(f"{a.name}: {'created' if a.created else 'already exists'}, {state}")
+            return 0
+        a = admin.set_enabled(
+            connection, user_id=user_id, org_id=org_id, name=args.name, enabled=command == "enable"
+        )
+        print(f"{a.name}: {'on' if a.enabled else 'off'}")
+        return 0
+    except admin.AgentAdminError as error:
+        print(f"refused: {error}", file=sys.stderr)
+        return 1
 
 
 def _prompt(connection: psycopg.Connection, args: argparse.Namespace) -> int:
@@ -280,8 +327,10 @@ def _seed(
         )
         if cursor.fetchone() is None:
             cursor.execute(
-                "insert into public.agents (org_id, department_id, name, role, model_tier) "
-                "values (%s, %s, %s, 'research', 'cheap')",
+                # Seeding is the owner's own act, so the researcher starts on.
+                # Agents created through the API start off (ADR 014).
+                "insert into public.agents (org_id, department_id, name, role, model_tier, "
+                "enabled) values (%s, %s, %s, 'research', 'cheap', true)",
                 (org_id, department_id, AGENT),
             )
         cursor.execute(
@@ -298,7 +347,35 @@ def _seed(
                 "where agent_id = %s and slot = %s)",
                 (org_id, agent_id, slot, body, agent_id, slot),
             )
+        # Jev's published price (ADR 009), for an org created after the
+        # migration that seeded it. Never overwrites a price the owner set.
+        # The embedding model (ADR 013), for an org created after the
+        # migration that assigned it. Never overwrites the owner's choice.
+        cursor.execute(
+            "insert into public.model_tier_assignments (org_id, department_id, tier, model) "
+            "values (%s, null, 'embedding', 'openai/text-embedding-3-small') "
+            "on conflict on constraint model_tier_assignments_scope_key do nothing",
+            (org_id,),
+        )
+        cursor.execute(
+            "insert into public.model_prices (org_id, provider, model, input_usd_per_mtok, "
+            "output_usd_per_mtok) values (%s, 'typesafe', 'jev-1.13.0', 0.042, 0) "
+            "on conflict (org_id, provider, model) do nothing",
+            (org_id,),
+        )
+    # The brain write gate's starting questions and thresholds (ADR 010). A
+    # gate the org already has, edited or not, is left alone.
+    seeded = seed_gates(connection, user_id=user_id, org_id=org_id, gates=STARTER_GATES)
+    tools = seed_tools(connection, user_id=user_id, org_id=org_id)
+    print(f"tools configured: {', '.join(tools) or 'none (already present)'}")
     print(f"org {org_id}: department '{DEPARTMENT}' at ${budget:.2f}/day, agent '{AGENT}'")
+    print(f"judge gates seeded: {', '.join(seeded) or 'none (already present)'}")
+    # Department charters (ADR 024): stored for review; nothing is applied.
+    from app.departments.charter import seed_charters
+    from app.departments.starter_charters import STARTER_CHARTERS
+
+    charters = seed_charters(connection, user_id=user_id, org_id=org_id, charters=STARTER_CHARTERS)
+    print(f"charters seeded: {', '.join(charters) or 'none (already present)'}")
 
 
 def _setup(connection: psycopg.Connection) -> tuple[str, str, str]:

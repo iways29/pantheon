@@ -1,0 +1,129 @@
+{
+  "gate": "brain_neighbour",
+  "about": "Pairs of a proposed claim and an existing fact. Expected outcomes for the brain_neighbour gate. Written 2026-09-25 as a starting set.",
+  "cases": [
+    {
+      "id": "same-reworded",
+      "expected": "duplicate",
+      "label_source": "author",
+      "state": {
+        "new_claim": "Acme Corp, founded in 2019, is based in Leeds.",
+        "existing_fact": "Acme Corp was founded in 2019 in Leeds."
+      }
+    },
+    {
+      "id": "same-exact-meaning",
+      "expected": "duplicate",
+      "label_source": "author",
+      "state": {
+        "new_claim": "The head office of Acme Corp is in Leeds.",
+        "existing_fact": "Acme Corp is headquartered in Leeds."
+      }
+    },
+    {
+      "id": "related-other-aspect",
+      "expected": "related",
+      "label_source": "author",
+      "state": {
+        "new_claim": "Acme Corp makes small wind turbines.",
+        "existing_fact": "Acme Corp was founded in 2019 in Leeds."
+      }
+    },
+    {
+      "id": "related-new-office",
+      "expected": "related",
+      "label_source": "author",
+      "state": {
+        "new_claim": "Acme Corp opened an office in Dublin in 2025.",
+        "existing_fact": "Acme Corp is headquartered in Leeds."
+      },
+      "note": "A second office does not contradict the headquarters."
+    },
+    {
+      "id": "different-company",
+      "expected": "different",
+      "label_source": "author",
+      "state": {
+        "new_claim": "Breeze Ltd sells solar panels.",
+        "existing_fact": "Acme Corp was founded in 2019 in Leeds."
+      }
+    },
+    {
+      "id": "conflict-place",
+      "expected": "conflict",
+      "label_source": "author",
+      "state": {
+        "new_claim": "Acme Corp was founded in Manchester.",
+        "existing_fact": "Acme Corp was founded in Leeds."
+      },
+      "note": "A founding place does not change over time, so this is a contradiction, not an update."
+    },
+    {
+      "id": "conflict-year",
+      "expected": "conflict",
+      "label_source": "author",
+      "state": {
+        "new_claim": "Acme Corp was founded in 2012.",
+        "existing_fact": "Acme Corp was founded in 2019."
+      }
+    },
+    {
+      "id": "update-headcount",
+      "expected": "update",
+      "label_source": "author",
+      "state": {
+        "new_claim": "Acme Corp now employs 55 people.",
+        "existing_fact": "Acme Corp employs 40 people."
+      }
+    },
+    {
+      "id": "update-role",
+      "expected": "update",
+      "label_source": "author",
+      "state": {
+        "new_claim": "Jane Smith is now chief executive of Acme Corp.",
+        "existing_fact": "Jane Smith is chief technology officer of Acme Corp."
+      }
+    },
+    {
+      "id": "update-price",
+      "expected": "update",
+      "label_source": "author",
+      "state": {
+        "new_claim": "The Breeze 2 kW turbine now costs 4,500 pounds.",
+        "existing_fact": "The Breeze 2 kW turbine costs 4,200 pounds."
+      }
+    },
+    {
+      "id": "double-negative-same",
+      "expected": "duplicate",
+      "label_source": "author",
+      "state": {
+        "new_claim": "Acme Corp was not founded anywhere other than Leeds.",
+        "existing_fact": "Acme Corp was founded in Leeds."
+      },
+      "weak_spot": "double_negative"
+    },
+    {
+      "id": "dates-same",
+      "expected": "duplicate",
+      "label_source": "author",
+      "state": {
+        "new_claim": "Acme Corp was founded in the year before 2020.",
+        "existing_fact": "Acme Corp was founded in 2019."
+      },
+      "weak_spot": "dates"
+    },
+    {
+      "id": "arithmetic-same",
+      "expected": "duplicate",
+      "label_source": "author",
+      "state": {
+        "new_claim": "Acme Corp's staff is twice the 20 people it had in 2023.",
+        "existing_fact": "Acme Corp employs 40 people."
+      },
+      "weak_spot": "arithmetic",
+      "note": "Also reads as an update over time; a person may prefer 'related'."
+    }
+  ]
+}

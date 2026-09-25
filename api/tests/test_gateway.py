@@ -376,7 +376,9 @@ def test_a_successful_call_emits_an_event(
 
     with acting_as(db, user_id=str(tenants.user_a)) as connection, connection.cursor() as cursor:
         cursor.execute(
-            "select type, payload from public.events where agent_id = %s", (str(agent_id),)
+            "select type, payload from public.events "
+            "where agent_id = %s and type like 'model_call%%'",
+            (str(agent_id),),
         )
         rows = cursor.fetchall()
 
@@ -405,7 +407,9 @@ def test_a_blocked_call_is_also_on_the_audit_trail(
 
     with acting_as(db, user_id=str(tenants.user_a)) as connection, connection.cursor() as cursor:
         cursor.execute(
-            "select type, payload from public.events where agent_id = %s", (str(agent_id),)
+            "select type, payload from public.events "
+            "where agent_id = %s and type like 'model_call%%'",
+            (str(agent_id),),
         )
         rows = cursor.fetchall()
 

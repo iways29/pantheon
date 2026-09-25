@@ -85,6 +85,13 @@ def dispatch(db: psycopg.Connection, at: datetime) -> list[uuid.UUID]:
     return [row["id"] for row in rows]
 
 
+def tasks(db: psycopg.Connection, org_id: uuid.UUID) -> list[dict[str, Any]]:
+    with as_service_role(db) as conn:
+        return conn.execute(
+            "select * from public.tasks where org_id = %s order by created_at", (str(org_id),)
+        ).fetchall()
+
+
 def runs(db: psycopg.Connection, org_id: uuid.UUID) -> list[dict[str, Any]]:
     with as_service_role(db) as conn:
         return conn.execute(
@@ -120,27 +127,44 @@ def test_it_fires_at_its_local_time_with_the_task_and_the_caps(
     # 08:30 in India is 03:00 UTC: the trigger is read in its own time zone.
     created = dispatch(db, ist(MONDAY, 8, 30).astimezone(UTC))
 
+    # Step 7.3: a trigger creates a task from its template (ADR 019).
     assert len(created) == 1
-    (run,) = runs(db, tenants.org_a)
-    assert run["id"] == created[0]
-    assert run["trigger"] == "schedule"
-    assert run["status"] == "pending"
-    assert run["input"] == TASK
-    assert run["requested_by"] == tenants.user_a
-    assert (run["max_steps"], run["max_tokens"]) == (25, 50000)
-    assert run["idempotency_key"] == f"trigger:{trigger.id}:2026-09-28"
+    (task,) = tasks(db, tenants.org_a)
+    assert task["id"] == created[0]
+    assert task["created_by"] == f"trigger:{trigger.id}"
+    assert task["status"] == "queued"
+    assert task["input"] == TASK
+    assert task["requested_by"] == tenants.user_a
+    assert (task["max_steps"], task["max_tokens"]) == (25, 50000)
+    assert task["idempotency_key"] == f"trigger:{trigger.id}:2026-09-28"
     with as_service_role(db) as conn:
         fired = conn.execute(
-            "select payload from public.events where run_id = %s and type = 'trigger_fired'",
-            (str(run["id"]),),
+            "select payload from public.events where type = 'trigger_fired' and agent_id = %s",
+            (str(agent),),
         ).fetchall()
     assert [f["payload"]["slot"] for f in fired] == ["2026-09-28"]
+    assert fired[0]["payload"]["task_id"] == str(task["id"])
+
+    # The scheduler then gives the queued task a run.
+    with as_service_role(db) as conn:
+        started = conn.execute("select public.dispatch_queued_tasks() as id").fetchall()
+    (run,) = runs(db, tenants.org_a)
+    assert [s["id"] for s in started] == [run["id"]]
+    assert run["trigger"] == "task" and run["status"] == "pending"
+    assert run["input"] == {
+        **TASK,
+        "task_id": str(task["id"]),
+        "title": "morning-brief",
+        "instructions": TASK["question"],
+    }
+    assert (run["max_steps"], run["max_tokens"]) == (25, 50000)
+    assert tasks(db, tenants.org_a)[0]["status"] == "running"
 
 
 def test_the_same_slot_produces_one_run_however_often_it_is_asked(
     db: psycopg.Connection, tenants: Tenants, agent: uuid.UUID
 ) -> None:
-    """Acceptance: the same trigger twice is one run."""
+    """Acceptance: the same trigger twice is one task, so one run."""
     trigger = add(db, tenants, agent)
 
     first = dispatch(db, ist(MONDAY, 8, 31))
@@ -154,7 +178,7 @@ def test_the_same_slot_produces_one_run_however_often_it_is_asked(
             "update public.triggers set last_slot = null where id = %s", (str(trigger.id),)
         )
     assert dispatch(db, ist(MONDAY, 8, 33)) == []
-    assert len(runs(db, tenants.org_a)) == 1
+    assert len(tasks(db, tenants.org_a)) == 1
 
 
 def test_it_fires_again_the_next_day(
@@ -163,7 +187,7 @@ def test_it_fires_again_the_next_day(
     add(db, tenants, agent)
     dispatch(db, ist(MONDAY, 8, 30))
     assert len(dispatch(db, ist(TUESDAY, 8, 30))) == 1
-    assert len(runs(db, tenants.org_a)) == 2
+    assert len(tasks(db, tenants.org_a)) == 2
 
 
 def test_it_skips_days_it_is_not_set_for(
@@ -504,16 +528,23 @@ def test_the_scheduler_to_finished_run_path_end_to_end(
         )
         triggers.set_enabled(connection, user_id=live.user_id, name="morning", enabled=True)
         with as_service_role(connection) as conn:
-            created = conn.execute(
+            queued = conn.execute(
                 "select public.dispatch_due_triggers(%s) as id", (ist(MONDAY, 8, 30),)
             ).fetchall()
+            created = conn.execute("select public.dispatch_queued_tasks() as id").fetchall()
             woken = conn.execute("select public.pending_wakeups() as id").fetchall()
 
-    assert len(created) == 1 and [w["id"] for w in woken] == [created[0]["id"]]
+    assert len(queued) == 1 and len(created) == 1
+    assert [w["id"] for w in woken] == [created[0]["id"]]
     result = advance_run(runtime(dsn, ScriptedModel()), created[0]["id"], deadline_seconds=60)
     assert (result.status, result.stop_reason) == ("succeeded", "completed")
     row = sql(
         dsn, "select trigger, idempotency_key from public.runs where id = %s", str(created[0]["id"])
     )
-    assert row[0]["trigger"] == "schedule"
-    assert row[0]["idempotency_key"].startswith(f"trigger:{trigger.id}:")
+    assert row[0]["trigger"] == "task"
+    assert row[0]["idempotency_key"] == f"task:{queued[0]['id']}:1"
+    task = sql(
+        dsn, "select status, idempotency_key from public.tasks where id = %s", str(queued[0]["id"])
+    )
+    assert task[0]["status"] == "done", "the task finished with its run"
+    assert task[0]["idempotency_key"].startswith(f"trigger:{trigger.id}:")

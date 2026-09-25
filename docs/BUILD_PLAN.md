@@ -1,13 +1,15 @@
 # Build Plan: Pantheon (Phase 1)
 
-Work in order. Each step lists what to build and the acceptance criteria ("done when"). Sizes: S under a day, M a few days, L about a week. Read `CLAUDE.md` first for the rules that apply to every step.
+Work in order. Each step lists what to build and the acceptance criteria ("done when"). Sizes: S under a day, M a few days, L about a week. Read `CLAUDE.md` first for the rules that apply to every step. Supporting documents: `docs/research/typesafe-jev.md` (what Jev is and how we use it) and `docs/design/agent-organization.md` (departments, agents, tools, tasks).
 
 ## Owner prerequisites (done by hand; Claude Code must not do these)
 
 - [ ] Vercel Pro team and project(s) created
 - [ ] Supabase Pro project created (note the region; keep it close to the Vercel function region)
 - [ ] OpenRouter account with credit and a management/provisioning key if per-agent keys are supported
-- [ ] TypeSafe API key
+- [ ] TypeSafe API key (`TYPESAFE_API_KEY` is currently empty in `.env`; needed to run Step 5 live; create at https://console.typesafe.ai/keys and set it in `.env` and the Vercel `pantheon-api` project)
+- [ ] Ask TypeSafe (privacy@typesafe.ai) how long request content is retained; needed before any sensitive data is sent to it (open decision 11)
+- [x] Business described and channels chosen (Reddit, Instagram, X, newsletter, site blog; the owner owns the accounts). Phase 1 posting is by hand, so no accounts or keys are needed by agents yet; any later automation needs accounts created by the owner when that step starts
 - [ ] Langfuse Cloud account (free Hobby tier) and a project for tracing; see ADR 004
 - [ ] All secrets placed in Vercel env vars and a local `.env` (never committed)
 
@@ -82,86 +84,576 @@ Owner requirement, built into this step: **a fixed morning routine, not an all-d
 
 **Status:** code, migrations and tests done (ADR 008). Going live needs the owner's steps listed in the ADR (apply migrations, set `TRIGGER_SECRET`, two Vault secrets, deploy).
 
-## Step 5: TypeSafe judge (M)
+## Where the plan goes from here (restructured 2026-09-25)
 
-Build `api/app/judge/`.
+Steps 0 to 4 are done. What was one "judge" step and one "first HOD" step is now
+two large parts, in this order:
 
-- Read the live docs first (https://docs.typesafe.ai/llms.txt) and the relevant primitive and cookbook pages. Use Choice, Noul, and Score appropriately; ask one narrow question per judgment and include the evidence in the state.
-- First gate: brain write gate. Questions such as "is this claim supported by this source?" and "does it contradict an existing fact?"
-- Log every judgment in `judgments`; keep thresholds and policy in config.
-- Configurable fail-open or fail-closed per gate (default fail-closed for brain writes and irreversible actions).
-- Cascade for uncertain cases: escalate to a frontier model with reasoning, then to the approval queue.
-- Small eval harness: labeled cases (start from approval verdicts) to check thresholds; report precision and recall per gate.
+- **Part 1, Step 5: TypeSafe Jev as the decision layer** (fact checking, content
+  screening, guardrails; later, routing, tool-risk gating, verification). Research
+  in `docs/research/typesafe-jev.md`.
+- **Part 2, Steps 7 and 8: the agent organization** (platform, then departments,
+  heads, workers, sub-agents, tools and tasks). Design in
+  `docs/design/agent-organization.md`.
+- **Step 6** (configuration backend) sits between them because departments need
+  knowledge, and knowledge needs the Step 5 gates.
 
-Done when: a new fact is checked before insertion; judgments are logged and queryable; the service being down triggers the configured failure mode; the eval harness runs on a small labeled set.
+| Old number | Now |
+| --- | --- |
+| 5 (judge) | 5 (gates 5.1 to 5.4), plus 7.5 (tool-risk gate), 8.2 (routing) and 9 (cascade, re-ranking) |
+| 5b (configuration backend) | 6 |
+| 6 (approval queue, first HOD) | 7.5 (approvals) and 7.4 and 8 (heads and workers) |
+| 7 (realtime and UI) | 10 |
+| 7b (Control Center) | 11 |
+| 8 (cost review) | 12 |
 
-## Step 5b: Configuration backend (M)
+**Milestones.** Stop and report to the owner after Step 5, after Step 7 and after
+Step 8.1, in the same way as the Step 3 Milestone. Each lists what to show.
 
-Principle: **configurable things live in the database, never in code.** The owner must not have to edit the repo or redeploy to change a prompt, add an agent, upload knowledge or change a model. Model tiers already work this way (ADR 003); this step brings the rest to the same standard. Backend only; the screens come in Step 7b. Write an ADR for it.
+## Step 5: TypeSafe Jev, the decision layer (L, four parts)
+
+**What Jev is and is not.** A model that returns typed answers with
+probabilities instead of text. It is cheap ($0.042 per million input tokens,
+output free), fast (about 100 ms) and can ask many questions of one state in one
+call. It cannot write, cannot do arithmetic or date maths, gives no explanation,
+and can be steered by adversarial text in the data it judges. So code owns every
+workflow and Jev makes narrow judgments inside it. Details, numbers and sources:
+`docs/research/typesafe-jev.md`. Read the live docs
+(https://docs.typesafe.ai/llms.txt) again before coding; never guess API details.
+
+**Rules for every gate:**
+- One narrow, atomic question per judgment; the evidence goes in the state; ask
+  independent questions together in one request.
+- Numbers, dates and counting stay in code. Filter the state in code first.
+- Pin the model version (`jev-1.13.0`), log the version on every judgment, move
+  only after the calibration set passes (5.4).
+- Raw probabilities go in `judgments`; thresholds and policy live in versioned
+  config, separate. Confidence is a signal, never permission to act.
+- Every gate has an "uncertain, ask a person" band and a fail-open or fail-closed
+  setting (closed by default for brain writes and irreversible actions).
+- Nothing marked sensitive is sent to TypeSafe. Its published terms promise no
+  training on inputs but state no retention period, and zero retention is
+  enterprise-only. Open decision 11.
+
+**The fronts Jev covers, and where each lands:**
+
+| Front | Step |
+| --- | --- |
+| Brain fact check, duplicates, contradictions, expiry | 5.2 |
+| Prompt-injection and sensitive-data screening of scraped and uploaded content | 5.3 |
+| Input and output guardrails (`strict` and `normal` policies) | 5.3 |
+| Tool-call risk check before an action runs; approval triage | 7.5 |
+| Tool and worker selection | 7.2 and 9 |
+| Intake routing (which department, which model tier, or a person) | 8.2 |
+| Verify-and-escalate: is a cheap-tier answer good enough? | 9 |
+| Re-ranking recalled facts before an agent reads them | 9 |
+| Output quality scoring, and cheap-versus-frontier comparison for cost review | 9 and 12 |
+
+### Step 5.1: Judge core (M)
+
+Build `api/app/judge/`:
+- `JevTransport`: a thin `httpx` client for `POST /v1/systemone` (same style as
+  `gateway/transport.py`; no new dependency, open decision 10). Model pinned in
+  config. Typed request and response models. Retry with backoff on 429 and 5xx
+  honouring `retry-after`; timeouts; a circuit breaker so an outage is not
+  hammered.
+- **Gates and questions as versioned data**, audited like prompts (ADR 007):
+  `judge_questions` (gate, key, version, type, instructions, criteria, active)
+  and `judge_gates` (gate, question-set version, thresholds, fail mode,
+  `allow_sensitive` default false, enabled). Changing wording or a threshold
+  takes effect on the next call with no deploy, and every change is an event.
+- `judge.run(gate, state)`: sends the gate's questions in one request, writes the
+  raw answers to `judgments` (question id and version, input reference, model
+  version, tokens, latency), applies the gate's thresholds, and returns a
+  decision with reasons.
+- **Shares the gateway's protections:** kill switch checked first, cost written
+  to `model_calls` (provider `typesafe`), a `judgment_made` event, counted in the
+  department's spend.
+- Failure handling per gate: service down, timeout, 429 or a malformed answer
+  triggers the configured mode.
+
+Done when: a gate can be defined in the database and called; the raw answer,
+version and cost are recorded for every call; changing a threshold changes the
+decision with no deploy; the kill switch stops judgments; TypeSafe being
+unreachable produces each gate's configured failure mode; a state marked
+sensitive is refused. Tests use a scripted transport, plus one live smoke test
+that the owner runs once `TYPESAFE_API_KEY` is set.
+
+**Status (2026-09-25):** code, migration and tests done (ADR 009). Live smoke
+test `python -m scripts.jev_smoke` waits for the owner's run; the migration
+is not yet applied to Supabase.
+
+### Step 5.2: Brain write gate (M)
+
+The recipe combines TypeSafe's citation-check and entity-alignment cookbooks.
+Every fact write passes it; `brain.insert_fact` has no bypass.
+
+1. **Code first, no model:** non-empty and length limits; exact duplicate by
+   normalised text; provenance present; when the source text is available, the
+   quote must appear in it (a missing quote is `fabricated` and rejected without
+   a model call); numbers and dates are extracted and compared in code.
+2. **One Jev request per claim** with a battery: Nouls for "is this a standalone
+   factual claim", "is it opinion or hedged", "does it contain a secret or personal
+   data", "does it contain an instruction aimed at an AI", "is it likely to
+   change"; and a Choice for how the source relates to the claim (`supports`,
+   `contradicts`, `says nothing`).
+3. **Neighbours:** fetch the closest existing facts by vector search and ask a
+   three-level Score per neighbour (different, related and possibly the same,
+   same) plus a Noul "does it contradict".
+4. **Decision in code** from the gate's thresholds: accept; accept as disputed;
+   supersede (old fact marked `superseded_by`); skip as duplicate; reject; or
+   send to review (an approval, Step 7.5). The uncertain band always goes to
+   review.
+5. `facts` records the judgment that admitted it, a review-after date for
+   facts likely to change, and a **visibility tier** (`public` or `internal`) so
+   public content can only use facts cleared for it (an idea from the owner's
+   earlier `unreal-lab-os` sketch). The research agent's store step moves onto this path.
+
+Done when: a new fact is checked before insertion; a duplicate is skipped; a
+contradiction becomes disputed or goes to review; a fabricated quote is rejected
+without a model call; the judgment behind every fact is queryable; and with the
+service down, brain writes fail closed.
+
+**Status (2026-09-25):** done (ADR 010). The research agent's store step uses
+it. Live: apply the migrations, then run `scripts.agent seed` once to publish
+the brain gates.
+
+### Step 5.3: Content screening and guardrails (M)
+
+Needed before Step 6 fetches web pages or reads uploads.
+- **Screening** each chunk of untrusted text (scraped pages, uploaded documents,
+  inbound messages) with Nouls for prompt injection (checked first), relevance,
+  sensitive data, and contradiction of what is already known. Labels: `clean`,
+  `quarantined`, `review`. Quarantined text never reaches an agent's context.
+- **Defence in depth.** Jev can be steered by adversarial text, so screening is
+  one layer. Untrusted text is always handed to models as quoted data, in tools
+  with no side effects, and never as instructions.
+- **Guardrails:** an input battery and an output battery (hazard Nouls plus a
+  severity Score), with named policies `strict` and `normal` held as thresholds
+  in config, mapped to pass, review or block.
+- Tests use real prompt-injection samples, including one planted in an otherwise
+  useful page.
+
+Done when: a page carrying a planted injection is quarantined and a normal page is
+`clean`; the same assessment routes differently under `strict` and `normal` with
+no new model call; every screening is a judgment row.
+
+**Status (2026-09-25):** done (ADR 011), tested with a scripted TypeSafe.
+How well Jev itself labels the injection samples is measured live in 5.4.
+
+### Step 5.4: Calibration and the labelled set (M)
+
+- A `judge_cases` set per gate (state, expected outcome, where the label came
+  from). Sources: the owner's approve and reject decisions (Step 7.5), a frontier
+  model ensemble through the gateway (cost-capped), and the owner's spot checks.
+- `scripts.judge_eval`: precision and recall per gate at each threshold,
+  confidence against accuracy, self-consistency over repeated runs, and
+  regression cases for the known weak spots (arithmetic, dates, double negatives,
+  adversarial text).
+- Recommended thresholds from data, not from cookbook numbers.
+- The model-upgrade rule: pin, re-run the set, write the result in an ADR, then move.
+- Measured cost per 1,000 judgments and latency.
+
+Done when: the harness runs on labelled cases for the brain gate and the screening
+gate and prints precision and recall; thresholds in config are set from it.
+
+**Status (2026-09-25):** harness, case store and 42 starting cases done
+(ADR 012), tested with a scripted TypeSafe. Still to do: the first live run
+(`scripts.judge_eval run all --repeats 3`) in a session with the key, then
+the owner sets thresholds from it. Label sources wait on open decision 14.
+
+### Milestone after Step 5 (stop and report)
+
+Show: per-gate precision and recall, cost per 1,000 judgments, latency, what fails
+and why, the retention answer from TypeSafe, and the recommended thresholds.
+
+## Step 6: Configuration backend (M)
+
+Formerly Step 5b. Principle: **configurable things live in the database, never in
+code.** The owner must not have to edit the repo or redeploy to change a prompt,
+add an agent, upload knowledge or change a model. Model tiers already work this
+way (ADR 003); this step brings the rest to the same standard. Backend only; the
+screens come in Step 11. Write an ADR for it.
 
 Build:
-- **Prompts in the database.** Move `ANSWER_SYSTEM` and `EXTRACT_SYSTEM` (currently constants in `api/app/agents/research.py`) into a versioned `agent_prompts` table: `agent_id`, `version`, `text`, `active`. Never overwrite; a new edit is a new version. Each run records the prompt version it used. One-step rollback. Changes emit an `events` row.
-- **Agent creation API.** Create an agent from a structured payload (department, name, role, tier, daily budget, starting prompt, allowed tools). New agents start `enabled = false` and emit an event.
-- **Documents.** A `documents` table (source material, kept separate from `facts`) and a `document_chunks` table with embeddings via the gateway. Files go in Supabase Storage. Every document and chunk carries a `scope` (`company`, `department` or `agent`) plus an owner id, enforced by RLS so an agent only retrieves its own scope, its department's and the company's. A fact created from a document links back to it.
-- **Link scraping, two steps.** (1) Fetch and preview: fetch a URL, extract the text, show the facts it would create, save nothing to the brain. (2) Push to brain: a separate, explicit action that writes the facts with `source_ref` set to the URL. Start with plain HTTP fetch and text extraction (free). A paid scraping service needs owner approval first. Scraped text is treated as data, never as instructions, and should pass the Step 5 judge before a fact is written.
+- **Prompts in the database.** Done ahead of Step 4 (ADR 007): versioned
+  `agent_prompts`, per-run pinning, audit events, rollback, and a CLI.
+- **Agent creation API.** Create an agent from a structured payload (department,
+  name, role, tier, daily budget, starting prompt, allowed tools). New agents start
+  `enabled = false` and emit an event. Extended in Step 7.4 with role type, runner
+  and autonomy level.
+- **Documents.** A `documents` table (source material, kept separate from
+  `facts`) and a `document_chunks` table with embeddings via the gateway. Files go
+  in Supabase Storage. Every document and chunk carries a `scope` (`company`,
+  `department` or `agent`) plus an owner id, enforced by RLS so an agent only
+  retrieves its own scope, its department's and the company's. **Every upload is
+  screened (Step 5.3) before it is chunked.** A fact created from a document links
+  back to it.
+- **Link scraping, two steps.** (1) Fetch and preview: fetch a URL (https only,
+  private and internal addresses refused), extract the text, **screen it (5.3)**,
+  show the facts it would create, save nothing to the brain. (2) Push to brain: a
+  separate, explicit action; each fact passes the write gate (5.2) and carries the
+  URL as `source_ref`. Start with plain HTTP fetch and text extraction (free); a
+  paid scraping service needs owner approval first.
 
-Done when: changing an agent's prompt takes effect on its next run with no code change or redeploy, and the run records which version it used; an agent can be created through the API and starts disabled; a company doc, a department doc and an agent doc are each retrievable only by the right agents (RLS test with two orgs and two scopes); a URL can be previewed without touching the brain and then pushed as a separate action.
+Done when: changing an agent's prompt takes effect on its next run with no code
+change or redeploy, and the run records which version it used; an agent can be
+created through the API and starts disabled; a company doc, a department doc and an
+agent doc are each retrievable only by the right agents (RLS test with two orgs and
+two scopes); a URL can be previewed without touching the brain and then pushed as a
+separate action; a page with a planted injection never reaches the preview as clean.
 
-Progress: the prompt-versioning part is done ahead of Step 4 (ADR 007): versioned `agent_prompts`, per-run pinning, audit events, rollback, and a CLI (`scripts.agent prompt`). Still to do in this step: the agent creation API, documents with scopes, and link scraping.
+**Status (2026-09-26):** done. Owner decisions: document scopes company,
+department and agent (7); plain HTTP fetch (9); real embeddings
+(`openai/text-embedding-3-small`) through the gateway. ADRs 013 (embeddings),
+014 (agent creation), 015 (documents), 016 (links). Live: apply the Step 5
+and Step 6 migrations, run `scripts.agent seed` and `scripts.brain reembed`,
+and set `SUPABASE_SERVICE_ROLE_KEY` and `TYPESAFE_API_KEY` in Vercel.
 
-## Step 6: Approval queue and first HOD (L)
+## Step 7: The agent platform (L, six parts)
 
-Build:
-- Approval queue for irreversible actions (create, list, approve, reject, snapshot the agent output).
-- One department-head agent that delegates to one or two worker agents (deepagents subagents or LangGraph supervisor; choose and record in an ADR).
-- Judge-based triage: auto-pass high-confidence low-risk items, escalate uncertain ones.
+Formerly the first half of Step 6, expanded. Design and reasoning:
+`docs/design/agent-organization.md`. The key decision: the hierarchy (Chief of
+Staff, heads, workers) is built from **durable database tasks**, not nested
+in-process calls, because deepagents supports only one level of subagent, runs it
+inside the parent's process, and our runs are short and resumable on serverless.
+Deepagents is used for a worker's temporary helpers. Open decision 5.
 
-Done when: an agent action is held for approval, and approve or reject resumes or cancels it; the HOD delegates a task to a worker and the full trail appears in `events`.
+### Step 7.1: Gateway tool calling (M)
 
-## Step 7: Realtime and UI (L)
+The gateway today is text in, text out, and the Step 3 ADR noted agents with tools
+need more. Verified against OpenRouter's current tool-calling docs (`tools`,
+`tool_choice`, `parallel_tool_calls`, `finish_reason: tool_calls`, and the `tools`
+parameter must be resent on every turn).
+- `complete()` accepts `tools` and `tool_choice`, returns tool calls, and accepts
+  `tool` role messages; routing requires providers that support the parameters.
+- Check that each tier's model supports tools against OpenRouter's catalogue.
+- A small LangChain chat-model adapter over the gateway, so deepagents and
+  LangGraph reach models **only** through it (budgets, kill switch, cost logging,
+  tracing all still apply).
 
-Choose the UI framework now (not before): present 2-3 options with tradeoffs.
+Done when: a tool-using loop is blocked mid-way when the department is over budget
+or the kill switch is on; cost and tokens are recorded for each call in the loop.
+
+### Step 7.2: Tool registry and runtime (M)
+
+- `tools` (name, description, risk class R0 to R5, approval policy, enabled) and
+  `agent_tools` (who may call what), managed as data.
+- Code implements the tools. The runtime wraps every call: allowlist check,
+  argument validation, timeout, output size limit, an idempotency key for side
+  effects, an `events` row, and Step 5.3 screening of any untrusted output.
+- Starting tools: `brain_search`, `brain_propose_fact` (through 5.2),
+  `read_document` (scoped), `web_fetch_preview` (screened), `create_task`,
+  `report_result`.
+- Where an agent has many tools, a Jev Choice picks the likely one and re-checks
+  the top few.
+
+Done when: an agent can only call tools it is allowed; a side-effecting tool called
+twice with one key acts once; an injection inside a fetched page is quarantined
+before the agent sees it.
+
+### Step 7.3: Tasks and delegation (L)
+
+- `tasks` table and lifecycle (`queued`, `running`, `blocked`, `awaiting_approval`,
+  `done`, `failed`, `cancelled`), parent and child links, budgets per task, and
+  idempotency keys. Runs (already built) advance tasks.
+- The Step 4 scheduler pokes runnable tasks. A trigger now creates a task from a
+  template. A parent blocks on its children and resumes when the last finishes.
+- **Limits enforced in the database:** tree depth 3, at most 4 children per task,
+  at most 50 tasks per department per day, a child's budget within the parent's
+  remaining budget. Only the Chief of Staff and heads may create tasks; no agent may
+  create or schedule agents or triggers. Open decision 13.
+
+Done when: a head splits a task into two worker tasks and finishes when both do,
+across separate short invocations; the limits refuse the fifth child and the fourth
+level; a repeated order is one task.
+
+### Step 7.4: Agent definitions and runners (L)
+
+- `agents` gains `role_type` (`chief_of_staff`, `head`, `worker`), `runner`,
+  `autonomy_level`, `max_children`. Creation and editing go through the Step 6 API.
+- **Runners:** `pipeline` (a fixed LangGraph graph; default), `deep` (a deepagents
+  loop with the Postgres checkpointer and the gateway adapter, for open-ended
+  work), `router` (mostly Jev), `digest` (gather and summarise).
+- The **head runner** plans, creates worker tasks, blocks, and on resume checks the
+  results. The **worker runner** does one task and writes a short structured result.
+  Temporary sub-agents exist only inside one run, for context isolation.
+- Record the decision in an ADR (open decision 5).
+
+Done when: one head and two workers complete a real task tree with the cost of every
+level visible on the task, and a worker's temporary helper does not appear as a
+persisted agent.
+
+### Step 7.5: Approvals and the tool-risk gate (M)
+
+Formerly the approval half of Step 6. The `approvals` table already exists.
+- Create, list, approve, reject and edit. Each decision stores the agent's output
+  snapshot.
+- A held action sets its task `awaiting_approval`. Approve resumes it from its
+  checkpoint (deepagents `interrupt_on` with `Command(resume=...)` on the same
+  thread), reject cancels or redirects it.
+- **Tool-risk gate (Jev):** before a call runs, questions about reversibility,
+  external effect, spending money, whether it matches the task's intent, and
+  sensitive content. R4 calls are always held; below R4, high-confidence low-risk
+  calls pass, and the uncertain band goes to a person. Thresholds scale with risk.
+- Every decision is stored as a labelled example for Step 5.4.
+- **Jev as the owner's right hand** (`docs/design/right-hand.md`, owner
+  2026-09-26):
+  - **Decision desk (idea 1).** Each held action gets a recommendation
+    (approve, reject, look closer) with its probability, the brain facts
+    checked, the most similar past decisions and how the owner decided, and a
+    short cheap-model explanation. Stored with the approval.
+  - **Agreement tracking (idea 2).** Per action type, how often the
+    recommendation matched the owner's verdict.
+  - **Decisions become facts (idea 4).** Each owner decision and standing
+    policy is written to the brain (source `owner`, through the write gate),
+    and new proposals are checked against them; a conflict is shown on the card.
+
+Done when: an R4 action is held and approve or reject resumes or cancels it; a
+low-risk call auto-passes only above its threshold; the full trail is in `events`;
+every held action carries a recommendation, and a proposal that conflicts with
+an earlier owner decision says so.
+
+**Status (2026-09-26):** done (ADR 021), tested with a scripted TypeSafe and a
+scripted model. One difference from the plan: a held call pauses the run and
+resumes by replaying the call through its idempotency key, not deepagents'
+`interrupt_on` (reasons in the ADR). Owner decisions and standing rules with a
+reason become owner facts. CLI: `python -m scripts.approvals`.
+
+### Step 7.6: Autonomy and safety limits (S)
+
+- The autonomy ladder per agent (L0 draft only, L1 default, L2, L3), set only by
+  the owner; the system can recommend a promotion from approval history but never
+  makes one. **Right-hand idea 2:** the recommendation is per action type, from
+  agreement between Jev and the owner (starting rule: 30 decisions at 95%),
+  reversible actions only.
+- Loop detection (the same tool with the same arguments three times), a
+  stuck-task reaper, per-agent task rate limits, and the kill switch stopping
+  tasks as well as runs.
+
+Done when: each limit has a test that trips it, and a task tree stops cleanly
+mid-flight when the kill switch is switched on.
+
+**Status (2026-09-26):** done (ADR 022). The ladder is data (`autonomy_rules`,
+defaults in `tool_mode`); limits are in `delegation_limits`. Runs stopped by
+the kill switch wait for the owner to resume them (`scripts.approvals resume`).
+Until Step 11 gives them a screen (item 10), they are changed through the owner
+API and `scripts.approvals`, never by editing the database or code.
+Follow-up (owner, 2026-09-26): the old kill switch is now called **pause**,
+and a real **kill** cancels everything for good (ADR 023).
+
+### Step 7.7: Tools from MCP servers (M)
+
+Added by the owner, 2026-09-26: tools must be configurable, not only built in.
+The owner adds a remote MCP server (Streamable HTTP), signs in once, reads each
+tool it offers and switches it on with a risk class, and gives it to any agent.
+First server: Higgsfield (the owner's subscription).
+- MCP tools are ordinary `tools` rows, so every rule for tools applies: the
+  autonomy ladder, the tool-risk gate, approvals, idempotency, loop detection,
+  the pause and the kill, the audit trail.
+- A new tool starts off; approval is of its exact definition, and a server that
+  changes a tool switches it off until the owner approves again.
+- R4 (spending, irreversible) always asks; a daily cap per tool.
+- What a tool returns is screened before an agent reads it.
+- Credentials in Supabase Vault, backend only. OAuth in two requests (start,
+  then the browser's callback), with refresh; bearer tokens for servers without
+  OAuth sign-up.
+- Official MCP Python SDK (`mcp` 2.x, MIT); remote servers only (Vercel cannot run
+  local ones).
+
+Done when: a server's tools are listed switched off; an approved tool runs for an
+agent in a real run; a changed definition switches it off; an R4 tool waits for
+the owner and runs once; returned text is screened; no credential can be read by a
+person's or an agent's session.
+
+**Status (2026-09-26):** built and tested (ADR 025), against an in-memory MCP server
+from the SDK and a scripted authorization server. Live: set `PUBLIC_API_URL`, deploy,
+then `scripts.mcp add higgsfield <url>` and `connect`.
+
+### Milestone after Step 7 (stop and report)
+
+Show: a head delegating to two workers under all limits, an approval-held action
+resumed, the kill switch mid-flight, and cost per task tree.
+
+## Step 8: Departments (L, one at a time)
+
+Each department is built, then run **unattended on its morning routine for five
+mornings** before the next starts. Start with three; the owner confirms the list.
+The proposal, charters and starting budgets are in
+`docs/design/agent-organization.md`, section 8. Open decision 12.
+
+- **8.0 Charters (S).** Each department's charter is a database row the owner can
+  edit: purpose, head, workers, tools, morning routine, approval rules, Jev gates,
+  budget, autonomy level, data sensitivity, metrics. The owner reviews them first.
+- **8.1 Research and Intelligence (M).** The existing researcher becomes a
+  department: Research Lead, web researcher, fact curator. Morning routine: an
+  overnight brief, and brain hygiene (stale or disputed facts). Every fact passes 5.2.
+  **Milestone: stop and report** (five unattended mornings, cost, facts admitted and
+  rejected, what the owner would change).
+  **Status (2026-09-26):** 8.0 and 8.1 built and tested (ADR 024): charters are
+  versioned rows applied by `scripts.department`; Research and Intelligence runs a
+  full morning end to end in tests. Charters are stored live; the department is not
+  applied or switched on live yet. The five unattended mornings need the owner's
+  topics and sources, the API deployed with Steps 5 to 8, and the owner's go.
+- **8.2 Executive Office and Chief of Staff (M).** Intake: a Jev Choice over the
+  departments (descriptions read from the database) plus a complexity Score, giving
+  the department, the model tier, or a person. An order endpoint and CLI so the
+  owner can give an order at any time. The morning brief and the approvals digest.
+  **Right-hand ideas 5, 6 and 4:** a low-confidence routing comes back to the
+  owner as a question; overnight items are ranked by urgency, impact and "needs
+  the owner" so the brief leads with the top five; every order is checked
+  against the owner's earlier decisions.
+- **8.3 Marketing and Content (L).** The owner's first revenue department (chosen
+  2026-09-25). Content Lead, topic researcher, writer, editor and fact-checker,
+  distribution scheduler. Drafts only; every publish is an approval. Claims in drafts
+  are checked against the brain with Jev, and the owner's edits are stored as
+  examples of their voice. **Right-hand idea 3:** the same claim check runs on
+  everything any department sends out, and an unsupported claim blocks the draft
+  and names the sentence. Charter and morning routine: design doc, section 8.1; the business, voice and
+  hard content rules: `docs/business/the-unreal-lab.md`. Each draft records the
+  facts it relied on (`artifact_claims`) so a wrong fact can be traced to every
+  piece that used it.
+  **Visuals (owner, 2026-09-26):** images and video through the owner's Higgsfield
+  subscription, as MCP tools (Step 7.7): R4, approved per piece, with a daily cap.
+  Needs from the owner: what the business sells and to whom, example content in the
+  voice they want, the channels, and any banned claims. Sales and Outreach follows it.
+- **8.4 Product and Engineering (L).** Any change to code is an approval, always.
+- **8.5 Finance and Cost controller (M).** Read-only on money; feeds Step 12.
+- **8.6 Founder Relations (deferred).** Inbound founder applications read and scored
+  with Jev, reply drafts for approval, honouring "we answer within a week". Built when
+  applications start arriving (open decision 16).
+- **8.7 Later.** Support, Legal or Compliance, LP and partner relations
+  (sensitive; see the brief's rule on fund language).
+
+Done when, for each department: its morning routine runs unattended five mornings
+in a row inside its budget, no external action happened without an approval, and
+the owner has stepped in at least once to give an order and had it obeyed.
+
+## Step 9: Jev in the loop (M)
+
+With real agents running, use Jev to lower cost and raise quality. Only start once
+Step 8.1 is running.
+- **Verify and escalate (cascade):** a cheap-tier answer is checked by Jev with
+  narrow "is this wrong?" questions per field; any flag re-runs the task on a
+  stronger tier.
+- **Re-rank recalled facts** before an agent reads them (relevance, contradicts the
+  question's premise, stale).
+- **Run and output scoring** for quality tracking, and cheap-versus-frontier
+  comparisons for Step 12.
+- Measure against always using the standard tier. (Right-hand idea 7.)
+
+Done when: on the labelled set the cascade costs less per task than always-standard
+with no drop in quality, and the numbers are in a report.
+
+## Step 10: Realtime and UI (L)
+
+Formerly Step 7. Choose the UI framework now (not before): present 2-3 options with
+tradeoffs.
 
 Build:
 - Supabase Realtime subscription on `events` (RLS-aware).
-- A chat window to talk to the HOD and give orders in real time.
-- The brain visualization at the center: it should glow and flow with information as agents work, driven by real events (not fake animation). Design after the framework is chosen.
-- Model management UI (lives inside the Control Center tab, Step 7b): change the model behind each tier, and per department, without a redeploy. The backend (table, gateway lookup, catalogue check, audit trigger) already exists; this is the screen on top of it. Picked from OpenRouter's live catalogue rather than typed free-hand, and every change audited to `events`. See `docs/adr/0003-model-selection-is-runtime-configuration.md`.
+- A chat window to talk to the Chief of Staff and heads and give orders in real time
+  (the order endpoint from 8.2 is its backend).
+- The brain visualization at the center: it should glow and flow with information as
+  agents work, driven by real events (not fake animation). Design after the framework
+  is chosen.
+- Model management UI (inside the Control Center, Step 11): change the model behind
+  each tier, and per department, without a redeploy. The backend (table, gateway
+  lookup, catalogue check, audit trigger) already exists; this is the screen on top
+  of it. Picked from OpenRouter's live catalogue, and every change audited to
+  `events`. See `docs/adr/0003-model-selection-is-runtime-configuration.md`.
 
-Done when: chatting with the HOD works end to end and agent activity visibly lights up the brain in near real time.
+Done when: chatting with the Chief of Staff works end to end and agent activity
+visibly lights up the brain in near real time.
 
-## Step 7b: Control Center tab (M)
+## Step 11: Control Center tab (M)
 
-A new tab in the web app: the owner's place to change everything configurable, with no code edits. Screens over the Step 5b backend:
+Formerly Step 7b. A new tab in the web app: the owner's place to change everything
+configurable, with no code edits. Screens over the Step 6 backend and the Step 7 and
+8 tables:
 
-1. **Create agents.** A common intake form per department (department, name, role, tier, daily budget, starting prompt, tools). Creates the agent disabled; the owner reviews and enables it.
+1. **Agents and departments.** A common intake form per department (department,
+   name, role type, runner, tier, budget, starting prompt, tools, autonomy level).
+   Creates the agent disabled; the owner reviews and enables it. Department charters.
 2. **Edit prompts.** Edit an agent's prompt, see version history, roll back.
-3. **Knowledge.** Upload documents with a scope picker (company, department or agent), and see what each agent can read.
-4. **Add links.** Paste a URL, preview the extracted facts, then an optional "Push to brain" button.
-5. **Model management.** The tier and per-department model screen from Step 7 lives here.
-6. **Morning routine.** Add, edit, enable and disable the scheduled tasks (Step 4's `triggers`): what each agent does each morning, at what time, on which days. Shows what fired and what it cost.
-7. **More to come.** The owner will add further features; the tab is built as a list of sections so a new one is a new section, not a redesign.
+3. **Knowledge.** Upload documents with a scope picker (company, department or
+   agent), and see what each agent can read.
+4. **Add links.** Paste a URL, preview the screened extract, then an optional "Push to
+   brain" button.
+5. **Model management.** The tier and per-department model screen from Step 10.
+6. **Morning routine.** Add, edit, enable and disable the scheduled tasks: what each
+   agent does each morning, at what time, on which days. Shows what fired and what it
+   cost.
+7. **Tools and approvals.** **MCP servers (Step 7.7):** add a server by its
+   address, sign in with one click, read each tool it offers (description, inputs,
+   suggested risk), switch it on with a risk class and an optional daily cap, and
+   see tools switched off because their server changed them. Which agent may use which tool, the approval queue as
+   the **decision desk** (right-hand idea 1: one card per decision with Jev's
+   recommendation, the facts checked and similar past decisions; one tap to
+   decide), agreement per action type, and the autonomy ladder.
+8. **Judge.** Gates, question wording, thresholds and policies, with the calibration
+   report beside them.
+9. **Tasks.** Every task tree with status, cost and who created it.
+10. **Autonomy and safety limits** (owner, 2026-09-26: no database or code edits
+    for these). Everything Step 7.6 keeps as data, editable here:
+    - each agent's autonomy level (L0 to L3), with the promotion suggestions
+      beside it and one tap to accept or ignore one;
+    - the ladder itself: for each level and risk class R0 to R3, run, check
+      with Jev, or always ask (`autonomy_rules`; R4 shown as always ask, not
+      editable);
+    - each tool's risk class, approval policy, on/off switch, timeout and
+      output cap (`tools`);
+    - the limits in `delegation_limits`: depth, sub-tasks per task, tasks per
+      department per day, tasks per agent per hour, the loop limit, when a task
+      counts as stuck, and the promotion bar (decisions and agreement);
+    - the tool-risk gate's thresholds per risk class (with the Judge screen);
+    - **Pause** (stops everything where it is; "resume paused runs" once
+      lifted) and **Kill** (cancels every unfinished task, run and held
+      action for good, with a typed confirmation), ADR 023;
+    - standing rules for the decision desk (right-hand idea 4), listed and
+      addable in plain English.
+11. **More to come.** The owner will add further features; the tab is a list of
+    sections so a new one is a new section, not a redesign.
 
-Done when: the owner can do items 1 to 5 entirely from the browser, every change is audited to `events`, and none of them needed a code change or redeploy.
+Done when: the owner can do items 1 to 6 and 10 entirely from the browser, every change is
+audited to `events`, and none of them needed a code change or redeploy.
 
-## Step 8: Cost review (S)
+## Step 12: Cost review (S)
 
-Build a small dashboard or query set: cost per agent per day, budget alerts, and a report of tasks that could move to a cheaper tier (using judge scores comparing cheap vs frontier outputs).
+Build a small dashboard or query set: cost per agent, per department and per task
+tree per day, judge cost, budget alerts, and a report of tasks that could move to a
+cheaper tier (using the Step 9 comparisons of cheap and frontier outputs).
 
-Done when: the owner can see real cost per agent per day and has budget alerts configured.
+Done when: the owner can see real cost per agent per day and has budget alerts
+configured.
 
 ## Open decisions (present options and recommend; do not decide silently)
 
 1. **Trigger mechanism:** ~~Vercel Cron, pg_cron plus webhooks, or a queue.~~ Decided: Supabase `pg_cron` + `pg_net`, with schedules stored in a table. See ADR 008.
 2. **Tracing:** ~~LangSmith vs Langfuse.~~ Decided: Langfuse Cloud, free Hobby tier. See ADR 004.
-3. **Per-agent spend control:** OpenRouter per-key limits vs application-level budget checks (depends on what the current API supports).
-4. **Checkpointer connection mode** through the Supabase pooler (result of the Step 3 test). ~~Open.~~ Decided: transaction pooler, checkpoints in a private `langgraph` schema. See ADR 005; the live probe against the pooler is still to run.
-5. **HOD pattern:** deepagents subagents vs LangGraph supervisor.
-6. **UI framework:** decided at Step 7.
-7. **Document scopes:** company, department and agent (recommended) vs company and agent only. Owner leaned toward the recommendation; confirm at Step 5b.
-8. **When to do prompts-in-database:** ~~now vs with Step 5b.~~ Decided and done ahead of Step 4. See ADR 007.
-9. **Scraping:** plain HTTP fetch (free, no JavaScript rendering) vs a paid scraping service (needs owner approval).
+3. **Per-agent spend control:** ~~OpenRouter per-key limits vs application-level checks.~~ Decided: departments hold the budget, enforced in the application. See ADR 002.
+4. **Checkpointer connection mode** through the Supabase pooler. ~~Open.~~ Decided: transaction pooler, checkpoints in a private `langgraph` schema. See ADR 005; verified against the live pooler.
+5. **How the hierarchy is built.** Options: (A) deepagents subagents only, which is one level, in-process and blocking, so it cannot express Chief of Staff, heads and workers; (B) a LangGraph supervisor, also in-process, which holds a run open while children work and fits serverless badly; (C) **durable database tasks for the tree, deepagents only for a worker's temporary helpers** (recommended: survives serverless limits, every step auditable, budgets and limits enforceable in SQL, resumable). Cost of C: a tasks table and scheduler extension to build (Step 7.3). Record in an ADR at 7.4.
+6. **UI framework:** decided at Step 10.
+7. **Document scopes:** ~~company, department and agent vs company and agent only.~~ **Decided (owner, 2026-09-26): company, department and agent.** See ADR 015.
+8. **When to do prompts-in-database:** ~~now vs with the rest.~~ Decided and done ahead of Step 4. See ADR 007.
+9. **Scraping:** ~~plain HTTP fetch vs a paid scraping service.~~ **Decided (owner, 2026-09-26): plain HTTP fetch, free.** A paid service needs owner approval later. See ADR 016.
+10. **How to call TypeSafe.** **Decided (owner, 2026-09-25): (A), see ADR 009.** (A) **Our own thin `httpx` transport to `api.typesafe.ai`** (recommended: no new dependency, matches the gateway's style, keeps kill switch, cost logging and events in one place; uses the `TYPESAFE_API_KEY` already in the plan). (B) The official `typesafe-sdk` package (retries and typed responses built in; a new dependency to approve). (C) Through OpenRouter as `~typesafe/jev-latest` (one key and one bill, but the alias moves, which ADR 003 forbids; a versioned id would be needed). (D) Through Vercel's AI Gateway (another moving part). Do not adopt `langchain-typesafe` (experimental, new dependency); copy its patterns.
+11. **Sensitive data and TypeSafe.** **Decided (owner, 2026-09-25): not allowed; a per-gate switch, off by default. See ADR 009.** Recommended: **not allowed** until TypeSafe confirms request retention in writing (their terms are silent on it and zero retention is enterprise-only). Sensitive items go to a person or to a zero-retention LLM judge through the gateway. The owner may email privacy@typesafe.ai; the answer is reported at the Step 5 Milestone.
+12. **Which departments first.** Decided in part: Executive Office, Research and Intelligence, then **Marketing and Content** as the first revenue department (owner, 2026-09-25); Sales and Outreach follows. The business, channels (Reddit, Instagram, X, newsletter, site blog every two weeks or as needed) and voice are in `docs/business/the-unreal-lab.md`. Still owed: sample content in the right voice, once there is any.
+13. **Delegation limits.** Recommended defaults: tree depth 3, four children per task, 50 tasks per department per day. The owner can set others; enforced in the database.
+14. **Where labels come from** for calibration: the owner's approval decisions (best, slow to accumulate), a frontier-model ensemble (fast, costs a few cents, needs spot checks), and the owner's spot checks. Recommended: start with the ensemble, verify a sample by hand, add approvals as they accumulate.
+15. **Entity and relationship layer.** The owner's earlier `unreal-lab-os` sketch models companies, people and investors with `FOUNDED`, `INVESTED_IN`, `ADVISES` and `COMPETES_WITH` edges and warm-introduction paths. Our brain holds facts only. ~~Now or later?~~ **Decided: later** (owner, 2026-09-25). When it is time: `entities` and `relationships` tables in **Postgres** (not the graph database, which is outside the locked stack); short paths are recursive queries.
+16. **How Pantheon relates to The Unreal Lab.** ~~Open.~~ **Decided (owner, 2026-09-25): Pantheon is for the owner to operate The Unreal Lab.** Expanding to onboarded companies is a possible future and not fixed, so only the multi-tenant groundwork is built. **Founder Relations is deferred** (nothing arrives yet; applications come by email).
+
+## After phase 1: agent-to-agent (A2A)
+
+Owner, 2026-09-26: once the project is complete, consider A2A, so Pantheon's
+agents can work with agents in other systems (and be offered to them). Nothing
+is built for it now; the groundwork that keeps it open is already there: tasks
+are durable rows with results, every agent has a charter and a tool list, and
+every outside action goes through the approval queue.
 
 ## Explicitly out of scope for phase 1
 
-Onboarding flows for other companies, code-execution sandboxes, session-based reusable agents (phase 2), local models, self-hosted infrastructure. The `org_id` + RLS groundwork is the only multi-tenant work to do now.
+Onboarding flows for other companies, code-execution sandboxes, session-based reusable agents (phase 2), local models, self-hosted infrastructure, agents creating or scheduling other agents, paid scraping services, and any tool that moves money or handles credentials. The `org_id` + RLS groundwork is the only multi-tenant work to do now.

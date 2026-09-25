@@ -10,6 +10,7 @@ both come before any money is spent, because a blocked call should cost
 nothing.
 """
 
+import dataclasses
 import json
 from dataclasses import dataclass
 from decimal import Decimal
@@ -25,10 +26,26 @@ from app.gateway.errors import (
     DepartmentDisabled,
     GatewayError,
     KillSwitchEngaged,
+    PriceNotConfigured,
+    TierNotConfigured,
     UpstreamError,
 )
-from app.gateway.tiers import TierMap
-from app.gateway.transport import SENSITIVE_PROVIDER_PREFERENCES, ModelResponse, Transport
+from app.gateway.systemone import (
+    PROVIDER as SYSTEMONE_PROVIDER,
+)
+from app.gateway.systemone import (
+    JsonText,
+    Question,
+    SystemOneResponse,
+    SystemOneTransport,
+)
+from app.gateway.tiers import EMBEDDING_DIMENSIONS, EMBEDDING_TIER, TierMap
+from app.gateway.transport import (
+    SENSITIVE_PROVIDER_PREFERENCES,
+    EmbeddingResponse,
+    ModelResponse,
+    Transport,
+)
 from app.tracing import NullTracer, Tracer
 
 
@@ -73,11 +90,13 @@ class Gateway:
         transport: Transport,
         tiers: TierMap,
         tracer: Tracer | None = None,
+        systemone: SystemOneTransport | None = None,
     ) -> None:
         self._connection = connection
         self._transport = transport
         self._tiers = tiers
         self._tracer = tracer or NullTracer()
+        self._systemone = systemone
 
     def complete(
         self,
@@ -87,26 +106,27 @@ class Gateway:
         sensitive: bool = False,
         run_id: UUID | str | None = None,
         max_tokens: int | None = None,
+        tools: list[dict[str, Any]] | None = None,
+        tool_choice: str | dict[str, Any] | None = None,
     ) -> ModelResponse:
         """Run one model call on behalf of an agent.
 
         `sensitive=True` restricts routing to providers that will not retain or
         train on the input. It is opt-in per call rather than a property of the
         agent, because the same agent may handle both kinds of work.
+
+        `tools` (OpenAI function format) lets the model ask for tool calls,
+        returned on the response; running them is the caller's job, through
+        the tool runtime. Every turn of a tool loop is a separate call here,
+        so the kill switch and budgets are checked before each one. Routing
+        then requires providers that support tools (`require_parameters`).
         """
         agent = self._load_agent(agent_id)
         run = str(run_id) if run_id else None
         trace_context = _trace_context(agent, run)
         trace_tags = [f"department:{agent.department_name}", f"tier:{agent.model_tier}"]
 
-        try:
-            self._check_permitted(agent)
-        except GatewayError as error:
-            self._emit_event(agent, run_id, "model_call_blocked", error.detail())
-            self._tracer.blocked(
-                context=trace_context, tags=trace_tags, run_id=run, detail=error.detail()
-            )
-            raise
+        self._admit(agent, run_id, tags=trace_tags)
 
         model = agent.assigned_model or self._tiers.model_for(agent.model_tier)
         preferences = dict(SENSITIVE_PROVIDER_PREFERENCES) if sensitive else None
@@ -121,11 +141,16 @@ class Gateway:
             sensitive=sensitive,
         ) as recorder:
             try:
+                extra: dict[str, Any] = {}
+                if tools:
+                    extra = {"tools": tools, "tool_choice": tool_choice}
+                    preferences = {**(preferences or {}), "require_parameters": True}
                 response = self._transport.complete(
                     model=model,
                     messages=messages,
                     max_tokens=max_tokens,
                     provider_preferences=preferences,
+                    **extra,
                 )
             except UpstreamError as error:
                 recorder.failed(code=error.code, message=str(error))
@@ -140,7 +165,16 @@ class Gateway:
                 latency_ms=response.latency_ms,
             )
 
-        self._record_call(agent, run_id, response)
+        self._record_call(
+            agent,
+            run_id,
+            model=response.model,
+            provider=response.provider,
+            tokens_in=response.tokens_in,
+            tokens_out=response.tokens_out,
+            cost_usd=response.cost_usd,
+            latency_ms=response.latency_ms,
+        )
         self._emit_event(
             agent,
             run_id,
@@ -155,6 +189,253 @@ class Gateway:
                 "cost_usd": response.cost_usd,
                 "latency_ms": response.latency_ms,
                 "sensitive": sensitive,
+                "tools_offered": len(tools or []),
+                "tool_calls": [call.name for call in response.tool_calls],
+            },
+        )
+        return response
+
+    def embed(
+        self,
+        *,
+        agent_id: UUID | str,
+        texts: list[str],
+        run_id: UUID | str | None = None,
+        sensitive: bool = False,
+    ) -> EmbeddingResponse:
+        """Turn texts into vectors with the org's embedding model (ADR 013).
+
+        Same guarantees as `complete`: kill switch and budgets first, one
+        `model_calls` row with OpenRouter's reported cost, a `model_call`
+        event. The model is data (`model_tier_assignments`, tier
+        `embedding`); with none assigned the call is refused, never guessed.
+        Every vector must be exactly as wide as the vector columns.
+        """
+        if not texts:
+            raise ValueError("Nothing to embed")
+        embed = getattr(self._transport, "embed", None)
+        if embed is None:
+            raise RuntimeError("This gateway's transport cannot embed")
+
+        agent = self._load_agent(agent_id)
+        self._admit(agent, run_id)
+        model = self._assigned_model(agent, EMBEDDING_TIER)
+        if model is None:
+            error = TierNotConfigured(EMBEDDING_TIER)
+            self._emit_event(agent, run_id, "model_call_blocked", error.detail())
+            raise error
+
+        run = str(run_id) if run_id else None
+        preferences = dict(SENSITIVE_PROVIDER_PREFERENCES) if sensitive else None
+        with self._tracer.model_call(
+            context=_trace_context(agent, run),
+            tags=[f"department:{agent.department_name}", f"tier:{EMBEDDING_TIER}"],
+            run_id=run,
+            model=model,
+            messages=[{"role": "user", "content": f"<{len(texts)} texts to embed>"}],
+            max_tokens=None,
+            sensitive=sensitive,
+        ) as recorder:
+            try:
+                response = embed(
+                    model=model,
+                    inputs=texts,
+                    dimensions=EMBEDDING_DIMENSIONS,
+                    provider_preferences=preferences,
+                )
+            except UpstreamError as error:
+                recorder.failed(code=error.code, message=str(error))
+                raise
+            response = dataclasses.replace(response, requested_model=model)
+            recorder.succeeded(
+                text=f"<{len(response.vectors)} vectors>",
+                served_model=response.model,
+                provider=response.provider,
+                tokens_in=response.tokens_in,
+                tokens_out=0,
+                cost_usd=response.cost_usd,
+                latency_ms=response.latency_ms,
+            )
+
+        self._record_call(
+            agent,
+            run_id,
+            model=response.model,
+            provider=response.provider,
+            tokens_in=response.tokens_in,
+            tokens_out=0,
+            cost_usd=response.cost_usd,
+            latency_ms=response.latency_ms,
+        )
+        self._emit_event(
+            agent,
+            run_id,
+            "model_call",
+            {
+                "tier": EMBEDDING_TIER,
+                "requested_model": model,
+                "model": response.model,
+                "provider": response.provider,
+                "texts": len(texts),
+                "tokens_in": response.tokens_in,
+                "tokens_out": 0,
+                "cost_usd": response.cost_usd,
+                "latency_ms": response.latency_ms,
+                "sensitive": sensitive,
+            },
+        )
+        # After the call is on the ledger: a wrong width was still paid for.
+        wrong = {len(v) for v in response.vectors} - {EMBEDDING_DIMENSIONS}
+        if wrong:
+            raise UpstreamError(
+                f"{response.model} returned vectors of width {sorted(wrong)}; "
+                f"the brain stores {EMBEDDING_DIMENSIONS}",
+                reason="malformed",
+            )
+        return response
+
+    def _assigned_model(self, agent: AgentRecord, tier: str) -> str | None:
+        """The model assigned to `tier` for this agent: department first, then org."""
+        with self._connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select model from public.model_tier_assignments
+                where org_id = %s and tier = %s
+                  and (department_id = %s or department_id is null)
+                order by department_id nulls last
+                limit 1
+                """,
+                (str(agent.org_id), tier, str(agent.department_id)),
+            )
+            row = cursor.fetchone()
+        return row["model"] if row else None
+
+    def admit(self, agent_id: UUID | str, *, run_id: UUID | str | None = None) -> AgentRecord:
+        """Load an agent and apply every call gate, without making a call.
+
+        For callers that must know before doing other work that the agent may
+        spend at all (the judge checks the kill switch before anything else).
+        A refusal is audited exactly as a refused call is.
+        """
+        agent = self._load_agent(agent_id)
+        self._admit(agent, run_id)
+        return agent
+
+    def evaluate(
+        self,
+        *,
+        agent_id: UUID | str,
+        model: str,
+        state: JsonText,
+        questions: dict[str, Question],
+        run_id: UUID | str | None = None,
+    ) -> SystemOneResponse:
+        """Ask TypeSafe's System One model typed questions about a state.
+
+        Same guarantees as `complete`: kill switch, department budget and
+        agent sub-cap first, then one row in model_calls and a `model_call`
+        event. TypeSafe reports tokens but not cost, so the price comes from
+        model_prices and a model with no price is refused before any request.
+
+        There is no `sensitive` flag: TypeSafe offers no zero-retention route
+        below enterprise plans, so sensitive state must never reach this
+        method (open decision 11). The judge refuses it before calling.
+        """
+        if self._systemone is None:
+            raise RuntimeError("This gateway has no TypeSafe transport; see judge_from")
+
+        agent = self._load_agent(agent_id)
+        self._admit(agent, run_id)
+        run = str(run_id) if run_id else None
+
+        price = self._price(agent, SYSTEMONE_PROVIDER, model)
+        if price is None:
+            error = PriceNotConfigured(SYSTEMONE_PROVIDER, model)
+            self._emit_event(agent, run_id, "model_call_blocked", error.detail())
+            raise error
+
+        with self._tracer.model_call(
+            context=_trace_context(agent, run),
+            tags=[f"department:{agent.department_name}", f"provider:{SYSTEMONE_PROVIDER}"],
+            run_id=run,
+            model=model,
+            messages=[
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        {
+                            "state": state,
+                            "questions": {k: q.payload() for k, q in questions.items()},
+                        }
+                    ),
+                }
+            ],
+            max_tokens=None,
+            sensitive=False,
+        ) as recorder:
+            try:
+                response = self._systemone.evaluate(model=model, state=state, questions=questions)
+            except UpstreamError as error:
+                recorder.failed(code=error.code, message=str(error))
+                if error.billed is not None:
+                    billed_model, tokens_in, tokens_out = error.billed
+                    self._record_call(
+                        agent,
+                        run_id,
+                        model=billed_model or model,
+                        provider=SYSTEMONE_PROVIDER,
+                        tokens_in=tokens_in,
+                        tokens_out=tokens_out,
+                        cost_usd=_cost(price, tokens_in, tokens_out),
+                        latency_ms=None,
+                    )
+                raise
+            cost_usd = _cost(price, response.tokens_in, response.tokens_out)
+            recorder.succeeded(
+                text=json.dumps(
+                    {key: answer.model_dump() for key, answer in response.answers.items()}
+                ),
+                served_model=response.model,
+                provider=SYSTEMONE_PROVIDER,
+                tokens_in=response.tokens_in,
+                tokens_out=response.tokens_out,
+                cost_usd=cost_usd,
+                latency_ms=response.latency_ms,
+            )
+
+        response = SystemOneResponse(
+            model=response.model,
+            answers=response.answers,
+            tokens_in=response.tokens_in,
+            tokens_out=response.tokens_out,
+            latency_ms=response.latency_ms,
+            cost_usd=cost_usd,
+            raw=response.raw,
+        )
+        self._record_call(
+            agent,
+            run_id,
+            model=response.model,
+            provider=SYSTEMONE_PROVIDER,
+            tokens_in=response.tokens_in,
+            tokens_out=response.tokens_out,
+            cost_usd=cost_usd,
+            latency_ms=response.latency_ms,
+        )
+        self._emit_event(
+            agent,
+            run_id,
+            "model_call",
+            {
+                "requested_model": model,
+                "model": response.model,
+                "provider": SYSTEMONE_PROVIDER,
+                "questions": len(questions),
+                "tokens_in": response.tokens_in,
+                "tokens_out": response.tokens_out,
+                "cost_usd": cost_usd,
+                "latency_ms": response.latency_ms,
+                "sensitive": False,
             },
         )
         return response
@@ -252,6 +533,45 @@ class Gateway:
             assigned_model=row["assigned_model"],
         )
 
+    def _admit(
+        self,
+        agent: AgentRecord,
+        run_id: UUID | str | None,
+        *,
+        tags: list[str] | None = None,
+    ) -> None:
+        """Apply the call gates; audit and trace a refusal, then re-raise it."""
+        run = str(run_id) if run_id else None
+        try:
+            self._check_permitted(agent)
+        except GatewayError as error:
+            self._emit_event(agent, run_id, "model_call_blocked", error.detail())
+            self._tracer.blocked(
+                context=_trace_context(agent, run),
+                tags=tags or [f"department:{agent.department_name}"],
+                run_id=run,
+                detail=error.detail(),
+            )
+            raise
+
+    def _price(
+        self, agent: AgentRecord, provider: str, model: str
+    ) -> tuple[Decimal, Decimal] | None:
+        """USD per million input and output tokens, read on every call."""
+        with self._connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select input_usd_per_mtok, output_usd_per_mtok
+                from public.model_prices
+                where org_id = %s and provider = %s and model = %s
+                """,
+                (str(agent.org_id), provider, model),
+            )
+            row = cursor.fetchone()
+        if row is None:
+            return None
+        return Decimal(row["input_usd_per_mtok"]), Decimal(row["output_usd_per_mtok"])
+
     def _check_permitted(self, agent: AgentRecord) -> None:
         """Every gate, cheapest and broadest first.
 
@@ -294,7 +614,13 @@ class Gateway:
         self,
         agent: AgentRecord,
         run_id: UUID | str | None,
-        response: ModelResponse,
+        *,
+        model: str,
+        provider: str | None,
+        tokens_in: int,
+        tokens_out: int,
+        cost_usd: float,
+        latency_ms: int | None,
     ) -> None:
         with self._connection.cursor() as cursor:
             cursor.execute(
@@ -308,12 +634,12 @@ class Gateway:
                     str(agent.org_id),
                     str(run_id) if run_id else None,
                     str(agent.id),
-                    response.model,
-                    response.provider,
-                    response.tokens_in,
-                    response.tokens_out,
-                    response.cost_usd,
-                    response.latency_ms,
+                    model,
+                    provider,
+                    tokens_in,
+                    tokens_out,
+                    cost_usd,
+                    latency_ms,
                 ),
             )
 
@@ -339,6 +665,11 @@ class Gateway:
                     json.dumps(payload),
                 ),
             )
+
+
+def _cost(price: tuple[Decimal, Decimal], tokens_in: int, tokens_out: int) -> float:
+    per_input, per_output = price
+    return float((per_input * tokens_in + per_output * tokens_out) / Decimal(1_000_000))
 
 
 def _trace_context(agent: AgentRecord, run_id: str | None) -> dict[str, str]:

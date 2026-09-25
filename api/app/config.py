@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     supabase_jwks_url: str | None = None
     supabase_jwt_audience: str = "authenticated"
 
+    # Server-side Supabase key for Storage uploads (documents, ADR 015). The
+    # legacy `service_role` JWT or a new `sb_secret_...` key. Never sent to
+    # the browser.
+    supabase_service_role_key: str | None = None
+
     # Phase 1 has exactly one operator. Any other authenticated subject is
     # rejected, so a stray Supabase signup cannot reach the API.
     owner_user_id: str | None = None
@@ -49,6 +54,18 @@ class Settings(BaseSettings):
     # guessed catalogue would be configuration that lies, and an unset tier
     # refuses loudly rather than falling back to something expensive.
     model_tiers: str = ""
+
+    # --- TypeSafe Jev, the judge (ADR 009) ----------------------------------
+    # Server-side only. The model each gate uses is pinned in the database
+    # (judge_gates.model), not here.
+    typesafe_api_key: str | None = None
+    typesafe_base_url: str = "https://api.typesafe.ai"
+
+    @field_validator("typesafe_base_url", mode="after")
+    @classmethod
+    def _default_typesafe_url(cls, value: str) -> str:
+        # A blank TYPESAFE_BASE_URL= line in .env means "the default".
+        return value.strip() or "https://api.typesafe.ai"
 
     # --- Tracing (ADR 004) -----------------------------------------------
     # Langfuse Cloud. Tracing is off unless both keys are set. Server-side
@@ -72,6 +89,11 @@ class Settings(BaseSettings):
 
     # Comma-separated browser origins allowed to call this API.
     cors_allow_origins: str = ""
+
+    # This API's public address, e.g. https://api.example.com (with any root
+    # path). MCP sign-ins return the owner's browser to
+    # <PUBLIC_API_URL>/mcp/oauth/callback (ADR 025).
+    public_api_url: str = ""
 
     # Set when the API is mounted under a path prefix (e.g. "/api" behind a
     # single-project rewrite). Empty when it serves its own domain root.

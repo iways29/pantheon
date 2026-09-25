@@ -12,7 +12,7 @@ on their own. The owner's requirement, beyond the plan: agents should do a
 all day, and the owner can step in at any time.
 
 The plan's open decision was Vercel Cron, Supabase `pg_cron` plus database
-webhooks, or a queue. The rule added in Step 5b is that configurable things
+webhooks, or a queue. The rule added in Step 5b (now Step 6) is that configurable things
 live in the database, not in code. A Vercel cron schedule lives in
 `vercel.json`, so changing it means a redeploy.
 
@@ -65,8 +65,8 @@ live in the database, not in code. A Vercel cron schedule lives in
 Triggers only start scheduled runs. They lock nothing. At any time the owner
 can start or ask an agent by hand, flip the kill switch (stops every run and
 every trigger), disable a single trigger, or change a prompt for the next run.
-Until the chat window exists (Step 7) the command line is the way in.
-Irreversible actions still go through the approval queue (Step 6); nothing
+Until the chat window exists (Step 10) the command line is the way in.
+Irreversible actions still go through the approval queue (Step 7.5); nothing
 here removes that requirement.
 
 ## Not done here
@@ -78,7 +78,7 @@ here removes that requirement.
   cannot grow into an all-day loop on its own.
 - **Runs paused for budget or the kill switch do not resume by themselves.**
   Deciding when they should is an owner policy question for later.
-- **Control Center screen.** Step 7b adds the screen for editing the morning
+- **Control Center screen.** Step 11 adds the screen for editing the morning
   routine; until then the `scripts.agent trigger` commands do it.
 
 ## Owner steps to go live (nothing here was done on the live project)

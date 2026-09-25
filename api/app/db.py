@@ -37,13 +37,18 @@ def acting_as(
     *,
     user_id: str | None,
     role: str = "authenticated",
+    agent_id: str | None = None,
 ) -> Iterator[psycopg.Connection]:
     """Run a transaction as `role`, with `user_id` as the RLS identity.
 
-    Both settings are LOCAL, so they unwind with the transaction and cannot
+    All settings are LOCAL, so they unwind with the transaction and cannot
     leak into the next caller to borrow this connection from a pool. Passing
     `user_id=None` models an unauthenticated caller, which every policy should
     reject.
+
+    `agent_id` says the work is an agent's, acting under the user's identity.
+    Policies that honour it (documents, ADR 015) then show only what that
+    agent may read. It only ever narrows what is visible.
     """
     if role not in _ALLOWED_ROLES:
         raise ValueError(f"Unknown role: {role!r}")
@@ -53,6 +58,10 @@ def acting_as(
             cursor.execute(f"set local role {role}")
             claims = json.dumps({"sub": user_id, "role": role}) if user_id else ""
             cursor.execute("select set_config('request.jwt.claims', %s, true)", (claims,))
+            cursor.execute(
+                "select set_config('pantheon.agent_id', %s, true)",
+                (str(agent_id) if agent_id else "",),
+            )
         yield connection
 
 

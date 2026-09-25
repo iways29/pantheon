@@ -434,6 +434,10 @@ reason become owner facts. CLI: `python -m scripts.approvals`.
 Done when: each limit has a test that trips it, and a task tree stops cleanly
 mid-flight when the kill switch is switched on.
 
+**Status (2026-09-26):** done (ADR 022). The ladder is data (`autonomy_rules`,
+defaults in `tool_mode`); limits are in `delegation_limits`. Runs stopped by
+the kill switch wait for the owner to resume them (`scripts.approvals resume`).
+
 ### Milestone after Step 7 (stop and report)
 
 Show: a head delegating to two workers under all limits, an approval-held action

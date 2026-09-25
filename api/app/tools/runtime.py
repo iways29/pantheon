@@ -11,8 +11,9 @@ Every call an agent makes goes through `ToolRuntime.call`, which, in order:
    arguments, and one the owner rejected returns the owner's note (Step 7.5);
 4. holds for the owner any tool whose policy needs approval (always for R4),
    as a pending approval with a decision card, without running it;
-5. asks the tool-risk gate about an R2 or R3 call: clearly low-risk calls
-   run, uncertain ones are held, clearly wrong ones are refused (ADR 021);
+5. applies the agent's autonomy level (ADR 022): the call runs, is held, or
+   goes to the tool-risk gate, where clearly low-risk calls run, uncertain
+   ones are held and clearly wrong ones are refused (ADR 021);
 6. runs it, times it, and caps the size of what comes back;
 7. for a tool that reads the outside world (R2), passes on text only if it
    was screened clean (Step 5.3);
@@ -141,7 +142,12 @@ class ToolRuntime:
             return self._hold(
                 name, payload, key, risk, "The tool always needs the owner's approval"
             )
-        if risk in ("R2", "R3"):
+        level, mode = self._mode(risk)
+        if mode == "hold":
+            return self._hold(
+                name, payload, key, risk, f"An {level} agent needs approval for {risk} tools"
+            )
+        if mode == "gate":
             verdict, why = self._risk(spec, payload, risk)
             if verdict == "block":
                 return self._finish(name, payload, None, "refused", {"error": why})
@@ -229,13 +235,26 @@ class ToolRuntime:
             replacing=row["id"],
         )
 
+    def _mode(self, risk: str) -> tuple[str, str]:
+        """The agent's autonomy level, and what it means for this risk class:
+        run, gate or hold (the ladder is data: `public.tool_mode`, ADR 022)."""
+        with self._ctx.connection.cursor() as cursor:
+            cursor.execute(
+                "select a.autonomy_level as level, "
+                "public.tool_mode(a.org_id, a.autonomy_level, %s) as mode "
+                "from public.agents a where a.id = %s",
+                (risk, str(self._ctx.agent_id)),
+            )
+            row = cursor.fetchone()
+        return (row["level"], row["mode"]) if row else ("L0", "hold")
+
     def _risk(self, spec: ToolSpec, payload: dict[str, Any], risk: str) -> tuple[str, str]:
         """The tool-risk gate's verdict: auto, ask or block, and why."""
         judge = self._ctx.judge
         if judge is None:
             # No TypeSafe: reads of the outside world run (they are screened
             # after), anything with an outside effect waits for a person.
-            if risk == "R2":
+            if risk in ("R0", "R2"):
                 return "auto", ""
             return "ask", "No risk check is available, so a person must decide"
         decision = judge.run(
@@ -248,7 +267,7 @@ class ToolRuntime:
             },
             agent_id=self._ctx.agent_id,
             run_id=self._ctx.run_id,
-            profile=risk.lower(),
+            profile=risk.lower() if risk in ("R2", "R3") else None,
         )
         if decision.failed:
             return "ask", "The risk check gave no answer, so a person must decide"

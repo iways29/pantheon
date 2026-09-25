@@ -6,6 +6,9 @@
     uv run python -m scripts.approvals reject <id> [--redirect] --note "why"
     uv run python -m scripts.approvals agreement
     uv run python -m scripts.approvals rule "Newsletters are always in English." [--as writer]
+    uv run python -m scripts.approvals level writer L2        # the autonomy ladder (ADR 022)
+    uv run python -m scripts.approvals suggest [--all]        # promotions the history supports
+    uv run python -m scripts.approvals resume [--reason kill_switch]
 
 A decision with a note, and every rule, is written to the brain as the
 owner's (through the write gate), so later proposals are checked against it.
@@ -16,6 +19,7 @@ import argparse
 import json
 import sys
 
+from app.agents.autonomy import resume_paused_runs, set_level, suggestions
 from app.approvals import decide, decision_statement, list_pending, remember
 from app.config import Settings
 from app.db import acting_as, as_service_role, connect
@@ -39,11 +43,48 @@ def main(argv: list[str]) -> int:
     rule = commands.add_parser("rule")
     rule.add_argument("statement")
     rule.add_argument("--as", dest="as_agent", default="researcher")
+    level = commands.add_parser("level", help="set an agent's autonomy level")
+    level.add_argument("agent")
+    level.add_argument("level", choices=["L0", "L1", "L2", "L3"])
+    suggest = commands.add_parser("suggest", help="promotions the approval history supports")
+    suggest.add_argument("--all", action="store_true")
+    resume = commands.add_parser("resume", help="resume runs paused by the kill switch")
+    resume.add_argument(
+        "--reason",
+        default="kill_switch",
+        choices=["kill_switch", "budget_exceeded", "agent_disabled", "department_disabled"],
+    )
     args = parser.parse_args(argv)
 
     settings = Settings(_env_file=ROOT_ENV)  # type: ignore[call-arg]
     with connect(_Env().database_url) as connection:  # type: ignore[call-arg]
         org_id, user_id, _ = _setup(connection)
+        if args.command == "level":
+            print(
+                set_level(
+                    connection,
+                    user_id=user_id,
+                    org_id=org_id,
+                    name=args.agent,
+                    level=args.level,
+                )
+            )
+            return 0
+        if args.command == "suggest":
+            for row in suggestions(connection, user_id=user_id, eligible_only=not args.all):
+                mark = "SUGGEST" if row["eligible"] else "       "
+                print(
+                    f"{mark} {row['agent']:<16} {row['action_key']:<28} "
+                    f"{row['agreed']}/{row['recommended']} agreed; "
+                    f"{row['current_level']} -> {row['suggested_level']}"
+                )
+            return 0
+        if args.command == "resume":
+            count = resume_paused_runs(
+                connection, user_id=user_id, org_id=org_id, reason=args.reason
+            )
+            print(f"resumed {count} runs")
+            return 0
         if args.command == "list":
             for row in list_pending(connection, user_id=user_id):
                 print(f"{row['id']}  {row['action_key']}  by {row['agent']}")

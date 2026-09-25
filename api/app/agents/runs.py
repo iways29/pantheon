@@ -34,6 +34,7 @@ inside each step runs as the user the run was requested by, under RLS.
 
 import json
 import time
+from collections import Counter
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -366,6 +367,7 @@ def _execute(runtime: Runtime, connection: psycopg.Connection, run: _Run, deadli
             },
         )
         stop = None
+        loop_limit = _loop_limit(connection, run.org_id)
         try:
             if steps >= run.max_steps:
                 stop = _Stop("failed", "max_steps")
@@ -388,9 +390,12 @@ def _execute(runtime: Runtime, connection: psycopg.Connection, run: _Run, deadli
                         node=next(iter(update)),
                         lease_seconds=runtime.lease_seconds,
                     )
-                    if not graph.get_state(config).next:
+                    state = graph.get_state(config)
+                    if not state.next:
                         break  # the graph is finished; nothing left to cap
-                    stop = _next_step_blocked(connection, run, steps, tokens, deadline)
+                    stop = _next_step_blocked(connection, run, steps, tokens, deadline) or _looping(
+                        state.values, loop_limit
+                    )
                     if stop is not None:
                         break
         except GatewayError as error:
@@ -425,6 +430,30 @@ def _next_step_blocked(
     if time.monotonic() >= deadline:
         return _Stop("paused", "deadline")
     return None
+
+
+def _looping(values: dict[str, Any], limit: int) -> _Stop | None:
+    """Stop a run that asks for the same tool with the same arguments `limit`
+    times (ADR 022). Checked after the model asks and before the tool runs,
+    so the repeat that trips it never runs."""
+    seen: Counter[tuple[str, str]] = Counter()
+    for message in values.get("messages") or []:
+        for call in getattr(message, "tool_calls", None) or []:
+            key = (call["name"], json.dumps(call.get("args") or {}, sort_keys=True, default=str))
+            seen[key] += 1
+            if seen[key] >= limit:
+                return _Stop(
+                    "failed",
+                    "loop_detected",
+                    error=f"{call['name']} asked for {seen[key]} times with the same arguments",
+                )
+    return None
+
+
+def _loop_limit(connection: psycopg.Connection, org_id: UUID) -> int:
+    with as_service_role(connection) as conn, conn.cursor() as cursor:
+        cursor.execute("select (public.org_limits(%s)).loop_repeat_limit as n", (str(org_id),))
+        return int(cursor.fetchone()["n"])
 
 
 @contextmanager

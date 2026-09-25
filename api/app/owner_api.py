@@ -503,3 +503,66 @@ def post_policy(
         "fact_id": str(result.fact.id) if result.fact else None,
         "reasons": list(result.reasons),
     }
+
+
+# --- Autonomy and safety limits (Step 7.6, ADR 022) ---------------------------
+
+
+class LevelRequest(BaseModel):
+    level: Literal["L0", "L1", "L2", "L3"]
+
+
+@router.post("/agents/{name}/autonomy")
+def put_autonomy(
+    name: str, body: LevelRequest, principal: OwnerPrincipal, connection: Connection
+) -> dict[str, Any]:
+    """Only the owner moves an agent up or down the ladder."""
+    from app.agents.autonomy import set_level
+
+    org_id = owner_org(connection, principal.user_id)
+    try:
+        level = set_level(
+            connection, user_id=principal.user_id, org_id=org_id, name=name, level=body.level
+        )
+    except AgentAdminError as error:
+        raise _refuse(error) from error
+    return {"name": name, "autonomy_level": level}
+
+
+@router.get("/autonomy/suggestions")
+def get_suggestions(
+    principal: OwnerPrincipal,
+    connection: Connection,
+    everything: Annotated[bool, Query(alias="all")] = False,
+) -> list[dict[str, Any]]:
+    """Promotions the approval history supports. Never applied automatically."""
+    from app.agents.autonomy import suggestions
+
+    owner_org(connection, principal.user_id)
+    return [
+        {**row, "agreement": None if row["agreement"] is None else float(row["agreement"])}
+        for row in suggestions(connection, user_id=principal.user_id, eligible_only=not everything)
+    ]
+
+
+class ResumeRequest(BaseModel):
+    reason: Literal["kill_switch", "budget_exceeded", "agent_disabled", "department_disabled"] = (
+        "kill_switch"
+    )
+
+
+@router.post("/runs/resume")
+def resume_runs(
+    body: ResumeRequest, principal: OwnerPrincipal, connection: Connection
+) -> dict[str, Any]:
+    """Runs paused by the kill switch stay paused until the owner says go."""
+    from app.agents.autonomy import resume_paused_runs
+
+    org_id = owner_org(connection, principal.user_id)
+    try:
+        count = resume_paused_runs(
+            connection, user_id=principal.user_id, org_id=org_id, reason=body.reason
+        )
+    except psycopg.errors.CheckViolation as error:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(error).splitlines()[0]) from error
+    return {"resumed": count}

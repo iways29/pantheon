@@ -14,8 +14,11 @@ preview then push; ADRs 013 to 016) are **built and tested but not live**.
 The owner said go past the Step 5 Milestone on 2026-09-26, with the live
 eval still owed. The right-hand design (`docs/design/right-hand.md`, seven
 ideas) is folded into Steps 7.5 to 11. Owner content rule (2026-09-26):
-English only everywhere except the website's vetted verses. Next is **Step
-7.1** (gateway tool calling). 365 tests pass.
+English only everywhere except the website's vetted verses. **Step 7**
+(tool calling, tools, tasks and delegation, runners, approvals and the
+decision desk, autonomy and limits; ADRs 017 to 022) is **built and tested
+but not live**; the Step 7 Milestone report is owed and nothing past it
+starts until the owner says go. 434 tests pass.
 
 ## Working agreement with the owner (keep to it)
 
@@ -92,17 +95,21 @@ those; the API's 401 versus 503 answers reveal whether `TRIGGER_SECRET` is set.
 ## Where the code is
 
 - `api/app/gateway/` the only path to models (tiers, budgets, kill switch, cost
-  logging; text only, no tool calling yet: that is Step 7.1).
+  logging, tool calling, embeddings, Jev).
+- `api/app/judge/` gates; `api/app/tools/` registry and runtime (autonomy,
+  risk gate, holds); `api/app/tasks/` delegation; `api/app/approvals/`
+  decisions and the decision desk; `api/app/agents/deep.py` the deepagents
+  runner, `autonomy.py` the ladder.
 - `api/app/brain/` facts, embeddings, search. `api/app/agents/` `research.py`
   (the graph), `runs.py` (leased, resumable runs), `prompts.py`, `triggers.py`,
   `starter_prompts.py`. `api/app/internal.py` the endpoint the scheduler calls.
 - `supabase/migrations/` versioned SQL (RLS on every table). `docs/adr/` ADRs
-  0001 to 0008. `docs/BUILD_PLAN.md` is the source of truth for order.
+  0001 to 0022. `docs/BUILD_PLAN.md` is the source of truth for order.
 
 ## What to do next
 
 1. **With the owner's go-ahead**, apply every migration from
-   `20260925050000` to `20260926040000` to Supabase through the Supabase MCP.
+   `20260925050000` to `20260926090000` to Supabase through the Supabase MCP.
    Then, against the pooler: `scripts.agent seed` (starter gates, Jev price,
    embedding model), `scripts.brain reembed` (moves old facts to the real
    embedding model; until then they are invisible to search), and
@@ -111,8 +118,8 @@ those; the API's 401 versus 503 answers reveal whether `TRIGGER_SECRET` is set.
    `SUPABASE_SERVICE_ROLE_KEY` (legacy key or a new `sb_secret_...` key).
 3. In a session with the TypeSafe key: `scripts.jev_smoke`, then
    `scripts.judge_eval run all --repeats 3`, and report the numbers.
-4. Open decision 14 (label sources) before building the labeller. Step 7
-   next: 7.1 gateway tool calling, then 7.2 to 7.6 with the right-hand ideas.
+4. Open decision 14 (label sources) before building the labeller.
+5. Report the Step 7 Milestone; Step 8 (departments) only after the owner's go.
 
 ## Prompt to paste into the new chat
 

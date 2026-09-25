@@ -371,9 +371,17 @@ def test_an_agent_can_never_decide_its_own_approval(
 # --- The tool-risk gate ----------------------------------------------------------------
 
 
+def set_level(db: psycopg.Connection, agent: UUID, level: str) -> None:
+    with as_service_role(db) as conn:
+        conn.execute(
+            "update public.agents set autonomy_level = %s where id = %s", (level, str(agent))
+        )
+
+
 def test_a_low_risk_call_runs_only_above_its_threshold(
     db: psycopg.Connection, tenants: Tenants, agent: UUID, effects: Effects
 ) -> None:
+    set_level(db, agent, "L2")  # at L1 an R3 call is always held (ADR 022)
     jev = ScriptedJev()
     with acting_as(db, user_id=str(tenants.user_a), agent_id=str(agent)) as conn:
         rt = runtime(conn, tenants, agent, jev)
@@ -396,6 +404,7 @@ def test_a_low_risk_call_runs_only_above_its_threshold(
 def test_without_typesafe_an_outside_effect_waits_for_a_person(
     db: psycopg.Connection, tenants: Tenants, agent: UUID, effects: Effects
 ) -> None:
+    set_level(db, agent, "L2")
     with acting_as(db, user_id=str(tenants.user_a), agent_id=str(agent)) as conn:
         rt = runtime(conn, tenants, agent, None)
         r3 = rt.call("note_test", {"text": "a"})

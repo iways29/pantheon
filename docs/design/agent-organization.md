@@ -224,7 +224,8 @@ what "working" means (metrics). Start with three departments, not seven.
 | --- | --- | --- | --- | --- | --- | --- |
 | **Executive Office** | intake, the daily brief, keeping the owner in control | Chief of Staff | Brief writer, Approvals clerk | brain search, create task, read costs and approvals | compile the morning brief (overnight results, approvals waiting, yesterday's cost) | nothing external |
 | **Research & Intelligence** (exists) | learn things and keep the brain accurate | Research Lead | Web researcher, Fact curator, Competitor analyst | web fetch, brain propose, read documents | overnight news on the owner's topics; competitor watch; brain hygiene (find stale or disputed facts) | nothing external |
-| **Revenue: Sales & Outreach** or **Marketing & Content** (**Owner** picks first) | find and warm leads / produce content | Sales Lead / Content Lead | Lead researcher, Outreach drafter (Sales); Writer, Editor (Content) | web fetch, brain, email draft, document write | shortlist of leads or content ideas; drafts | **all** sends and publishes |
+| **Marketing & Content** (**chosen first revenue department**, 2026-09-25; charter in 8.1) | produce content that builds audience and demand | Content Lead | Topic researcher, Writer, Editor and fact-checker, Distribution scheduler | web fetch, brain, document read, draft save | three topic ideas, one drafted piece, checked and ready for approval | **all** publishes and sends |
+| Sales & Outreach (after Marketing) | find and warm leads | Sales Lead | Lead researcher, Outreach drafter | web fetch, brain, email draft | shortlist of leads; drafts | **all** sends |
 | Product & Engineering (later) | build and maintain the product | Eng Lead | Spec writer, Implementer, Reviewer, Docs writer | GitHub read, branch and PR | triage issues, review open PRs | every change to code |
 | Finance & Cost (later) | watch spend, protect the budget | Controller | Cost analyst, Budget sentinel | read costs, read budgets | cost and budget alert summary | any change to a budget |
 | Support, Legal/Compliance (phase 2) | customers and their rules | later | later | later | later | later |
@@ -235,6 +236,31 @@ morning routine of a HOD plus three workers is on the order of ten runs, so
 cents a day at the cheap tier. Start each department at $0.10 to $0.25 a day
 (the research department is at $0.25); the whole starting company stays under
 about $1 a day, and the owner raises limits as results justify.
+
+### 8.1 Charter: Marketing & Content (first revenue department)
+
+Chosen by the owner on 2026-09-25. The product, audience and voice are not yet
+described, so those parts are placeholders (marked **Owner**).
+
+| Field | Proposal |
+| --- | --- |
+| Purpose | Turn what the brain knows into content that builds audience and demand for the business. **Owner:** the product, the audience, the channels. |
+| Head: **Content Lead** | Reads the department's goals and the brain, keeps a content queue, hands tasks to workers, reviews results, reports in the morning brief. Runner `deep`, standard tier. |
+| Worker: **Topic researcher** | Finds angles using the brain and fetched pages (screened, Step 5.3); new facts pass the write gate (5.2). Runner `pipeline`, cheap tier. |
+| Worker: **Writer** | Drafts one piece per task from a brief: post, thread, newsletter, script. Reads the brand-voice document. Runner `pipeline`, standard tier (writing quality matters). May use a temporary helper to gather sources. |
+| Worker: **Editor and fact-checker** | Checks every claim in a draft against brain facts, and scores voice and quality (below). Sends fixes back to the Writer or marks the draft ready. Runner `pipeline`, cheap tier plus Jev. |
+| Worker: **Distribution scheduler** | Makes channel-specific versions and a posting queue. **Publishing is an approval, always.** Until the owner creates channel accounts, the output is a ready-to-post draft the owner publishes by hand. Runner `pipeline`, cheap tier. |
+| Later worker: **Analytics reader** | Reads engagement and feeds what worked back to the Content Lead. Needs owner-created accounts. |
+| Tools | `brain_search`, `web_fetch_preview` (R2, screened), `read_document` (brand voice, product docs, past content, as company documents), `save_draft` (R1), `publish_post` per channel (R4, later), `analytics_read` (later). |
+| Autonomy | L0 draft only for at least the first 30 pieces. The owner edits and approves; every edit is stored as a labelled example of the owner's voice. |
+| Morning routine (fixed, America/New_York, time **Owner**) | 1. Three topic ideas from overnight research and the department goals (cheap). 2. One draft from the approved idea queue (standard). 3. Editor pass. The morning brief lists the draft as ready for approval. Nothing else runs until the owner gives an order. |
+| Jev gates | Write gate on research facts (5.2). Screening of fetched pages (5.3). Output guardrails on drafts: unsupported or prohibited claims, personal data, tone (5.3). **Claim check:** each factual claim in the draft against brain facts, using the citation-check pattern (`supported`, `contradicted`, `not in the brain`); an unsupported claim blocks the draft. **Voice and quality:** composite scoring with weights held in config (on-brand, clear, specific, not hype). **Repeat check:** is this too close to something already published (three-level alignment Score). **Cascade (Step 9):** a cheap draft that fails a check is re-written on a stronger tier. |
+| Approvals | Every publish and every send. The first drafts of every new format. |
+| Knowledge needed (Step 6 uploads) | Brand-voice guide, product and pricing documents, audience notes, past content, banned claims. Company-scoped documents, so every worker in the department can read them. |
+| Working means | Approval rate without edits rising; edits shrinking; zero unsupported claims reaching the owner; cost per approved piece; time from idea to approval. |
+| Starting budget | $0.25 a day, raised only on results. Measured cost per piece is reported at the Step 8 milestone. |
+| Risks and answers | Invented statistics: the claim check. Copied text from a fetched page: a repeat check plus a rule to paraphrase and cite. Instructions hidden in a page: screening, and fetched text is only ever quoted data. Off-brand output: voice score plus owner approval. |
+| **Owner** provides | What the business sells and to whom; two or three example pieces or accounts whose voice they like; the channels; the words never to use; the morning time. |
 
 ## 9. Build order
 
@@ -247,7 +273,7 @@ unattended mornings before the next starts. The plan has the details.
 
 1. **What the business is**, in a few sentences, and who the customers are.
    Departments follow from it.
-2. **Which revenue department first**: Sales & Outreach or Marketing & Content.
+2. ~~Which revenue department first~~ **Decided: Marketing & Content** (2026-09-25). Sales & Outreach follows.
 3. **The morning time** (time zone is America/New_York) and how much the owner
    wants to see in the brief.
 4. **Which outside accounts exist** or may be created (email, a social account,

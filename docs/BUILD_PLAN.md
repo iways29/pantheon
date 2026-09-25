@@ -9,7 +9,7 @@ Work in order. Each step lists what to build and the acceptance criteria ("done 
 - [ ] OpenRouter account with credit and a management/provisioning key if per-agent keys are supported
 - [ ] TypeSafe API key (`TYPESAFE_API_KEY` is currently empty in `.env`; needed to run Step 5 live; create at https://console.typesafe.ai/keys and set it in `.env` and the Vercel `pantheon-api` project)
 - [ ] Ask TypeSafe (privacy@typesafe.ai) how long request content is retained; needed before any sensitive data is sent to it (open decision 11)
-- [ ] Describe the business and pick the first revenue department (open decision 12); create any outside accounts a department needs (email, social, GitHub) yourself when its step starts
+- [ ] Describe the business and choose the channels for Marketing and Content (open decision 12); create any outside accounts a department needs (email, social, GitHub) yourself when its step starts
 - [ ] Langfuse Cloud account (free Hobby tier) and a project for tracing; see ADR 004
 - [ ] All secrets placed in Vercel env vars and a local `.env` (never committed)
 
@@ -412,8 +412,13 @@ The proposal, charters and starting budgets are in
   departments (descriptions read from the database) plus a complexity Score, giving
   the department, the model tier, or a person. An order endpoint and CLI so the
   owner can give an order at any time. The morning brief and the approvals digest.
-- **8.3 First revenue department (L).** Sales and Outreach or Marketing and Content,
-  the owner's choice. Drafts only; every send or publish is an approval.
+- **8.3 Marketing and Content (L).** The owner's first revenue department (chosen
+  2026-09-25). Content Lead, topic researcher, writer, editor and fact-checker,
+  distribution scheduler. Drafts only; every publish is an approval. Claims in drafts
+  are checked against the brain with Jev, and the owner's edits are stored as
+  examples of their voice. Charter and morning routine: design doc, section 8.1.
+  Needs from the owner: what the business sells and to whom, example content in the
+  voice they want, the channels, and any banned claims. Sales and Outreach follows it.
 - **8.4 Product and Engineering (L).** Any change to code is an approval, always.
 - **8.5 Finance and Cost controller (M).** Read-only on money; feeds Step 12.
 - **8.6 Later (phase 2).** Support and Legal or Compliance.
@@ -510,7 +515,7 @@ configured.
 9. **Scraping:** plain HTTP fetch (free, no JavaScript rendering) vs a paid scraping service (needs owner approval).
 10. **How to call TypeSafe.** (A) **Our own thin `httpx` transport to `api.typesafe.ai`** (recommended: no new dependency, matches the gateway's style, keeps kill switch, cost logging and events in one place; uses the `TYPESAFE_API_KEY` already in the plan). (B) The official `typesafe-sdk` package (retries and typed responses built in; a new dependency to approve). (C) Through OpenRouter as `~typesafe/jev-latest` (one key and one bill, but the alias moves, which ADR 003 forbids; a versioned id would be needed). (D) Through Vercel's AI Gateway (another moving part). Do not adopt `langchain-typesafe` (experimental, new dependency); copy its patterns.
 11. **Sensitive data and TypeSafe.** Recommended: **not allowed** until TypeSafe confirms request retention in writing (their terms are silent on it and zero retention is enterprise-only). Sensitive items go to a person or to a zero-retention LLM judge through the gateway. The owner may email privacy@typesafe.ai; the answer is reported at the Step 5 Milestone.
-12. **Which departments first.** Recommended: Executive Office, Research and Intelligence, and one revenue department. The owner picks Sales and Outreach or Marketing and Content, and describes the business in a few sentences. The proposal in `docs/design/agent-organization.md` changes to match.
+12. **Which departments first.** Decided in part: Executive Office, Research and Intelligence, then **Marketing and Content** as the first revenue department (owner, 2026-09-25); Sales and Outreach follows. Still owed: a few sentences describing the business, the audience and the voice, which shape the Step 8.3 charter.
 13. **Delegation limits.** Recommended defaults: tree depth 3, four children per task, 50 tasks per department per day. The owner can set others; enforced in the database.
 14. **Where labels come from** for calibration: the owner's approval decisions (best, slow to accumulate), a frontier-model ensemble (fast, costs a few cents, needs spot checks), and the owner's spot checks. Recommended: start with the ensemble, verify a sample by hand, add approvals as they accumulate.
 

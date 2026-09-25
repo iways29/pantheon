@@ -107,10 +107,13 @@ those; the API's 401 versus 503 answers reveal whether `TRIGGER_SECRET` is set.
    defaults are in the plan, the owner has not explicitly answered):
    - #10 call TypeSafe with our own thin `httpx` transport (recommended);
    - #11 nothing sensitive goes to TypeSafe for now (recommended).
-   Decisions #5, #12 and #13 are needed later (Steps 7 and 8). The owner also
-   still owes a few sentences describing the business and a choice of first
-   revenue department; that blocks Step 8, not Step 5.
-3. **The TypeSafe API key** is being arranged by the owner. It goes in the
+   Decisions #5, #12 and #13 are needed later (Steps 7 and 8). The first revenue department is **decided: Marketing and Content** (2026-09-25).
+   The owner still owes a few sentences describing the business, audience and
+   voice; that blocks the Step 8.3 charter, not Step 5.
+3. **The TypeSafe API key is set locally and verified** (2026-09-25: 108 characters, and a
+   free `GET /v1/models` call returned 200 with `jev-latest` and `jev-preview`). The owner
+   was to confirm it in Vercel too (not checkable through the Vercel MCP).
+   Where it goes: It goes in the
    repo-root `.env` as `TYPESAFE_API_KEY=` (the line already exists, blank) and
    in the Vercel `pantheon-api` project as `TYPESAFE_API_KEY` (server-side,
    sensitive). Add a `typesafe_api_key` field to `app/config.py`'s `Settings`.

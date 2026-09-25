@@ -45,7 +45,8 @@ starts until the owner says go. 437 tests pass.
 | --- | --- |
 | GitHub | `iways29/pantheon` |
 | Supabase project | `epelwbiehczkkgqtgkqt` (name `pantheon`, us-west-2), reachable through the Supabase MCP |
-| Migrations applied to Supabase | all of `supabase/migrations/` through `20260925040100_trigger_schedule.sql` |
+| Migrations applied to Supabase | all of `supabase/migrations/` through `20260926110000_revoke_trigger_functions.sql` (2026-09-26, owner's go) |
+| Seeded live (2026-09-26) | 9 starter Jev gates (32 questions), 6 tools, Jev price, embedding model `openai/text-embedding-3-small`. Not yet: `scripts.brain reembed` (3 old facts use the hashing stand-in and are invisible to search until then) |
 | Vercel team | `team_6UC1DSN83JcGLrVJC3P8aXE6` |
 | API project | `pantheon-api` (`prj_XHno72KOypj7fapEIXze9XtZZJMR`), production `https://api-xi-opal-67.vercel.app`, deploys from `main` |
 | Web project | `pantheon-web` (`prj_XdV67seWTQSsmSDvBUH2NIg9AZNX`) |
@@ -108,12 +109,11 @@ those; the API's 401 versus 503 answers reveal whether `TRIGGER_SECRET` is set.
 
 ## What to do next
 
-1. **With the owner's go-ahead**, apply every migration from
-   `20260925050000` to `20260926100000` to Supabase through the Supabase MCP.
-   Then, against the pooler: `scripts.agent seed` (starter gates, Jev price,
-   embedding model), `scripts.brain reembed` (moves old facts to the real
-   embedding model; until then they are invisible to search), and
-   `scripts.judge_eval import`.
+1. Migrations and seed are live (2026-09-26). Still owed, against the pooler
+   with keys: `scripts.brain reembed` (moves the 3 old facts to the real
+   embedding model; until then they are invisible to search) and
+   `scripts.judge_eval import`. The API on Vercel deploys from `main`, which
+   does not have Steps 5 to 7 yet: merge `step-3` for them to run live.
 2. Vercel `pantheon-api` needs `TYPESAFE_API_KEY` and
    `SUPABASE_SERVICE_ROLE_KEY` (legacy key or a new `sb_secret_...` key).
 3. In a session with the TypeSafe key: `scripts.jev_smoke`, then

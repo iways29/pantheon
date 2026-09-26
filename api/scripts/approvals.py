@@ -61,7 +61,13 @@ def main(argv: list[str]) -> int:
     resume.add_argument(
         "--reason",
         default="kill_switch",
-        choices=["kill_switch", "budget_exceeded", "agent_disabled", "department_disabled"],
+        choices=[
+            "kill_switch",
+            "budget_exceeded",
+            "agent_disabled",
+            "department_disabled",
+            "upstream_error",
+        ],
     )
     pause = commands.add_parser("pause", help="pause everything (resumable), or lift it")
     pause.add_argument("state", choices=["on", "off"])

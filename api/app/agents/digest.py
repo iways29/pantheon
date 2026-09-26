@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, Any
 
 import psycopg
 
+from app.gateway import UpstreamError
 from app.judge.store import load_gate
 from app.mail import compose
 
@@ -74,30 +75,37 @@ def run(session: "Session", run: "_Run") -> dict[str, Any]:
     policy = load_gate(session.connection, org_id=run.org_id, gate=GATE).policy
     # What the departments found is the point of the brief: it is never cut
     # and always leads; everything else is ranked (idea 6).
-    findings = [i for i in items if i["kind"] == "findings"]
-    others = [i for i in items if i["kind"] != "findings"]
-    others = others[: max(int(policy.setting("max_items", 15)) - len(findings), 0)]
-    ranked = findings + _rank(session, run, others, policy)
+    # An alert (the models cannot be reached) comes before everything.
+    first = [i for i in items if i["kind"] in ("alert", "findings")]
+    others = [i for i in items if i["kind"] not in ("alert", "findings")]
+    others = others[: max(int(policy.setting("max_items", 15)) - len(first), 0)]
+    ranked = first + _rank(session, run, others, policy)
     lead_count = int(policy.setting("lead_count", 5))
     lead, rest = ranked[:lead_count], ranked[lead_count:]
-    response = session.gateway.complete(
-        agent_id=run.agent_id,
-        run_id=run.id,
-        max_tokens=700,
-        messages=[
-            {"role": "system", "content": prompt["body"]},
-            {
-                "role": "user",
-                "content": json.dumps(
-                    {"since": since.isoformat(), "lead": lead, "rest": rest},
-                    ensure_ascii=False,
-                    default=str,
-                ),
-            },
-        ],
-    )
+    try:
+        response = session.gateway.complete(
+            agent_id=run.agent_id,
+            run_id=run.id,
+            max_tokens=700,
+            messages=[
+                {"role": "system", "content": prompt["body"]},
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        {"since": since.isoformat(), "lead": lead, "rest": rest},
+                        ensure_ascii=False,
+                        default=str,
+                    ),
+                },
+            ],
+        )
+        text = response.text.strip()
+    except UpstreamError as error:
+        # No model (out of credit, provider down): the brief still goes out,
+        # written from the items as they are, so the owner hears about it.
+        text = _plain_brief(lead, rest, error)
     output = {
-        "summary": response.text.strip()[:4000],
+        "summary": text[:4000],
         "since": since.isoformat(),
         "lead": lead,
         "items": len(ranked),
@@ -215,6 +223,27 @@ def _since(cursor: psycopg.Cursor, run: "_Run") -> datetime:
 
 def _items(cursor: psycopg.Cursor, run: "_Run", since: datetime) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
+    # Out of model credit stops every department: say so first, and how to fix it.
+    cursor.execute(
+        """
+        select count(*) as n from public.runs r
+         where r.org_id = %s and r.updated_at >= %s and r.status in ('paused', 'failed')
+           and (r.error ilike '%%returned 402%%' or r.error ilike '%%more credits%%')
+        """,
+        (str(run.org_id), since),
+    )
+    if cursor.fetchone()["n"]:
+        items.append(
+            {
+                "kind": "alert",
+                "title": "OpenRouter is out of credit: agents cannot run",
+                "detail": (
+                    "Model calls were refused for lack of credit (402). Add credits at "
+                    "openrouter.ai, Settings, Credits, then resume the paused work with "
+                    "scripts.approvals resume --reason upstream_error."
+                ),
+            }
+        )
     cursor.execute(
         """
         select ap.action_key, ap.recommendation, ap.explanation, ap.created_at, a.name as agent,
@@ -413,3 +442,16 @@ def _rank(
             score = {"approval": 3, "problem": 2}.get(item["kind"], 0)
         scored.append((score, -order, {**item, "rank_score": round(score, 3)}))
     return [item for _, _, item in sorted(scored, key=lambda s: (s[0], s[1]), reverse=True)]
+
+
+def _plain_brief(lead: list[dict[str, Any]], rest: list[dict[str, Any]], error: Exception) -> str:
+    """The brief without a model: the ranked items, one line each."""
+    lines = [
+        f"The brief writer could not reach its model ({str(error)[:120]}), so this is "
+        "the plain list.",
+        "",
+    ]
+    for item in lead + rest:
+        detail = f": {item['detail']}" if item.get("detail") else ""
+        lines.append(f"- {item['title']}{detail}"[:600])
+    return "\n".join(lines)

@@ -5,7 +5,7 @@
     uv run python -m scripts.department show research         # the live charter, as JSON
     uv run python -m scripts.department publish research charter.json [--note "why"]
     uv run python -m scripts.department sources research --topic "AI agents" \
-        --source https://example.com/news [--source ...] [--time 06:30]
+        --source https://example.com/news [--source ...] [--time 06:30] [--days mon-sat]
     uv run python -m scripts.department apply research        # make agents and routine match
     uv run python -m scripts.department enable research       # switch agents and routine on
     uv run python -m scripts.department disable research
@@ -20,6 +20,7 @@ import json
 import sys
 from pathlib import Path
 
+from app.agents.triggers import parse_days
 from app.db import acting_as, connect
 from app.departments.apply import apply_charter, enable
 from app.departments.charter import Charter, load, publish, seed_charters, to_json
@@ -43,6 +44,7 @@ def main(argv: list[str]) -> int:
     src.add_argument("--topic", action="append", default=[])
     src.add_argument("--source", action="append", default=[])
     src.add_argument("--time", help="local time, e.g. 06:30")
+    src.add_argument("--days", help='e.g. "mon-sat", "weekdays", "mon,wed,fri"')
     rep = commands.add_parser("report")
     rep.add_argument("department")
     rep.add_argument("--days", type=int, default=5)
@@ -80,8 +82,14 @@ def main(argv: list[str]) -> int:
             first = charter.routine[0]
             item = first.model_copy(
                 update={
-                    "input": {**first.input, "topics": args.topic, "sources": args.source},
+                    # Only what was passed changes; the rest of the input stays.
+                    "input": {
+                        **first.input,
+                        **({"topics": args.topic} if args.topic else {}),
+                        **({"sources": args.source} if args.source else {}),
+                    },
                     **({"time": args.time} if args.time else {}),
+                    **({"days": parse_days(args.days)} if args.days else {}),
                 }
             )
             changed = charter.model_copy(update={"routine": [item, *charter.routine[1:]]})

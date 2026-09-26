@@ -118,7 +118,8 @@ RESEARCH: Final = Charter(
             # The owner fills these in (docs/HANDOFF.md); empty: hygiene only.
             input={"topics": [], "sources": []},
             time="06:30",
-            days=[1, 2, 3, 4, 5],
+            # Monday to Saturday: Saturday brings Friday's news (owner, 2026-09-26).
+            days=[1, 2, 3, 4, 5, 6],
             timezone="America/New_York",
             max_steps=25,
             max_tokens=40000,

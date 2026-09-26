@@ -25,7 +25,7 @@ from app.agents.research import parse_claims
 from app.brain.write_gate import BrainWriter, FactCandidate
 from app.gateway import Gateway
 from app.judge.screening import Screener, as_quoted_data
-from app.knowledge.extract import extract_text
+from app.knowledge.extract import extract_text, without_comments
 from app.knowledge.fetch import FetchedPage
 
 #: How much page text the extraction call reads. A cost ceiling, not a
@@ -94,7 +94,8 @@ class Links:
         )
         claims: list[str] = []
         if screening.label == "clean":
-            claims = self._extract(text, page.final_url, agent_id)
+            # Screened with its comments; read without them.
+            claims = self._extract(without_comments(text), page.final_url, agent_id)
 
         with self._connection.cursor() as cursor:
             cursor.execute(

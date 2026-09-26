@@ -67,6 +67,9 @@ class AgentRecord:
     #: The model assigned to this agent's tier in the database, department
     #: override first. None means no row, so the MODEL_TIERS default applies.
     assigned_model: str | None = None
+    #: OpenRouter's `reasoning` setting for this agent's tier (the
+    #: `reasoning` system flag), or None for the model's default.
+    reasoning: dict[str, Any] | None = None
 
 
 class Gateway:
@@ -150,6 +153,9 @@ class Gateway:
                     # OpenRouter plugins, e.g. web search (ADR 026). Their
                     # charge is part of the call's reported cost.
                     extra["plugins"] = plugins
+                if agent.reasoning:
+                    # How hard the tier's model thinks: data, not code.
+                    extra["reasoning"] = agent.reasoning
                 response = self._transport.complete(
                     model=model,
                     messages=messages,
@@ -496,7 +502,9 @@ class Gateway:
                        d.name as department_name,
                        d.daily_budget_usd as department_budget_usd,
                        d.enabled as department_enabled,
-                       assigned.model as assigned_model
+                       assigned.model as assigned_model,
+                       (select f.value -> a.model_tier from public.system_flags f
+                         where f.org_id = a.org_id and f.key = 'reasoning') as reasoning
                 from public.agents a
                 join public.departments d on d.id = a.department_id
                 -- ADR 003: the tier's model is data. A department override
@@ -536,6 +544,7 @@ class Gateway:
             department_enabled=row["department_enabled"],
             daily_budget_usd=None if sub_cap is None else Decimal(sub_cap),
             assigned_model=row["assigned_model"],
+            reasoning=row["reasoning"] if isinstance(row["reasoning"], dict) else None,
         )
 
     def _admit(

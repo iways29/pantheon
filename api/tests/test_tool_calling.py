@@ -203,7 +203,7 @@ def test_the_transport_sends_tools_and_parses_tool_calls() -> None:
 
     body = json.loads(seen[0].content)
     assert body["tools"] == tools and body["tool_choice"] == "auto"
-    assert body["parallel_tool_calls"] is False
+    assert "parallel_tool_calls" not in body, "it would rule out models that lack it"
     assert response.finish_reason == "tool_calls"
     assert response.tool_calls == (ToolCall("call_1", "lookup", '{"term": "acme"}'),)
     assert response.assistant_message()["tool_calls"][0]["id"] == "call_1"
@@ -233,3 +233,24 @@ def test_malformed_tool_arguments_become_invalid_calls_not_crashes(
         ).invoke("hi")
 
     assert reply.tool_calls == [] and reply.invalid_tool_calls[0]["name"] == "lookup"
+
+
+def test_only_the_first_tool_call_of_a_turn_is_kept() -> None:
+    from app.gateway.transport import _parse
+
+    body = {
+        "choices": [
+            {
+                "finish_reason": "tool_calls",
+                "message": {
+                    "tool_calls": [
+                        {"id": "a", "function": {"name": "one", "arguments": "{}"}},
+                        {"id": "b", "function": {"name": "two", "arguments": "{}"}},
+                    ]
+                },
+            }
+        ]
+    }
+    response = _parse(body, model="m", latency_ms=1)
+    assert [c.name for c in response.tool_calls] == ["one"]
+    assert len(response.assistant_message()["tool_calls"]) == 1

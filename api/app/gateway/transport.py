@@ -103,6 +103,7 @@ class Transport(Protocol):
         tools: list[dict[str, Any]] | None = None,
         tool_choice: str | dict[str, Any] | None = None,
         plugins: list[dict[str, Any]] | None = None,
+        reasoning: dict[str, Any] | None = None,
     ) -> ModelResponse: ...
 
 
@@ -141,6 +142,7 @@ class OpenRouterTransport:
         tools: list[dict[str, Any]] | None = None,
         tool_choice: str | dict[str, Any] | None = None,
         plugins: list[dict[str, Any]] | None = None,
+        reasoning: dict[str, Any] | None = None,
     ) -> ModelResponse:
         """One chat completion. With `tools`, the reply may carry tool calls.
 
@@ -149,21 +151,28 @@ class OpenRouterTransport:
         `none` or a named function; the reply's `finish_reason` is
         `tool_calls` and `message.tool_calls` holds id, name and JSON
         arguments; results go back as `tool` role messages. Tool calls are
-        sequential (`parallel_tool_calls: false`) so every call is gated and
-        logged one at a time.
+        sequential: only the first call of a turn is kept (`_parse`), so every
+        call is gated and logged one at a time on any model.
         """
         payload: dict[str, Any] = {"model": model, "messages": messages}
         if max_tokens is not None:
             payload["max_tokens"] = max_tokens
         if tools:
+            # Not `parallel_tool_calls: false`: with require_parameters, it
+            # rules out models that lack it (GPT-6 Luna, GPT-5.6 Sol, found
+            # 2026-09-26). One call per turn is kept in `_parse` instead.
             payload["tools"] = tools
-            payload["parallel_tool_calls"] = False
             if tool_choice is not None:
                 payload["tool_choice"] = tool_choice
         if provider_preferences:
             payload["provider"] = provider_preferences
         if plugins:
             payload["plugins"] = plugins
+        if reasoning:
+            # OpenRouter's unified reasoning control (docs read 2026-09-26):
+            # {"effort": ...} or {"max_tokens": ...}; reasoning counts
+            # against max_tokens on most providers.
+            payload["reasoning"] = reasoning
 
         started = time.monotonic()
         try:
@@ -270,6 +279,10 @@ def _parse(body: dict[str, Any], *, model: str, latency_ms: int) -> ModelRespons
         if not isinstance(arguments, str):
             arguments = json.dumps(arguments or {})
         calls.append(ToolCall(str(raw_call.get("id") or ""), function["name"], arguments))
+    # One tool call per turn, on every model: the rest are dropped here, so the
+    # assistant message in the history matches what ran and the model asks
+    # again next turn if it still wants them.
+    calls = calls[:1]
 
     return ModelResponse(
         model=body.get("model") or model,

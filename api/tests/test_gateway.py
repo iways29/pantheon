@@ -568,3 +568,40 @@ def test_an_agent_cannot_join_another_orgs_department(
                 """,
                 (str(tenants.org_a), str(foreign_department)),
             )
+
+
+# --- How hard each tier thinks is data -------------------------------------------
+
+
+@dataclass
+class ReasoningTransport(RecordingTransport):
+    reasoning: list[Any] = field(default_factory=list)
+
+    def complete(self, *, reasoning: dict[str, Any] | None = None, **kw: Any) -> ModelResponse:
+        self.reasoning.append(reasoning)
+        return super().complete(**kw)
+
+
+def test_the_tiers_reasoning_setting_is_sent_with_each_call(
+    db: psycopg.Connection, tenants: Tenants
+) -> None:
+    cheap = make_agent(db, tenants.org_a, name="cheap-one")
+    standard = make_agent(db, tenants.org_a, name="standard-one", tier="standard")
+    with as_service_role(db) as connection:
+        connection.execute(
+            "insert into public.system_flags (org_id, key, value) values (%s, 'reasoning', %s)",
+            (str(tenants.org_a), json.dumps({"cheap": {"effort": "low"}})),
+        )
+    transport = ReasoningTransport()
+    with acting_as(db, user_id=str(tenants.user_a)) as connection:
+        gateway = Gateway(connection, transport, TIERS)
+        for agent_id in (cheap, standard):
+            gateway.complete(agent_id=agent_id, messages=[{"role": "user", "content": "hi"}])
+
+    assert transport.reasoning == [{"effort": "low"}, None], "no entry: the model's default"
+    with as_service_role(db) as connection:
+        (event,) = connection.execute(
+            "select payload from public.events where type = 'reasoning_changed' and org_id = %s",
+            (str(tenants.org_a),),
+        ).fetchall()
+    assert event["payload"]["value"] == {"cheap": {"effort": "low"}}

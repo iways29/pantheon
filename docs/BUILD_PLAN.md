@@ -508,6 +508,11 @@ The proposal, charters and starting budgets are in
   cleared; no answer means the standing topics only. Every extra question is an
   event, and the brief says which parts answer it. Standing topics, sources and
   the nightly prompt are editable in the Control Center (Step 11, item 6).
+  **Status (2026-09-26):** built (migration `20260926180000_routine_requests.sql`).
+  21:00 Sunday to Friday, fixed text, no model call; the owner answers with
+  `scripts.department ask research "..."`; the request joins the next research
+  task once and the brief answers it first, under "You asked". Not yet: replying
+  by email.
 - **8.2 Executive Office and Chief of Staff (M).** Intake: a Jev Choice over the
   departments (descriptions read from the database) plus a complexity Score, giving
   the department, the model tier, or a person. An order endpoint and CLI so the

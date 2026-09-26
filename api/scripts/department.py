@@ -11,6 +11,8 @@
     uv run python -m scripts.department enable research       # switch agents and routine on
     uv run python -m scripts.department disable research
     uv run python -m scripts.department report research [--days 5]
+    uv run python -m scripts.department ask research "Who is building AI for legal?"
+    uv run python -m scripts.department asks research [--cancel <id>]
 
 A charter is data (ADR 024): editing it never needs a code change. `apply`
 creates what is missing switched off; `enable` is the owner's go.
@@ -47,6 +49,12 @@ def main(argv: list[str]) -> int:
     src.add_argument("--source", action="append", default=[])
     src.add_argument("--time", help="local time, e.g. 06:30")
     src.add_argument("--days", help='e.g. "mon-sat", "weekdays", "mon,wed,fri"')
+    ask = commands.add_parser("ask", help="add a one-off request to tomorrow's routine")
+    ask.add_argument("department")
+    ask.add_argument("request")
+    asks = commands.add_parser("asks", help="pending requests, or cancel one")
+    asks.add_argument("department")
+    asks.add_argument("--cancel")
     rep = commands.add_parser("report")
     rep.add_argument("department")
     rep.add_argument("--days", type=int, default=5)
@@ -81,6 +89,33 @@ def main(argv: list[str]) -> int:
                     note=args.note,
                 )
             )
+        elif args.command in ("ask", "asks"):
+            with acting_as(connection, user_id=user_id) as owner:
+                _, charter = load(owner, org_id=org_id, department=args.department)
+                if not charter.routine:
+                    raise SystemExit("This charter has no morning routine")
+                routine = f"{args.department}:{charter.routine[0].key}"
+                if args.command == "ask":
+                    row = owner.execute(
+                        "insert into public.routine_requests (org_id, routine_key, request) "
+                        "values (%s, %s, %s) returning id",
+                        (org_id, routine, args.request.strip()),
+                    ).fetchone()
+                    print(f"{row['id']}  added to the next {routine}")
+                else:
+                    if args.cancel:
+                        owner.execute(
+                            "update public.routine_requests set status = 'cancelled' "
+                            "where id = %s and status = 'pending'",
+                            (args.cancel,),
+                        )
+                    for r in owner.execute(
+                        "select id, request, created_at from public.routine_requests "
+                        "where org_id = %s and routine_key = %s and status = 'pending' "
+                        "order by created_at",
+                        (org_id, routine),
+                    ).fetchall():
+                        print(f"{r['id']}  {r['request']}")
         elif args.command == "sources":
             with acting_as(connection, user_id=user_id) as owner:
                 _, charter = load(owner, org_id=org_id, department=args.department)

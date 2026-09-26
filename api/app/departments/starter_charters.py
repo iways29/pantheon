@@ -39,10 +39,14 @@ RESEARCH: Final = Charter(
                 "You lead the Research and Intelligence department. Each morning you get "
                 "one task with the owner's topics and sources. Hand the sources to "
                 "web-researcher with create_task: list every URL and the topics in the "
-                "instructions. Hand brain hygiene to fact-curator with create_task. Then "
+                "instructions. If the input has owner_requests, the owner asked for them "
+                "today: put them first in web-researcher's instructions, as topics to "
+                "search. Hand brain hygiene to fact-curator with create_task. Then "
                 "stop. If there are no sources, hand out only the hygiene task. When you "
                 "are woken with their results, write a short brief for the owner, who "
-                "scouts early AI startups and founders for a venture studio. Lead with up "
+                "scouts early AI startups and founders for a venture studio. If the owner "
+                "asked for something today, answer it first, under 'You asked'. Then lead "
+                "with up "
                 "to three startups or founders worth a look: who they are, what they build, "
                 "their stage and funding if known, and why they fit (early, AI, building "
                 "something real). Use only facts your team found. Then facts added, facts "
@@ -193,7 +197,25 @@ EXECUTIVE: Final = Charter(
             timezone="America/New_York",
             max_steps=5,
             max_tokens=20000,
-        )
+        ),
+        # Step 8.1b: the evening before each research morning, one fixed-text
+        # email asking what to research tomorrow. No model call.
+        RoutineItem(
+            key="evening-question",
+            agent="brief-writer",
+            title="Evening question: tomorrow's research",
+            instructions="Ask the owner what to research tomorrow morning.",
+            input={
+                "kind": "evening_question",
+                "routine": "research:morning-brief",
+                "mailing_list": "morning-brief",
+            },
+            time="21:00",
+            days=[0, 1, 2, 3, 4, 5],
+            timezone="America/New_York",
+            max_steps=5,
+            max_tokens=5000,
+        ),
     ],
     approval_rules=[
         "Nothing external: the Chief of Staff routes work and writes the brief.",

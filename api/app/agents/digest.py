@@ -47,6 +47,8 @@ QUIET_REASONS = (
 )
 
 
+#: How many new facts from the web the brief may list.
+NEW_FACTS = 25
 #: A digest task with this `kind` is the evening question, not a brief.
 EVENING = "evening_question"
 
@@ -311,6 +313,28 @@ def _items(cursor: psycopg.Cursor, run: "_Run", since: datetime) -> list[dict[st
                 "kind": "facts",
                 "title": "Facts proposed to the brain",
                 "detail": ", ".join(f"{n} {o}" for o, n in sorted(facts.items())),
+            }
+        )
+    # What was learned, not only how much: the new facts read from the web,
+    # so the brief can name the startups, founders and rounds themselves.
+    cursor.execute(
+        """
+        select f.claim, split_part(f.source, ':', 2) as site
+          from public.facts f
+         where f.org_id = %s and f.created_at >= %s and f.status = 'active'
+           and f.source like 'web:%%'
+         order by f.created_at
+         limit %s
+        """,
+        (str(run.org_id), since, NEW_FACTS),
+    )
+    found = cursor.fetchall()
+    if found:
+        items.append(
+            {
+                "kind": "findings",
+                "title": f"New from your sources ({len(found)})",
+                "detail": " | ".join(f"{r['claim']} ({r['site']})" for r in found),
             }
         )
     cursor.execute(

@@ -342,3 +342,31 @@ def test_only_a_person_adds_a_request(dsn: str, lab: Lab) -> None:
             "values (%s, 'research:morning-brief', 'An agent asking itself')",
             (str(lab.org_id),),
         )
+
+
+def test_a_task_gets_its_agents_run_caps(dsn: str, lab: Lab) -> None:
+    with connect(dsn) as connection:
+        wide = order(
+            connection,
+            user_id=lab.user_id,
+            org_id=lab.org_id,
+            agent="web-researcher",
+            title="Read many pages",
+        )
+        plain = order(
+            connection,
+            user_id=lab.user_id,
+            org_id=lab.org_id,
+            agent="fact-curator",
+            title="Hygiene",
+        )
+    with connect(dsn) as connection, as_service_role(connection) as conn:
+        caps = {
+            r["id"]: (r["max_tokens"], r["max_steps"])
+            for r in conn.execute(
+                "select id, max_tokens, max_steps from public.tasks where id = any(%s)",
+                ([wide.id, plain.id],),
+            ).fetchall()
+        }
+    assert caps[wide.id] == (150000, 40), "the charter's caps for the web researcher"
+    assert caps[plain.id] == (50000, 25), "no caps set: the defaults"

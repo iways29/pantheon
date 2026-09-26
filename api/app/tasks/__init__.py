@@ -16,6 +16,10 @@ import psycopg
 
 from app.db import acting_as
 
+#: A task's caps when its agent sets none (the table's defaults too).
+DEFAULT_MAX_TOKENS = 50000
+DEFAULT_MAX_STEPS = 25
+
 
 class TaskError(ValueError):
     status = 400
@@ -203,14 +207,20 @@ def _insert(
     key: str,
     requested_by: UUID | str,
 ) -> Task:
+    # The assigned agent's own caps (charter data), else the defaults.
+    cursor.execute(
+        "select max_run_tokens, max_run_steps from public.agents where id = %s", (str(agent_id),)
+    )
+    caps = cursor.fetchone() or {}
     try:
         cursor.execute("savepoint task_insert")
         cursor.execute(
             """
             insert into public.tasks
                 (org_id, parent_task_id, assigned_agent_id, created_by, created_by_agent_id,
-                 title, instructions, input, max_cost_usd, idempotency_key, requested_by)
-            values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 title, instructions, input, max_cost_usd, idempotency_key, requested_by,
+                 max_tokens, max_steps)
+            values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             on conflict (org_id, idempotency_key) do nothing
             returning id, title, status, depth, assigned_agent_id, parent_task_id, result
             """,
@@ -226,6 +236,8 @@ def _insert(
                 max_cost_usd,
                 key,
                 str(requested_by),
+                caps.get("max_run_tokens") or DEFAULT_MAX_TOKENS,
+                caps.get("max_run_steps") or DEFAULT_MAX_STEPS,
             ),
         )
         row = cursor.fetchone()

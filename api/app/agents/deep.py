@@ -23,6 +23,7 @@ import json
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -81,7 +82,10 @@ def build_deep_graph(
 
 def first_message(scope: DeepScope, run_input: dict[str, Any]) -> dict[str, Any]:
     """The task as the agent reads it: the order, its team, and any results."""
-    lines = [f"Task: {run_input.get('title') or 'Untitled'}"]
+    # Agents do not know the date on their own; without it they cannot tell
+    # this week's news from last year's (2026-09-26).
+    today = datetime.now(UTC).strftime("%A %d %B %Y")
+    lines = [f"Today (UTC): {today}", f"Task: {run_input.get('title') or 'Untitled'}"]
     if run_input.get("instructions"):
         lines.append(f"Instructions: {run_input['instructions']}")
     extra = {k: v for k, v in run_input.items() if k not in ("task_id", "title", "instructions")}

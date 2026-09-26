@@ -263,15 +263,17 @@ MARKETING: Final = Charter(
                 "You lead Marketing and Content for The Unreal Lab. Each morning you get one "
                 "task. You work in rounds: after create_task you stop, and you are woken with "
                 "the results.\n"
+                "Every piece serves one of the goals in your task's input, and names it. "
                 "Round 1: call list_drafts to see what is in progress and what the owner "
                 "approved, edited or rejected lately, and read the owner's notes. Then hand "
-                "topic-researcher one task: three topic ideas for today, avoiding what was "
-                "done lately. Stop.\n"
+                "topic-researcher one task: three topic ideas for today that serve the "
+                "goals, avoiding what was done lately. Stop.\n"
                 "Round 2, woken with the ideas: pick the best one and the smallest piece due "
                 "today: one post for X, Reddit or Instagram, or a newsletter section; for the "
                 "blog, the next stage of its two-week cycle (outline, then draft, then the "
                 "channel versions of an approved post). Hand writer one task naming the idea, "
-                "the channel, the format and the fact ids to rely on. Stop.\n"
+                "the channel, the format, the goal it serves and the fact ids to rely on. "
+                "Stop.\n"
                 "Round 3, woken with the draft id: hand editor one task to check that draft "
                 "and fix it if it fails. Stop.\n"
                 "Round 4: record with report_result, in plain English: the three ideas, what "
@@ -320,7 +322,10 @@ MARKETING: Final = Charter(
                     "channel: X is one post or a short thread; Reddit is written for the "
                     "community, useful on its own, never an advert; Instagram is carousel "
                     "text, one short line per slide; a newsletter section is a few short "
-                    "paragraphs; a blog outline is headings with one line each. Save it once "
+                    "paragraphs; a blog outline is headings with one line each. End with one "
+                    "plain next step that serves the goal in your task: for founder "
+                    "applications, email the studio, no deck needed; for Mumba sign-ups, try "
+                    "Mumba.ai, free during beta. Never a hard sell. Save it once "
                     "with save_draft, with the ids of the facts you relied on. Then record the "
                     "draft id with report_result and stop."
                 ),
@@ -361,6 +366,11 @@ MARKETING: Final = Charter(
                 "and waiting for the owner's approval."
             ),
             input={
+                # Owner, 2026-09-26. Changed with `scripts.department`, no deploy.
+                "goals": [
+                    "Founder applications: early founders email the studio to apply.",
+                    "Mumba.ai sign-ups: people try Mumba, free during beta.",
+                ],
                 "channels": ["x", "reddit", "instagram", "newsletter", "blog"],
                 "cadence": (
                     "A blog post every two weeks is the anchor; the other channels are "

@@ -5,6 +5,8 @@ the protocol (listing, schemas, calls, errors) is the real one; only the
 network is skipped. OAuth is tested against a scripted authorization server.
 """
 
+import base64
+import hashlib
 import json
 import time
 from collections.abc import Iterator
@@ -447,7 +449,8 @@ def test_signing_in_takes_two_requests_and_stores_tokens_in_the_vault(
         redirect_uri="https://api.example/mcp/oauth/callback",
         http=httpx.Client(transport=httpx.MockTransport(auth)),
     )
-    state = parse_qs(urlsplit(url).query)["state"][0]
+    query = parse_qs(urlsplit(url).query)
+    state = query["state"][0]
     done = oauth.finish(
         db,
         state=state,
@@ -459,6 +462,9 @@ def test_signing_in_takes_two_requests_and_stores_tokens_in_the_vault(
     assert done["server_id"] == server["id"]
     exchange = parse_qs(auth.requests[-1].content.decode())
     assert exchange["grant_type"] == ["authorization_code"] and "code_verifier" in exchange
+    # RFC 7636: the challenge is BASE64URL(SHA256(verifier)) with no padding.
+    digest = hashlib.sha256(exchange["code_verifier"][0].encode()).digest()
+    assert query["code_challenge"] == [base64.urlsafe_b64encode(digest).decode().rstrip("=")]
     token = oauth.access_token(db, server=server)
     assert token.startswith("access-")
     with as_service_role(db) as conn:

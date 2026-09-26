@@ -8,9 +8,9 @@
     uv run python -m scripts.judge_eval history brain_claim
 
 `run` makes real TypeSafe calls through the gateway as the `researcher`
-agent: one per case per repeat. The starting sets hold 42 cases, so
-`run all --repeats 3` is 126 calls, about 50,000 input tokens: roughly
-$0.002. It prints accuracy, precision and recall per outcome, accuracy by
+agent: one per case per repeat. The sets hold 60 cases, so
+`run all --repeats 3` is 180 calls, about 100,000 input tokens: roughly
+$0.004. It prints accuracy, precision and recall per outcome, accuracy by
 confidence, self-consistency, the weak spots, the cases it got wrong, cost
 per 1,000 judgments, latency, and threshold changes the data supports. Each
 run is saved in `judge_eval_runs`. Thresholds are changed by the owner with

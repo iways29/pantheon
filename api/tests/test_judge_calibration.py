@@ -147,7 +147,7 @@ def test_every_case_file_imports_against_its_gate(
         gate, count = import_cases(db, user_id=tenants.user_a, org_id=tenants.org_a, path=path)
         counts[gate] = count
 
-    assert counts == {"brain_claim": 17, "brain_neighbour": 13, "content_screen": 12}
+    assert counts == {"brain_claim": 35, "brain_neighbour": 13, "content_screen": 12}
     cases = load_cases(db, org_id=tenants.org_a, gate="brain_claim")
     assert {c.weak_spot for c in cases} >= {"arithmetic", "dates", "double_negative", "adversarial"}
     assert all(c.label_source == "author" for c in cases)
@@ -156,7 +156,7 @@ def test_every_case_file_imports_against_its_gate(
     import_cases(
         db, user_id=tenants.user_a, org_id=tenants.org_a, path=CASES_DIR / "brain_claim.json"
     )
-    assert len(load_cases(db, org_id=tenants.org_a, gate="brain_claim")) == 17
+    assert len(load_cases(db, org_id=tenants.org_a, gate="brain_claim")) == 35
 
 
 def test_a_label_that_is_not_an_outcome_of_the_gate_is_refused(

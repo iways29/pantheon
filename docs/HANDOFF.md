@@ -158,7 +158,7 @@ Live migrations go in through the Supabase connector's `apply_migration`.
 The owner's user id: `scripts.agent seed` needs `--user-id` if `OWNER_USER_ID`
 is blank.
 
-8. **Next: Step 8.3 Marketing and Content** (owner starts it, 2026-09-27). The
+8. **Next: Step 8.3 Marketing and Content** (owner starts it next session). The
    inputs are in `docs/business/the-unreal-lab.md` (voice, hard rules, five
    channels, posting by hand, Higgsfield visuals, some emoji, weekly
    newsletter, no voice samples yet). The draft charter is `MARKETING` in

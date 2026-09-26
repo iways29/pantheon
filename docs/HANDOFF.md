@@ -143,10 +143,10 @@ those; the API's 401 versus 503 answers reveal whether `TRIGGER_SECRET` is set.
      and sources), `apply research`, `enable research`;
    - `scripts.department publish executive --starter`, `apply executive`,
      `enable executive`;
-   - `scripts.mailing set morning-brief --from "The Unreal Lab <ADDRESS>"
-     --to ADDRESS`, with the owner's confirmed addresses (the ones typed in
-     chat had typos), and `--auto` only if the owner says the brief may go
-     out without approval;
+   - `scripts.mailing set morning-brief --from "The Unreal Lab
+     <newsletter@theunreallab.com>" --to ishanpanchaal@theunreallab.com --auto`
+     (owner confirmed both addresses and "without approval", 2026-09-26; turn
+     `--no-auto` back on before adding anyone else);
    - Vercel `pantheon-api`: `RESEND_API_KEY`, then redeploy.
 
 ## Prompt to paste into the new chat

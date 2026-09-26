@@ -25,11 +25,9 @@ and tested, with live web search (ADR 026). Merged to `main` 2026-09-26. 467 tes
 
 ## Working agreement with the owner (keep to it)
 
-- **Stay on branch `step-3`.** No pull requests for now; the owner will push
-  everything together later. Commit small, one step at a time. Do not push
-  unless asked. (GitHub `main` already has PR #6, which contains everything up
-  to Step 4; local `step-3` is ahead of `origin/step-3` by the planning commit
-  and whatever you add.)
+- **Work reaches `main` only through a pull request the owner merges**
+  (CLAUDE.md). Branch from `origin/main`, commit small, open the PR, and let
+  the owner merge. Never push to `main` directly.
 - **Explain in simple, plain language.** The owner asked for "like I am 10" on
   the first explanation and likes short tables and clear next steps.
 - **Never enter secrets or accounts.** Tell the owner exactly where to put a
@@ -113,47 +111,50 @@ those; the API's 401 versus 503 answers reveal whether `TRIGGER_SECRET` is set.
 
 ## What to do next
 
-1. Migrations and seed are live (2026-09-26). Still owed, against the pooler
-   with keys: `scripts.brain reembed` (moves the 3 old facts to the real
-   embedding model; until then they are invisible to search) and
-   `scripts.judge_eval import`. The API on Vercel deploys from `main`, which
-   does not have Steps 5 to 7 yet: merge `step-3` for them to run live.
-2. Vercel `pantheon-api` needs `TYPESAFE_API_KEY` and
-   `SUPABASE_SERVICE_ROLE_KEY` (legacy key or a new `sb_secret_...` key).
-3. In a session with the TypeSafe key: `scripts.jev_smoke`, then
-   `scripts.judge_eval run all --repeats 3`, and report the numbers.
+1. Done: `scripts.brain reembed` (3 facts moved to
+   `openai/text-embedding-3-small`) and `scripts.judge_eval import` (42 cases).
+   `main` has Steps 5 to 8.2 and the newsletter; Vercel deploys it.
+2. Done: the owner set the Vercel `pantheon-api` env vars, including
+   `RESEND_API_KEY`. A test brief ran end to end on Vercel.
+3. Done: `scripts.jev_smoke` passes against jev-1.13.0 (request ids come back
+   as `x-typesafe-request-id`). `scripts.judge_eval run all --repeats 3`,
+   0 failed calls, about $0.003 in total:
+   - `brain_claim` 88%. Missed `adversarial-evidence` (accepted a claim it
+     should reject) and `double-negative` (accepted instead of review).
+   - `brain_neighbour` 77%. The misses all go to `review` instead of
+     `conflict` or `duplicate`, which is the safe direction.
+   - `content_screen` 100%.
+   The script suggests threshold changes. With 12 to 17 cases per gate they
+   would overfit, so none were made; thresholds stay the owner's call
+   (`scripts.judge gate set`). Adding more cases first is the better fix,
+   starting with adversarial evidence.
 4. Open decision 14 (label sources) before building the labeller.
-5. Step 8.1 live: research charter v3 (live, 2026-09-26; v3 adds web search) has the owner's first
-   topic, space tech VC investment, and five checked sources (SpaceNews business,
-   Payload, TechCrunch space, Space Capital publications, Space Insider). With the
-   API deployed from Steps 5 to 8: `apply research`, then `enable research`; after five weekday mornings,
-   `scripts.department report research` is the Milestone report.
+5. Step 8.1 is live: research charter v4 (Monday to Saturday, 06:30 New York;
+   topic and sources unchanged from v3), applied and enabled. After five
+   unattended mornings, `scripts.department report research` is the Milestone
+   report. Stop there.
 6. MCP (Step 7.7): set `PUBLIC_API_URL` in Vercel to the API's address, deploy,
    then `scripts.mcp add higgsfield <its MCP URL>` and `scripts.mcp connect
    higgsfield` (opens the sign-in; a bearer token goes in `MCP_TOKEN` instead),
    `scripts.mcp tools`, `approve`, `assign`.
+7. Done: the morning brief is switched on. The newsletter migration is applied,
+   the `route_order` and `brief_rank` gates are seeded, and the Executive
+   charter v2 is applied and enabled (07:15 Monday to Saturday, New York). The
+   `morning-brief` list sends from `The Unreal Lab
+   <newsletter@theunreallab.com>` to ishanpanchaal@theunreallab.com without
+   approval. Turn `--no-auto` back on before adding anyone else. One test brief
+   (task key `test-brief:2026-09-25`) was delivered through Resend.
 
-7. Switch-on for the morning brief (owner's go, 2026-09-26; PRs #8 and #9
-   merged). Needs a session with Full network access (the pooler is not
-   HTTPS) and `DATABASE_URL` set to the pooler URL (`SUPABASE_POOLER_URL`
-   holds it), and the owner approving each live change:
-   - apply `20260926160000_newsletter.sql`; `scripts.agent seed` (adds the
-     `route_order` and `brief_rank` gates);
-   - `scripts.department sources research --days mon-sat` (keeps the topic
-     and sources), `apply research`, `enable research`;
-   - `scripts.department publish executive --starter`, `apply executive`,
-     `enable executive`;
-   - `scripts.mailing set morning-brief --from "The Unreal Lab
-     <newsletter@theunreallab.com>" --to ishanpanchaal@theunreallab.com --auto`
-     (owner confirmed both addresses and "without approval", 2026-09-26; turn
-     `--no-auto` back on before adding anyone else);
-   - Vercel `pantheon-api`: `RESEND_API_KEY`, then redeploy.
+Running scripts against the live database: `.env` `DATABASE_URL` points at the
+local Docker database, so prefix each command with
+`DATABASE_URL="$(grep -E '^SUPABASE_POOLER_URL=' ../.env | cut -d= -f2-)"`.
+Live migrations go in through the Supabase connector's `apply_migration`.
 
 ## Prompt to paste into the new chat
 
 ```
-Continue the Pantheon project on branch step-3 (do not open a PR or push; I will
-push everything together later). Read, in order: CLAUDE.md, docs/HANDOFF.md,
+Continue the Pantheon project. Branch from origin/main; work reaches main
+only through a pull request I merge. Read, in order: CLAUDE.md, docs/HANDOFF.md,
 docs/BUILD_PLAN.md (Step 5 onward), docs/research/typesafe-jev.md,
 docs/design/agent-organization.md and docs/business/the-unreal-lab.md. Then re-read the live TypeSafe docs
 (https://docs.typesafe.ai/llms.txt) and use the typesafe:typesafe-ai skill before

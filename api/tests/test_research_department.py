@@ -243,14 +243,18 @@ def test_one_unattended_morning_adds_checked_facts_and_reports(dsn: str, lab: La
         result = conn.execute(
             "select result from public.tasks where id = %s", (str(brief),)
         ).fetchone()["result"]
-        unscreened = conn.execute(
-            "select count(*) as n from public.judgments where org_id = %s and gate = 'tool_risk'",
-            (str(lab.org_id),),
-        ).fetchone()["n"]
+        gates = {
+            r["gate"]: r["n"]
+            for r in conn.execute(
+                "select gate, count(*) as n from public.judgments where org_id = %s group by gate",
+                (str(lab.org_id),),
+            ).fetchall()
+        }
     assert [f["claim"] for f in facts] == sorted(CLAIMS)
     assert {f["source"] for f in facts} == {"web:acme.example"}
     assert result["summary"].startswith("Brief:")
-    assert unscreened > 0, "the web read (R2) went through the tool-risk gate at L1"
+    assert "tool_risk" not in gates, "at L3 page reads (R2) skip the tool-risk check"
+    assert gates.get("content_screen", 0) > 0, "every page is still screened"
 
     with connect(dsn) as connection:
         report = department_report(

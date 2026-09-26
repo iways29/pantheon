@@ -198,8 +198,8 @@ def test_a_draft_or_a_charter_needing_unbuilt_tools_is_not_applied(
         department="marketing",
         charter=STARTER_CHARTERS["marketing"],
     )
-    # generate_image comes from the owner's Higgsfield MCP server, not added here.
-    with pytest.raises(CharterError, match="generate_image"):
+    # Higgsfield tools come from the owner's Higgsfield MCP server, not added here.
+    with pytest.raises(CharterError, match="mcp_higgsfield_generate_image"):
         apply_charter(db, user_id=org.user_a, org_id=org.org_a, department="marketing")
 
 

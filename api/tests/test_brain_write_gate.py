@@ -98,6 +98,7 @@ def test_a_clean_supported_fact_is_accepted_after_one_judgment(
         "opinion",
         "personal_or_secret",
         "ai_instruction",
+        "evidence_instruction",
         "volatile",
         "support",
     }
@@ -121,6 +122,7 @@ def test_the_judgment_behind_every_fact_is_queryable(
     )
     assert [r["question_id"] for r in behind] == [
         "ai_instruction",
+        "evidence_instruction",
         "opinion",
         "personal_or_secret",
         "standalone",
@@ -152,6 +154,14 @@ def test_a_fact_that_is_likely_to_change_gets_a_review_date(
 
     assert result.fact is not None
     assert result.fact.review_after == date.today() + timedelta(days=90)
+
+
+def test_evidence_that_instructs_the_checker_goes_to_a_person(
+    db: psycopg.Connection, tenants: Tenants, agent: UUID
+) -> None:
+    result = propose(db, tenants, agent, ScriptedJev(nouls={"evidence_instruction": 0.9}))
+
+    assert result.outcome == "review" and result.fact is None
 
 
 # --- Duplicates are skipped ---------------------------------------------------

@@ -107,7 +107,11 @@ def start(
             client_info = _register(client, asm, redirect_uri, server["name"])
 
     verifier = secrets.token_urlsafe(64)
-    challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode()
+    # RFC 7636: BASE64URL without padding. With the `=` a strict server
+    # (Clerk, for Higgsfield) refuses the code exchange as invalid_grant.
+    challenge = (
+        base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
+    )
     state = secrets.token_urlsafe(32)
     scope = get_client_metadata_scopes(www_scope, prm, asm, ["authorization_code", "refresh_token"])
     params = {
@@ -271,8 +275,23 @@ def _token_request(
             auth = (client_info["client_id"], secret)
     response = client.post(str(asm.token_endpoint), data=form, auth=auth)
     if response.status_code != 200:
-        raise McpAuthError(f"The token request was refused ({response.status_code})")
+        raise McpAuthError(
+            f"The token request was refused ({response.status_code}{_oauth_error(response)})"
+        )
     return OAuthToken.model_validate(response.json())
+
+
+def _oauth_error(response: httpx.Response) -> str:
+    """The server's own reason (RFC 6749 section 5.2), never a token or secret."""
+    try:
+        body = response.json()
+    except ValueError:
+        return ""
+    if not isinstance(body, dict) or not isinstance(body.get("error"), str):
+        return ""
+    detail = body.get("error_description")
+    reason = body["error"] + (f": {detail}" if isinstance(detail, str) else "")
+    return f": {reason[:300]}"
 
 
 def _store_token(connection: psycopg.Connection, record: dict[str, Any], token: OAuthToken) -> None:

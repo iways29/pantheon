@@ -404,3 +404,68 @@ def test_the_brief_lists_what_was_learned_from_the_web(dsn: str, office: Office)
     assert findings["title"] == "New from your sources (1)"
     assert "Lightspeed is targeting $250 million" in findings["detail"]
     assert "(techcrunch.com)" in findings["detail"]
+
+
+def test_a_bad_day_still_leads_with_what_was_found(dsn: str, office: Office) -> None:
+    import dataclasses
+
+    from app.brain import Brain, HashingEmbedder
+    from app.tasks import order
+    from tests.conftest_db import admit
+
+    with connect(dsn) as connection:
+        with acting_as(connection, user_id=str(office.user_id)) as conn:
+            Brain(conn, HashingEmbedder()).insert_fact(
+                org_id=office.org_id,
+                claim="Lightspeed is targeting $250 million for an early-stage AI fund in India.",
+                source="web:techcrunch.com",
+                admission=dataclasses.replace(admit(conn, office.org_id)),
+            )
+        for n in range(12):
+            failed = order(
+                connection,
+                user_id=office.user_id,
+                org_id=office.org_id,
+                agent="research-lead",
+                title=f"Attempt {n}",
+            )
+            with as_service_role(connection) as conn:
+                conn.execute(
+                    "update public.tasks set status = 'failed', error = 'max_tokens', "
+                    "finished_at = now() where id = %s",
+                    (str(failed.id),),
+                )
+                conn.execute(
+                    "insert into public.approvals (org_id, action_type, payload) "
+                    "values (%s, 'fact_write', %s)",
+                    (str(office.org_id), json.dumps({"claim": f"Held claim {n}."})),
+                )
+        order(
+            connection,
+            user_id=office.user_id,
+            org_id=office.org_id,
+            agent="brief-writer",
+            title="Morning brief",
+        )
+    writer = Writer()
+    with connect(dsn) as connection, as_service_role(connection) as conn:
+        (run_id,) = [
+            r["id"]
+            for r in conn.execute("select public.dispatch_queued_tasks() as id").fetchall()
+            if conn.execute(
+                "select 1 from public.runs r join public.agents a on a.id = r.agent_id "
+                "where r.id = %s and a.name = 'brief-writer'",
+                (r["id"],),
+            ).fetchone()
+        ]
+    assert advance_run(runtime(dsn, ScriptedJev(), writer), run_id, deadline_seconds=60).status == (
+        "succeeded"
+    )
+
+    sent = json.loads(writer.calls[0][1]["content"])
+    items = sent["lead"] + sent["rest"]
+    assert sent["lead"][0]["kind"] == "findings", "what was found always leads"
+    (problems,) = [i for i in items if i["kind"] == "problem"]
+    assert problems["title"] == "Problems since the last brief (12)"
+    (held,) = [i for i in items if i["title"].startswith("Facts held")]
+    assert held["title"] == "Facts held for your review (12)" and "Held claim 3." in held["detail"]

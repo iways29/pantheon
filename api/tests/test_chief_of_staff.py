@@ -302,3 +302,38 @@ def test_the_brief_leads_with_what_needs_the_owner(dsn: str, office: Office) -> 
     sent = json.loads(writer.calls[0][1]["content"])
     assert sent["lead"][0]["title"] == "Waiting for you: route_order"
     assert writer.calls[0][0]["content"].startswith("You write the owner's morning brief")
+
+
+def test_the_brief_says_when_this_mornings_work_has_not_finished(dsn: str, office: Office) -> None:
+    with connect(dsn) as connection:
+        from app.tasks import order
+
+        order(
+            connection,
+            user_id=office.user_id,
+            org_id=office.org_id,
+            agent="research-lead",
+            title="Morning research brief",
+        )
+        brief = order(
+            connection,
+            user_id=office.user_id,
+            org_id=office.org_id,
+            agent="brief-writer",
+            title="Morning brief",
+        )
+    writer = Writer()
+    rt = runtime(dsn, ScriptedJev(), writer)
+    with connect(dsn) as connection, as_service_role(connection) as conn:
+        (run_id,) = [
+            r["id"]
+            for r in conn.execute("select public.dispatch_queued_tasks() as id").fetchall()
+            if conn.execute(
+                "select 1 from public.runs where id = %s and task_id = %s", (r["id"], str(brief.id))
+            ).fetchone()
+        ]
+    assert advance_run(rt, run_id, deadline_seconds=60).status == "succeeded"
+
+    sent = json.loads(writer.calls[0][1]["content"])
+    titles = [i["title"] for i in sent["lead"] + sent.get("rest", [])]
+    assert "Not finished yet: Morning research brief" in titles

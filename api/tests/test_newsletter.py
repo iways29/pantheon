@@ -315,3 +315,13 @@ def test_resend_is_called_as_its_docs_say(monkeypatch: pytest.MonkeyPatch) -> No
         ResendMailer(api_key="re_test").send(
             Outgoing("a <b@c.com>", ["d@e.com"], "s", "t", "h", "k")
         )
+
+
+def test_markdown_bold_is_bold_in_html_and_plain_in_text() -> None:
+    from app.mail.outbox import plain_text, render_html
+
+    body = "**Morning brief**\n\n- 3 facts <added>"
+    rendered = render_html("Brief", body)
+    assert "<strong>Morning brief</strong>" in rendered and "**" not in rendered
+    assert "&lt;added&gt;" in rendered, "still escaped"
+    assert plain_text(body) == "Morning brief\n\n- 3 facts <added>"

@@ -27,10 +27,13 @@ from app.knowledge.wiring import agent_services
 from app.mail import mailer_from
 from app.tracing import tracer_from
 
-#: One invocation's time budget. Vercel's function limit for this app is 60s
-#: (vercel.json), so this leaves room to record where the run stopped. A run
-#: that needs longer is paused and picked up by the scheduler's next poke.
-ADVANCE_DEADLINE_SECONDS = 45.0
+#: One invocation's time budget. Vercel's function limit for this app is 300s
+#: (vercel.json), and the deadline is only checked between steps, so it leaves
+#: room for one model call (at most MODEL_CALL_TIMEOUT_SECONDS, factory.py)
+#: plus start-up. A run that needs longer is paused and picked up by the
+#: scheduler's next poke. The run lease (300s) must not be shorter than the
+#: function limit, or a second invocation could claim a run still going.
+ADVANCE_DEADLINE_SECONDS = 180.0
 
 router = APIRouter(prefix="/internal", tags=["internal"])
 

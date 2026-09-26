@@ -195,6 +195,27 @@ def _items(cursor: psycopg.Cursor, run: "_Run", since: datetime) -> list[dict[st
                 "detail": (r["error"] or "")[:300],
             }
         )
+    # This morning's work that has not finished: a stuck or slow department
+    # must reach the owner now, not after it fails.
+    cursor.execute(
+        """
+        select t.title, t.status, a.name as agent
+          from public.tasks t join public.agents a on a.id = t.assigned_agent_id
+         where t.org_id = %s and t.parent_task_id is null and t.created_at >= %s
+           and t.status in ('queued', 'running', 'blocked') and t.id <> %s
+         order by t.created_at
+        """,
+        (str(run.org_id), since, str(run.task_id)),
+    )
+    for r in cursor.fetchall():
+        items.append(
+            {
+                "kind": "problem",
+                "title": f"Not finished yet: {r['title']}",
+                "agent": r["agent"],
+                "detail": f"Still {r['status']} when the brief was written.",
+            }
+        )
     cursor.execute(
         """
         select t.title, t.status, t.result->>'summary' as summary, t.error, a.name as agent

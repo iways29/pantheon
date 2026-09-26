@@ -14,6 +14,7 @@ sent once by the backend (ADR 028).
 
 import html
 import json
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -123,7 +124,7 @@ def compose(
             mailing_list["from_address"],
             mailing_list["recipients"],
             subject,
-            body,
+            plain_text(body),
             render_html(subject, body),
             idempotency_key,
         ),
@@ -172,11 +173,24 @@ def send(connection: psycopg.Connection, mailer: Mailer | None, email_id: UUID |
     return _record(connection, email_id, "sent", provider_id=provider_id)
 
 
+_BOLD = re.compile(r"\*\*(.+?)\*\*")
+
+
+def plain_text(body: str) -> str:
+    """The text version: models write **bold**; mail clients show the stars."""
+    return _BOLD.sub(r"\1", body)
+
+
 def render_html(subject: str, body: str) -> str:
-    """The brief as simple HTML: paragraphs and line breaks, everything escaped."""
+    """The brief as simple HTML: paragraphs, line breaks and **bold**, all escaped."""
     paragraphs = [p.strip() for p in body.strip().split("\n\n") if p.strip()]
     inner = "\n".join(
-        f"<p>{'<br>'.join(html.escape(line) for line in p.splitlines())}</p>" for p in paragraphs
+        "<p>"
+        + "<br>".join(
+            _BOLD.sub(r"<strong>\1</strong>", html.escape(line)) for line in p.splitlines()
+        )
+        + "</p>"
+        for p in paragraphs
     )
     return (
         '<!doctype html><html><body style="font-family:-apple-system,Segoe UI,Helvetica,'

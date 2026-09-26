@@ -72,8 +72,12 @@ def run(session: "Session", run: "_Run") -> dict[str, Any]:
     since = _since(cursor, run)
     items = _items(cursor, run, since)
     policy = load_gate(session.connection, org_id=run.org_id, gate=GATE).policy
-    items = items[: int(policy.setting("max_items", 15))]
-    ranked = _rank(session, run, items, policy)
+    # What the departments found is the point of the brief: it is never cut
+    # and always leads; everything else is ranked (idea 6).
+    findings = [i for i in items if i["kind"] == "findings"]
+    others = [i for i in items if i["kind"] != "findings"]
+    others = others[: max(int(policy.setting("max_items", 15)) - len(findings), 0)]
+    ranked = findings + _rank(session, run, others, policy)
     lead_count = int(policy.setting("lead_count", 5))
     lead, rest = ranked[:lead_count], ranked[lead_count:]
     response = session.gateway.complete(
@@ -215,14 +219,20 @@ def _items(cursor: psycopg.Cursor, run: "_Run", since: datetime) -> list[dict[st
         """
         select ap.action_key, ap.recommendation, ap.explanation, ap.created_at, a.name as agent,
                ap.payload->>'tool' as tool, ap.payload->'arguments' as arguments,
-               ap.payload->>'order' as order_text
+               ap.payload->>'order' as order_text,
+               case when ap.action_type = 'fact_write' then ap.payload->>'claim' end
+                 as fact_claim
           from public.approvals ap left join public.agents a on a.id = ap.agent_id
          where ap.org_id = %s and ap.status = 'pending'
          order by ap.created_at
         """,
         (str(run.org_id),),
     )
+    held_facts: list[str] = []
     for r in cursor.fetchall():
+        if r["fact_claim"]:
+            held_facts.append(r["fact_claim"])
+            continue
         # A held tool call, a routing question, or (a draft) its explanation.
         what = (
             r["order_text"]
@@ -239,6 +249,17 @@ def _items(cursor: psycopg.Cursor, run: "_Run", since: datetime) -> list[dict[st
                 "recommendation": r["recommendation"],
             }
         )
+    if held_facts:
+        items.append(
+            {
+                "kind": "approval",
+                "title": f"Facts held for your review ({len(held_facts)})",
+                "detail": " | ".join(held_facts)[:1500],
+                "how": "scripts.brain held, then admit or reject",
+            }
+        )
+    # Problems are one item, counted: a bad day must not crowd out the rest.
+    problems: list[str] = []
     cursor.execute(
         """
         select r.status, r.stop_reason, r.error, a.name as agent
@@ -249,14 +270,7 @@ def _items(cursor: psycopg.Cursor, run: "_Run", since: datetime) -> list[dict[st
         (str(run.org_id), since, list(QUIET_REASONS)),
     )
     for r in cursor.fetchall():
-        items.append(
-            {
-                "kind": "problem",
-                "title": f"{r['agent']} {r['status']}: {r['stop_reason']}",
-                "agent": r["agent"],
-                "detail": (r["error"] or "")[:300],
-            }
-        )
+        problems.append(f"{r['agent']} {r['status']}: {r['stop_reason']}")
     # This morning's work that has not finished: a stuck or slow department
     # must reach the owner now, not after it fails.
     cursor.execute(
@@ -289,12 +303,28 @@ def _items(cursor: psycopg.Cursor, run: "_Run", since: datetime) -> list[dict[st
         (str(run.org_id), since, str(run.agent_id)),
     )
     for r in cursor.fetchall():
+        if r["status"] != "done":
+            problems.append(f"{r['title']} {r['status']}: {(r['error'] or '')[:120]}")
+            continue
         items.append(
             {
                 "kind": "task",
-                "title": f"{r['title']} ({r['status']})",
+                "title": r["title"],
                 "agent": r["agent"],
-                "detail": (r["summary"] or r["error"] or "")[:500],
+                "detail": (r["summary"] or "")[:500],
+            }
+        )
+    if problems:
+        counted: dict[str, int] = {}
+        for problem in problems:
+            counted[problem] = counted.get(problem, 0) + 1
+        items.append(
+            {
+                "kind": "problem",
+                "title": f"Problems since the last brief ({len(problems)})",
+                "detail": " | ".join(f"{p} (x{n})" if n > 1 else p for p, n in counted.items())[
+                    :800
+                ],
             }
         )
     cursor.execute(

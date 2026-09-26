@@ -167,8 +167,12 @@ is blank.
    ASHVAA README (admitted through the write gate; held ones approved with
    `scripts.brain admit <id> --public`). Left out on purpose: "looking for
    our first LPs" (fund solicitation) and the Fortune 500 line (never point at
-   an employer). The company brief is **not uploaded**: `scripts.knowledge add`
-   needs `SUPABASE_SERVICE_ROLE_KEY` in `.env`, which is blank. Owner's desk:
+   an employer). The full brief is quarantined by screening (its agent rules read
+   as instructions to an AI), so `docs/business/company-profile.md`, a
+   descriptive version without the rules or the TV character names, is the
+   company document agents read (uploaded clean 2026-09-26). The owner's shell
+   exports an empty `SUPABASE_SERVICE_ROLE_KEY`, which overrides `.env`: run
+   `scripts.knowledge` with `env -u SUPABASE_SERVICE_ROLE_KEY`. Owner's desk:
    `scripts.draft list|show|approve|reject|posted|trace|public`.
 
 Local tests: `pantheon_dev` and `pantheon_test` in the Docker container are

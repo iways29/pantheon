@@ -525,6 +525,11 @@ The proposal, charters and starting budgets are in
   subscription, as MCP tools (Step 7.7): R4, approved per piece, with a daily cap.
   Needs from the owner: what the business sells and to whom, example content in the
   voice they want, the channels, and any banned claims. Sales and Outreach follows it.
+  **Status (2026-09-26):** built and tested (ADR 029), not applied live. Charter v2
+  (Content Lead, topic researcher, writer, editor; L1; 06:45 Monday to Friday):
+  `drafts` and `artifact_claims`, tools `save_draft`, `check_draft`, `list_drafts`,
+  gates `draft_claim` and `draft_voice`, the owner's `scripts.draft`. Not yet: the
+  repeat check and the Step 9 cascade.
 - **8.4 Product and Engineering (L).** Any change to code is an approval, always.
 - **8.5 Finance and Cost controller (M).** Read-only on money; feeds Step 12.
 - **8.6 Founder Relations (deferred).** Inbound founder applications read and scored

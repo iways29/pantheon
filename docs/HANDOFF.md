@@ -124,19 +124,25 @@ those; the API's 401 versus 503 answers reveal whether `TRIGGER_SECRET` is set.
    - `brain_neighbour` 77%. The misses all go to `review` instead of
      `conflict` or `duplicate`, which is the safe direction.
    - `content_screen` 100%.
-   The script suggests threshold changes. With 12 to 17 cases per gate they
-   would overfit, so none were made; thresholds stay the owner's call
-   (`scripts.judge gate set`). Adding more cases first is the better fix,
-   starting with adversarial evidence.
+   Then 18 more `brain_claim` cases (35 now, mostly evidence that tries to
+   steer the checker) and, with the owner's go, a seventh question
+   `evidence_instruction` (0.3 or more: review). Live gate `brain_claim` is
+   **v2**: 89% on 35 cases, no harmful misses, $0.004 per run. Roll back with
+   `scripts.judge gate activate brain_claim 1`. No thresholds changed.
 4. Open decision 14 (label sources) before building the labeller.
 5. Step 8.1 is live: research charter v4 (Monday to Saturday, 06:30 New York;
    topic and sources unchanged from v3), applied and enabled. After five
    unattended mornings, `scripts.department report research` is the Milestone
    report. Stop there.
-6. MCP (Step 7.7): set `PUBLIC_API_URL` in Vercel to the API's address, deploy,
-   then `scripts.mcp add higgsfield <its MCP URL>` and `scripts.mcp connect
-   higgsfield` (opens the sign-in; a bearer token goes in `MCP_TOKEN` instead),
-   `scripts.mcp tools`, `approve`, `assign`.
+6. Done: Higgsfield (`https://mcp.higgsfield.ai/mcp`, OAuth through Clerk) is
+   connected: 101 tools, 7 on. `generate_image` (R4, approval, 10 a day),
+   `generate_video` (R4, approval, 2 a day); `job_status`, `jobs_wait`,
+   `show_generation_by_ids`, `balance`, `models_explore` automatic. None is
+   assigned to an agent yet: assign them to Marketing's agents in 8.3. Keep off:
+   `generate_*_batch` (suggested R1 but they spend credits), `website_secrets`,
+   `tiktok_publish`, billing and trial tools. MCP generations always spend
+   credits. `PUBLIC_API_URL` is not in `.env`; pass
+   `PUBLIC_API_URL=https://api-xi-opal-67.vercel.app` to `scripts.mcp connect`.
 7. Done: the morning brief is switched on. The newsletter migration is applied,
    the `route_order` and `brief_rank` gates are seeded, and the Executive
    charter v2 is applied and enabled (07:15 Monday to Saturday, New York). The
@@ -149,19 +155,35 @@ Running scripts against the live database: `.env` `DATABASE_URL` points at the
 local Docker database, so prefix each command with
 `DATABASE_URL="$(grep -E '^SUPABASE_POOLER_URL=' ../.env | cut -d= -f2-)"`.
 Live migrations go in through the Supabase connector's `apply_migration`.
+The owner's user id: `scripts.agent seed` needs `--user-id` if `OWNER_USER_ID`
+is blank.
+
+8. **Next: Step 8.3 Marketing and Content** (owner starts it, 2026-09-27). The
+   inputs are in `docs/business/the-unreal-lab.md` (voice, hard rules, five
+   channels, posting by hand, Higgsfield visuals, some emoji, weekly
+   newsletter, no voice samples yet). The draft charter is `MARKETING` in
+   `api/app/departments/starter_charters.py`. The owner is designing the brain
+   UI separately (Step 10 territory): do not pick the UI framework unasked.
+
+Local tests: `pantheon_dev` and `pantheon_test` in the Docker container are
+behind on migrations. Use the fresh `pantheon_ci` database (482 tests pass):
+`DATABASE_URL=postgresql://pantheon:pantheon@127.0.0.1:55432/pantheon_ci`.
+Rebuild it with `scripts/local_db.sh reset` (`DB_NAME=pantheon_ci`), with
+`PSQL_SUPER` set to a wrapper that runs `docker exec -i pantheon-testdb psql -U
+postgres` and feeds `-f` files on stdin.
 
 ## Prompt to paste into the new chat
 
 ```
-Continue the Pantheon project. Branch from origin/main; work reaches main
-only through a pull request I merge. Read, in order: CLAUDE.md, docs/HANDOFF.md,
-docs/BUILD_PLAN.md (Step 5 onward), docs/research/typesafe-jev.md,
-docs/design/agent-organization.md and docs/business/the-unreal-lab.md. Then re-read the live TypeSafe docs
-(https://docs.typesafe.ai/llms.txt) and use the typesafe:typesafe-ai skill before
-coding. Start Step 5.1 (judge core). First ask me to confirm open decisions 10
-(thin httpx transport to TypeSafe) and 11 (no sensitive data to TypeSafe for now)
-in one short question, using the recommendations in the plan. I am arranging the
-TYPESAFE_API_KEY myself; until it is set, build and test against a scripted
-transport. Explain things in simple, plain language, and stop at the Step 5
-Milestone.
+Continue the Pantheon project. Fetch first; branch from origin/main; work
+reaches main only through a pull request I merge. Read, in order: CLAUDE.md,
+docs/HANDOFF.md, docs/BUILD_PLAN.md (Step 8 onward),
+docs/design/agent-organization.md (section 8.1) and
+docs/business/the-unreal-lab.md. Then start Step 8.3, Marketing and Content:
+review the draft MARKETING charter against the business brief, tell me in one
+short message what you would change and what it will cost per day, and wait
+for my go before publishing or applying it live. Research's five mornings
+are running; after five, write the Step 8.1 Milestone report
+(scripts.department report research) and stop for me. Ask before every live
+change. Explain things in simple, plain language.
 ```

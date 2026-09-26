@@ -56,9 +56,10 @@ def triggers(db: psycopg.Connection, org_id: UUID) -> list[dict[str, Any]]:
 # --- The charter itself --------------------------------------------------------------
 
 
-def test_the_starting_charters_are_valid_and_two_are_drafts() -> None:
-    assert not RESEARCH.draft
-    assert STARTER_CHARTERS["executive"].draft and STARTER_CHARTERS["marketing"].draft
+def test_the_starting_charters_are_valid_and_marketing_is_a_draft() -> None:
+    assert not RESEARCH.draft and not STARTER_CHARTERS["executive"].draft
+    assert STARTER_CHARTERS["marketing"].draft
+    assert STARTER_CHARTERS["executive"].head.role_type == "chief_of_staff"
     assert [a.name for a in RESEARCH.agents] == ["research-lead", "web-researcher", "fact-curator"]
 
 

@@ -164,6 +164,12 @@ class Policy(BaseModel):
             raise ValueError(f"setting {name!r} must be a number")
         return float(value)
 
+    def text_setting(self, name: str, default: str | None = None) -> str | None:
+        value = self.settings.get(name, default)
+        if value is not None and not isinstance(value, str):
+            raise ValueError(f"setting {name!r} must be text")
+        return value
+
     @model_validator(mode="after")
     def _known_outcomes(self) -> "Policy":
         if len(set(self.outcomes)) != len(self.outcomes):

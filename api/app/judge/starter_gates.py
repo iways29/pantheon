@@ -783,6 +783,120 @@ OWNER_CONFLICT = StarterGate(
     },
 )
 
+# --- The Chief of Staff (Step 8.2): routing an order -------------------------------
+#
+# State: {"order": ..., "departments": {name: purpose}}. The department options
+# are the departments that exist, added by code from their charters on each
+# call; `owner` is the one stored option (right-hand idea 5: an order only the
+# owner can settle, or one that fits nowhere, comes back as a question).
+
+ROUTE_ORDER = StarterGate(
+    gate="route_order",
+    questions=(
+        StarterQuestion(
+            key="department",
+            type="choice",
+            instructions=(
+                "Which department should carry out `order`? `departments` says what each "
+                "one is for."
+            ),
+            criteria={
+                "owner": (
+                    "Only the owner can decide or do this, or it fits none of the departments."
+                )
+            },
+        ),
+        StarterQuestion(
+            key="complexity",
+            type="score",
+            instructions="How hard is `order` to do well?",
+            criteria=[
+                "Simple: a lookup or a short, routine piece of work.",
+                "Moderate: several steps, or some judgement.",
+                "Complex: open-ended, high-stakes, or needing deep expertise.",
+            ],
+        ),
+    ),
+    policy={
+        "outcomes": ["route", "ask"],
+        "rules": [
+            {
+                "question": "department",
+                "choice_in": ["owner"],
+                "outcome": "ask",
+                "reason": "Only the owner can settle this",
+            },
+            {
+                "question": "department",
+                "confidence_below": 0.6,
+                "outcome": "ask",
+                "reason": "Not clear which department should do this",
+            },
+        ],
+        # Complexity level 0, 1, 2 suggests these tiers; owner facts checked for
+        # a conflict with the order (right-hand idea 4).
+        "settings": {
+            "tier_simple": "cheap",
+            "tier_moderate": "standard",
+            "tier_complex": "frontier",
+            "owner_facts": 3,
+        },
+    },
+)
+
+# --- The morning brief (Step 8.2): what the owner should see first ----------------
+#
+# State: {"item": {...}}: one overnight item (a finished task, a waiting
+# approval, a failure, spend). Right-hand idea 6: the brief leads with the
+# items that score highest; the weights are settings.
+
+BRIEF_RANK = StarterGate(
+    gate="brief_rank",
+    questions=(
+        StarterQuestion(
+            key="urgency",
+            type="score",
+            instructions="How soon does the owner need to know about, or act on, `item`?",
+            criteria=[
+                "Can wait: no time pressure.",
+                "Soon: within the next few days.",
+                "Today: it needs attention today.",
+            ],
+        ),
+        StarterQuestion(
+            key="impact",
+            type="score",
+            instructions="How much could `item` matter to the business?",
+            criteria=[
+                "Little: routine.",
+                "Some: worth knowing.",
+                "A lot: money, reputation, or an important decision.",
+            ],
+        ),
+        StarterQuestion(
+            key="needs_owner",
+            type="noul",
+            instructions="Does `item` need the owner to decide or do something?",
+        ),
+    ),
+    policy={
+        "outcomes": ["routine", "lead"],
+        "rules": [
+            {"question": "needs_owner", "noul_at_least": 0.6, "outcome": "lead"},
+            {"question": "urgency", "score_at_least": 1.5, "outcome": "lead"},
+            {"question": "impact", "score_at_least": 1.5, "outcome": "lead"},
+        ],
+        "settings": {
+            "weight_urgency": 1.0,
+            "weight_impact": 1.0,
+            "weight_needs_owner": 2.0,
+            "lead_count": 5,
+            "max_items": 15,
+        },
+    },
+    fail_mode="open",
+)
+
 STARTER_GATES: tuple[StarterGate, ...] = (
     TOOL_SELECT,
     BRAIN_CLAIM,
@@ -793,4 +907,6 @@ STARTER_GATES: tuple[StarterGate, ...] = (
     TOOL_RISK,
     APPROVAL_RECOMMEND,
     OWNER_CONFLICT,
+    ROUTE_ORDER,
+    BRIEF_RANK,
 )

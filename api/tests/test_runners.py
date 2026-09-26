@@ -268,7 +268,7 @@ def test_a_head_and_two_workers_complete_a_task_tree(dsn: str, team: Team) -> No
     assert w1_calls == 4
 
 
-def test_a_runner_that_is_not_built_yet_fails_clearly(dsn: str, team: Team) -> None:
+def test_a_digest_agent_without_its_brief_prompt_fails_clearly(dsn: str, team: Team) -> None:
     with connect(dsn) as connection:
         with as_service_role(connection) as conn:
             conn.execute(
@@ -282,5 +282,5 @@ def test_a_runner_that_is_not_built_yet_fails_clearly(dsn: str, team: Team) -> N
 
     result = advance_run(runtime(dsn, ScriptedTeam()), run_id, deadline_seconds=60)
 
-    assert (result.status, result.stop_reason) == ("failed", "runner_not_built")
+    assert (result.status, result.stop_reason) == ("failed", "prompt_missing")
     assert status(dsn, task.id) == "failed"

@@ -138,18 +138,21 @@ RESEARCH: Final = Charter(
 )
 
 EXECUTIVE: Final = Charter(
-    draft=True,
     purpose=(
-        "Take the owner's orders and route them, compile the morning brief and the "
-        "approvals digest, and keep the owner in control."
+        "Keep the owner in control: take the owner's orders and hand each to the right "
+        "department, write the morning brief with what needs the owner first, and list "
+        "the approvals waiting."
     ),
     daily_budget_usd=Decimal("0.10"),
+    autonomy_level="L1",
     head=AgentPlan(
         name="chief-of-staff",
         role="executive",
         tier="cheap",
         runner="router",
-        allowed_tools=["create_task", "report_result", "brain_search"],
+        role_type="chief_of_staff",
+        allowed_tools=[],
+        prompts={"explain": EXPLAIN},
     ),
     workers=[
         AgentPlan(
@@ -157,11 +160,43 @@ EXECUTIVE: Final = Charter(
             role="executive",
             tier="cheap",
             runner="digest",
-            allowed_tools=["brain_search", "report_result"],
+            allowed_tools=[],
+            prompts={
+                "brief": (
+                    "You write the owner's morning brief from the items you are given, "
+                    "already ranked. Start with the `lead` items, one short line each: what "
+                    "happened, and what the owner must do, if anything. Then two or three "
+                    "lines on the rest. End with what was spent against the budget. Report "
+                    "only what the items say; never add facts. Plain English, no hype, at "
+                    "most 200 words."
+                ),
+            },
         ),
     ],
-    approval_rules=["Nothing external."],
-    metrics=["The brief leads with what needs the owner.", "Orders are routed correctly."],
+    routine=[
+        RoutineItem(
+            key="morning-brief",
+            agent="brief-writer",
+            title="Morning brief",
+            instructions="Write the owner's morning brief and the approvals waiting.",
+            # After Research's 06:30 run, Monday to Saturday.
+            time="07:15",
+            days=[1, 2, 3, 4, 5, 6],
+            timezone="America/New_York",
+            max_steps=5,
+            max_tokens=20000,
+        )
+    ],
+    approval_rules=[
+        "Nothing external: the Chief of Staff routes work and writes the brief.",
+        "An order it cannot route with confidence, or that goes against an owner "
+        "decision, comes back to the owner as a question.",
+    ],
+    gates=["route_order", "brief_rank", "owner_conflict"],
+    metrics=[
+        "Orders reach the right department; questions back to the owner are few and fair.",
+        "The brief leads with what the owner needs to act on.",
+    ],
 )
 
 MARKETING: Final = Charter(

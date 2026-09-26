@@ -56,9 +56,8 @@ def triggers(db: psycopg.Connection, org_id: UUID) -> list[dict[str, Any]]:
 # --- The charter itself --------------------------------------------------------------
 
 
-def test_the_starting_charters_are_valid_and_marketing_is_a_draft() -> None:
-    assert not RESEARCH.draft and not STARTER_CHARTERS["executive"].draft
-    assert STARTER_CHARTERS["marketing"].draft
+def test_the_starting_charters_are_valid_and_final() -> None:
+    assert not any(c.draft for c in STARTER_CHARTERS.values())
     assert STARTER_CHARTERS["executive"].head.role_type == "chief_of_staff"
     assert [a.name for a in RESEARCH.agents] == ["research-lead", "web-researcher", "fact-curator"]
 
@@ -188,11 +187,19 @@ def test_a_new_version_updates_agents_prompts_and_routine(
 def test_a_draft_or_a_charter_needing_unbuilt_tools_is_not_applied(
     db: psycopg.Connection, org: Tenants
 ) -> None:
+    draft = STARTER_CHARTERS["marketing"].model_copy(update={"draft": True})
+    publish(db, user_id=org.user_a, org_id=org.org_a, department="marketing", charter=draft)
     with pytest.raises(CharterError, match="draft"):
         apply_charter(db, user_id=org.user_a, org_id=org.org_a, department="marketing")
-    final = STARTER_CHARTERS["marketing"].model_copy(update={"draft": False})
-    publish(db, user_id=org.user_a, org_id=org.org_a, department="marketing", charter=final)
-    with pytest.raises(CharterError, match="save_draft"):
+    publish(
+        db,
+        user_id=org.user_a,
+        org_id=org.org_a,
+        department="marketing",
+        charter=STARTER_CHARTERS["marketing"],
+    )
+    # generate_image comes from the owner's Higgsfield MCP server, not added here.
+    with pytest.raises(CharterError, match="generate_image"):
         apply_charter(db, user_id=org.user_a, org_id=org.org_a, department="marketing")
 
 

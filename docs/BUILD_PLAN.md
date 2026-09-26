@@ -498,6 +498,16 @@ The proposal, charters and starting budgets are in
   full morning end to end in tests. Charters are stored live; the department is not
   applied or switched on live yet. The five unattended mornings need the owner's
   topics and sources, the API deployed with Steps 5 to 8, and the owner's go.
+- **8.1b Tomorrow's question (S, owner 2026-09-26).** Standing topics keep running
+  on their own; on top, the owner can say what they want to know tomorrow. Each
+  evening (time is data, default 21:00 New York) the Chief of Staff emails one
+  line: "Anything you want researched tomorrow?" The owner answers with an order
+  (`scripts.order`, `POST /orders`, later the Control Center and the chat), or by
+  replying to the email once inbound mail is built (check Resend's inbound docs
+  first). The answer is added to the next morning's research task once, then
+  cleared; no answer means the standing topics only. Every extra question is an
+  event, and the brief says which parts answer it. Standing topics, sources and
+  the nightly prompt are editable in the Control Center (Step 11, item 6).
 - **8.2 Executive Office and Chief of Staff (M).** Intake: a Jev Choice over the
   departments (descriptions read from the database) plus a complexity Score, giving
   the department, the model tier, or a person. An order endpoint and CLI so the

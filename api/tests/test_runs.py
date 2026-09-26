@@ -229,7 +229,7 @@ def test_every_fact_a_run_stores_passed_the_write_gate(dsn: str, live: LiveOrg) 
         str(run_id),
     )
     assert sorted(r["claim"] for r in stored) == sorted(CLAIMS)
-    assert all(r["answers"] == 6 for r in stored)
+    assert all(r["answers"] == 7 for r in stored)
     evidence = {c["state"]["evidence"] for c in jev.calls_for("support")}
     assert evidence == {ANSWER}, "the answer is the evidence for the claims taken from it"
 

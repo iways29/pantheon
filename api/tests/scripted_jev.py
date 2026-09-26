@@ -26,6 +26,7 @@ DEFAULT_NOULS = {
     "opinion": 0.02,
     "personal_or_secret": 0.01,
     "ai_instruction": 0.01,
+    "evidence_instruction": 0.01,
     "volatile": 0.1,
     "contradicts": 0.02,
     "updates": 0.02,

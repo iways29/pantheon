@@ -469,3 +469,63 @@ def test_a_bad_day_still_leads_with_what_was_found(dsn: str, office: Office) -> 
     assert problems["title"] == "Problems since the last brief (12)"
     (held,) = [i for i in items if i["title"].startswith("Facts held")]
     assert held["title"] == "Facts held for your review (12)" and "Held claim 3." in held["detail"]
+
+
+@dataclass
+class NoCredit(Writer):
+    """A provider that refuses every call: the account is out of credit."""
+
+    def complete(self, *, model: str, messages: list[dict[str, Any]], **kw: Any) -> ModelResponse:
+        from app.gateway import UpstreamError
+
+        raise UpstreamError("OpenRouter returned 402: This request requires more credits")
+
+
+def test_out_of_credit_leads_the_brief_which_still_goes_out(dsn: str, office: Office) -> None:
+    from app.tasks import order
+
+    with connect(dsn) as connection:
+        stalled = order(
+            connection,
+            user_id=office.user_id,
+            org_id=office.org_id,
+            agent="research-lead",
+            title="Morning research brief",
+        )
+        with as_service_role(connection) as conn:
+            conn.execute(
+                "insert into public.runs (org_id, agent_id, trigger, status, stop_reason, error, "
+                "idempotency_key, requested_by, task_id) "
+                "select org_id, assigned_agent_id, 'task', 'paused', 'upstream_error', %s, %s, "
+                "requested_by, id from public.tasks where id = %s",
+                (
+                    "OpenRouter returned 402: This request requires more credits",
+                    str(uuid.uuid4()),
+                    str(stalled.id),
+                ),
+            )
+        brief = order(
+            connection,
+            user_id=office.user_id,
+            org_id=office.org_id,
+            agent="brief-writer",
+            title="Morning brief",
+        )
+    with connect(dsn) as connection, as_service_role(connection) as conn:
+        (run_id,) = [
+            r["id"]
+            for r in conn.execute("select public.dispatch_queued_tasks() as id").fetchall()
+            if conn.execute(
+                "select 1 from public.runs where id = %s and task_id = %s", (r["id"], str(brief.id))
+            ).fetchone()
+        ]
+    result = advance_run(runtime(dsn, ScriptedJev(), NoCredit()), run_id, deadline_seconds=60)
+
+    assert result.status == "succeeded", "no model is no reason to stay silent"
+    with connect(dsn) as connection, as_service_role(connection) as conn:
+        output = conn.execute(
+            "select result from public.tasks where id = %s", (str(brief.id),)
+        ).fetchone()["result"]
+    assert output["lead"][0]["kind"] == "alert"
+    assert output["summary"].startswith("The brief writer could not reach its model")
+    assert "- OpenRouter is out of credit: agents cannot run" in output["summary"]

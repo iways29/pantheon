@@ -557,3 +557,28 @@ def test_a_run_paused_by_a_provider_error_is_retried(
         db, tenants, agent, trigger="task", status="paused", stop_reason="upstream_error"
     )
     assert wakeups(db) == [run], "a rate limit passes; the morning must not stop for good"
+
+
+def test_the_owner_can_resume_runs_paused_by_a_provider_error(
+    db: psycopg.Connection, tenants: Tenants, agent: uuid.UUID
+) -> None:
+    from app.agents.autonomy import resume_paused_runs
+
+    run = make_run(
+        db,
+        tenants,
+        agent,
+        trigger="task",
+        status="paused",
+        stop_reason="upstream_error",
+        wake_count=5,
+    )
+    assert wakeups(db) == [], "its automatic retries are spent"
+
+    assert (
+        resume_paused_runs(
+            db, user_id=tenants.user_a, org_id=tenants.org_a, reason="upstream_error"
+        )
+        == 1
+    )
+    assert wakeups(db) == [run], "after a top-up, the owner's resume wakes it again"

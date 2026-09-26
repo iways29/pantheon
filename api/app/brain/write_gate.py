@@ -27,7 +27,7 @@ import json
 import re
 from dataclasses import dataclass, field
 from datetime import date, timedelta
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 import psycopg
@@ -281,6 +281,60 @@ class BrainWriter:
         if "conflict" in by_outcome:
             return WriteResult("disputed", texts("conflict"), fact=fact, judgments=requests)
         return WriteResult("accepted", _texts(verdict), fact=fact, judgments=requests)
+
+    def admit_approved(
+        self, approval: dict[str, Any], *, agent_id: UUID | str, visibility: str | None = None
+    ) -> WriteResult:
+        """Store a held claim the owner approved (a `fact_write` approval).
+
+        The fact is admitted by the brain_claim judgment made when it was held,
+        exactly as proposed: an owner's edit would not be the text Jev judged.
+        Admitting twice returns the fact already stored.
+        """
+        if approval["action_type"] != "fact_write" or approval["status"] != "approved":
+            raise ValueError("Only an approved fact_write can be admitted")
+        proposal = approval["payload"]
+        org_id = approval["org_id"]
+        with self._connection.cursor() as cursor:
+            cursor.execute(
+                "select request_id from public.judgments where org_id = %s "
+                "and gate = %s and request_id = any(%s::uuid[]) limit 1",
+                (str(org_id), CLAIM_GATE, proposal.get("judgments") or []),
+            )
+            judged = cursor.fetchone()
+            cursor.execute(
+                "select id from public.facts where org_id = %s and admitted_by = %s",
+                (str(org_id), str(judged["request_id"]) if judged else None),
+            )
+            stored = cursor.fetchone()
+        if judged is None:
+            raise ValueError("It was held before any judgment; propose it again instead")
+        if stored is not None:
+            fact = self._brain.get(stored["id"])
+            return WriteResult("accepted", ("Already admitted",), fact=fact)
+        candidate = FactCandidate(
+            claim=proposal["claim"],
+            source=proposal.get("source"),
+            source_text=proposal["claim"],
+            source_ref=proposal.get("source_ref"),
+            quote=proposal.get("quote"),
+            visibility=visibility or proposal.get("visibility") or "internal",
+        )
+        fact = self._brain.insert_fact(
+            org_id=org_id,
+            claim=candidate.claim,
+            admission=Admission(
+                request_id=judged["request_id"],
+                visibility=candidate.visibility,
+                quote=candidate.quote,
+            ),
+            source=candidate.source,
+            source_ref=candidate.source_ref,
+        )
+        result = WriteResult(
+            "accepted", (f"Approved by the owner (approval {approval['id']})",), fact=fact
+        )
+        return self._finish(result, candidate, candidate.claim, org_id, agent_id, None)
 
     def _hold(
         self,

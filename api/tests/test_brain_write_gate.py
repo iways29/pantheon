@@ -430,3 +430,31 @@ def test_long_evidence_is_cut_to_the_sentences_nearest_the_claim() -> None:
 
     assert len(evidence) <= 300
     assert "Acme Corp was founded in 2019 in Leeds." in evidence
+
+
+# --- A held claim the owner approves is stored ----------------------------------
+
+
+def test_a_held_claim_the_owner_approves_is_stored_once(
+    db: psycopg.Connection, tenants: Tenants, agent: UUID
+) -> None:
+    from app.approvals import decide
+
+    held = propose(db, tenants, agent, ScriptedJev(nouls={"standalone": 0.7}))
+    assert held.outcome == "review" and held.approval_id is not None
+    decided = decide(db, user_id=tenants.user_a, approval_id=held.approval_id, decision="approve")
+
+    def admit() -> WriteResult:
+        with acting_as(db, user_id=str(tenants.user_a)) as conn:
+            gateway = Gateway(conn, RecordingTransport(), TIERS, systemone=ScriptedJev())
+            writer = BrainWriter(conn, Brain(conn, HashingEmbedder()), Judge(conn, gateway))
+            return writer.admit_approved(decided, agent_id=agent, visibility="public")
+
+    first, again = admit(), admit()
+
+    assert first.outcome == "accepted" and first.fact is not None
+    assert again.fact is not None and again.fact.id == first.fact.id, "admitting twice is one fact"
+    (fact,) = facts(db, tenants)
+    assert fact["claim"] == FOUNDED
+    (stored,) = rows(db, "select visibility from public.facts where id = %s", str(first.fact.id))
+    assert stored["visibility"] == "public"

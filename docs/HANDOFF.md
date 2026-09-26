@@ -158,21 +158,18 @@ Live migrations go in through the Supabase connector's `apply_migration`.
 The owner's user id: `scripts.agent seed` needs `--user-id` if `OWNER_USER_ID`
 is blank.
 
-8. **Step 8.3 Marketing and Content: built and tested, not live** (ADR 029,
-   branch `step-8.3-marketing`). Charter v2 replaces the draft: Content Lead
-   (cheap), topic researcher (cheap), writer (standard), editor (cheap), all
-   `deep`, autonomy L1, 06:45 Monday to Friday. New: migration
-   `20260926170000_drafts.sql` (`drafts`, `artifact_claims`, only a person
-   changes `facts.visibility`), tools `save_draft`, `check_draft`,
-   `list_drafts`, gates `draft_claim` and `draft_voice`, eval sets for both,
-   the owner's `scripts.draft`. To go live, each with the owner's yes: merge
-   the PR; apply the migration through the Supabase MCP; `scripts.agent seed`
-   (or `seed_gates`/`seed_tools`) so the two gates and three tools exist;
-   `scripts.judge_eval import` and `run draft_claim` / `run draft_voice`;
-   publish charter v2 and `scripts.department apply marketing`, then enable.
-   Then clear some facts as public (`scripts.draft public <fact>`), or every
-   factual sentence blocks. Research's five mornings run from 2026-09-26; the
-   owner said not to wait on its Milestone report to keep building.
+8. **Step 8.3 Marketing and Content is live** (ADR 029; PRs #18 to #20).
+   Migration `20260926170000_drafts.sql` applied 2026-09-26; gates
+   `draft_claim` (100% on 16 cases) and `draft_voice` (90% on 10; its miss
+   sends a good draft back) seeded; charter v3 applied and enabled: 06:45
+   Monday to Friday, New York. Higgsfield tools are named `mcp_higgsfield_*`.
+   The brain holds 32 public facts from theunreallab.com, mumba.ai and the
+   ASHVAA README (admitted through the write gate; held ones approved with
+   `scripts.brain admit <id> --public`). Left out on purpose: "looking for
+   our first LPs" (fund solicitation) and the Fortune 500 line (never point at
+   an employer). The company brief is **not uploaded**: `scripts.knowledge add`
+   needs `SUPABASE_SERVICE_ROLE_KEY` in `.env`, which is blank. Owner's desk:
+   `scripts.draft list|show|approve|reject|posted|trace|public`.
 
 Local tests: `pantheon_dev` and `pantheon_test` in the Docker container are
 behind on migrations. Use the fresh `pantheon_ci` database (482 tests pass):

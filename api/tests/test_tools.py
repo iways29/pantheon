@@ -118,6 +118,9 @@ def test_the_starting_tools_are_seeded_as_data(
         "web_push_preview": "R1",
         "brain_hygiene_scan": "R0",
         "web_search": "R2",
+        "save_draft": "R1",
+        "check_draft": "R1",
+        "list_drafts": "R0",
     }
 
 

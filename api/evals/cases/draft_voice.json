@@ -1,0 +1,106 @@
+{
+  "gate": "draft_voice",
+  "about": "Short drafts in and out of The Unreal Lab's voice (docs/business/the-unreal-lab.md section 6): composed, restrained, specific, decisive; no hype, swagger, filler or fictional characters. Written 2026-09-26 by the author; the owner's edits replace these as they arrive.",
+  "cases": [
+    {
+      "id": "on-brand-mumba",
+      "expected": "pass",
+      "label_source": "author",
+      "state": {
+        "text": "Chat is a straight line. Your thinking is not.\n\nMumba.ai lets you branch any reply, run each branch on the model you choose, and see every path on one map.\n\nFree while in beta.",
+        "channel": "x",
+        "format": "post"
+      }
+    },
+    {
+      "id": "on-brand-founders",
+      "expected": "pass",
+      "label_source": "author",
+      "state": {
+        "text": "You do not need a deck to start. You need the first fort.\n\nWe back founders at the very beginning, with architecture, people and hours. When the model fits, we answer within a week.",
+        "channel": "x",
+        "format": "post"
+      }
+    },
+    {
+      "id": "on-brand-ashvaa",
+      "expected": "pass",
+      "label_source": "author",
+      "state": {
+        "text": "ASHVAA reads a GitHub repository and returns a dependency map, dead code and a health score. Open source, MIT licensed. Early, and improving in public.",
+        "channel": "x",
+        "format": "post"
+      }
+    },
+    {
+      "id": "hype",
+      "expected": "revise",
+      "label_source": "author",
+      "state": {
+        "text": "🚀 Mumba.ai is the most revolutionary AI tool ever built! It will 10x your productivity, guaranteed. Don't miss out!",
+        "channel": "x",
+        "format": "post"
+      }
+    },
+    {
+      "id": "hustle",
+      "expected": "revise",
+      "label_source": "author",
+      "state": {
+        "text": "Rise and grind, founders. Crush your competition, outwork everyone, and never sleep. That's how empires are built.",
+        "channel": "x",
+        "format": "post"
+      }
+    },
+    {
+      "id": "swagger",
+      "expected": "revise",
+      "label_source": "author",
+      "state": {
+        "text": "Other AI tools are toys. We are playing a different game, and frankly nobody else is even close. Try to keep up.",
+        "channel": "x",
+        "format": "post"
+      }
+    },
+    {
+      "id": "fiction",
+      "expected": "revise",
+      "label_source": "author",
+      "state": {
+        "text": "As Harvey Specter would say, when you're backed against the wall, break the wall down. That is how we back founders.",
+        "channel": "x",
+        "format": "post"
+      }
+    },
+    {
+      "id": "filler",
+      "expected": "revise",
+      "label_source": "author",
+      "state": {
+        "text": "In today's fast-paced world of AI, are you ready to dive in? Let's explore how branching might possibly help you think a bit better.",
+        "channel": "x",
+        "format": "post"
+      }
+    },
+    {
+      "id": "vague-generic",
+      "expected": "revise",
+      "label_source": "author",
+      "state": {
+        "text": "AI is changing everything. It is important to think about the future. There are many opportunities for those who are ready. Stay tuned for more.",
+        "channel": "x",
+        "format": "post"
+      }
+    },
+    {
+      "id": "tangled",
+      "expected": "revise",
+      "label_source": "author",
+      "state": {
+        "text": "Mumba, which as a product that we have been building for some time now in a way that, if you think about it, reflects how people might, in certain situations, want to explore several options, which is branching, lets you do that, more or less, across models.",
+        "channel": "x",
+        "format": "post"
+      }
+    }
+  ]
+}

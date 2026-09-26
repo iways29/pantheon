@@ -161,7 +161,13 @@ def _items(cursor: psycopg.Cursor, run: "_Run", since: datetime) -> list[dict[st
         (str(run.org_id),),
     )
     for r in cursor.fetchall():
-        what = r["order_text"] or f"{r['tool']} {json.dumps(r['arguments'])[:200]}"
+        # A held tool call, a routing question, or (a draft) its explanation.
+        what = (
+            r["order_text"]
+            or (r["tool"] and f"{r['tool']} {json.dumps(r['arguments'])[:200]}")
+            or r["explanation"]
+            or ""
+        )
         items.append(
             {
                 "kind": "approval",

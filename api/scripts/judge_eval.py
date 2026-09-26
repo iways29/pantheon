@@ -29,7 +29,7 @@ from app.judge.evaluation import Report
 from scripts.agent import ROOT_ENV, _Env, _setup
 
 CASES_DIR = Path(__file__).resolve().parents[1] / "evals" / "cases"
-EVAL_GATES = ("brain_claim", "brain_neighbour", "content_screen")
+EVAL_GATES = ("brain_claim", "brain_neighbour", "content_screen", "draft_claim", "draft_voice")
 
 
 def main(argv: list[str]) -> int:

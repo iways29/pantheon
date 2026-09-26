@@ -37,6 +37,11 @@ class AgentPlan(BaseModel):
     autonomy_level: Literal["L0", "L1", "L2", "L3"] | None = None
     max_children: int | None = Field(default=None, ge=1, le=20)
     daily_budget_usd: Decimal | None = Field(default=None, ge=0)
+    #: Caps for each task handed to this agent; None: the defaults (50,000
+    #: tokens, 25 steps). A tool loop re-reads its conversation every turn,
+    #: so an agent that reads many pages needs more.
+    max_run_tokens: int | None = Field(default=None, ge=1000, le=500000)
+    max_run_steps: int | None = Field(default=None, ge=1, le=100)
     #: None: head for the charter's head, worker for the rest. The Executive
     #: Office's head is the Chief of Staff.
     role_type: Literal["chief_of_staff", "head", "worker"] | None = None

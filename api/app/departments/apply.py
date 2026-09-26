@@ -190,6 +190,13 @@ def _agent(
         current = cursor.fetchone()
     if current is None:
         create_agent(connection, user_id=user_id, org_id=org_id, spec=spec)
+        if plan.max_run_tokens is not None or plan.max_run_steps is not None:
+            with acting_as(connection, user_id=str(user_id)) as conn:
+                conn.execute(
+                    "update public.agents set max_run_tokens = %s, max_run_steps = %s "
+                    "where org_id = %s and name = %s",
+                    (plan.max_run_tokens, plan.max_run_steps, str(org_id), plan.name),
+                )
         report.created.append(f"agent {plan.name}")
         return
 
@@ -209,6 +216,8 @@ def _agent(
             "autonomy_level": spec.autonomy_level,
             "max_children": spec.max_children,
             "daily_budget_usd": spec.daily_budget_usd,
+            "max_run_tokens": plan.max_run_tokens,
+            "max_run_steps": plan.max_run_steps,
         }
         differs = {
             k: v

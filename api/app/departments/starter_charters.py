@@ -71,6 +71,10 @@ RESEARCH: Final = Charter(
             # L3: page reads and searches run without the tool-risk check;
             # pages are still screened (owner, 2026-09-26).
             autonomy_level="L3",
+            # A tool loop over several pages re-reads its conversation every
+            # turn; 50,000 tokens ran out after three pages (2026-09-26).
+            max_run_tokens=150000,
+            max_run_steps=40,
             allowed_tools=[
                 "web_search",
                 "web_fetch_preview",

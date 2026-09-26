@@ -337,3 +337,37 @@ def test_the_brief_says_when_this_mornings_work_has_not_finished(dsn: str, offic
     sent = json.loads(writer.calls[0][1]["content"])
     titles = [i["title"] for i in sent["lead"] + sent.get("rest", [])]
     assert "Not finished yet: Morning research brief" in titles
+
+
+def test_the_evening_question_lists_tomorrows_topics_without_a_model_call(
+    dsn: str, office: Office
+) -> None:
+    with connect(dsn) as connection:
+        from app.tasks import order
+
+        with acting_as(connection, user_id=str(office.user_id)) as owner:
+            owner.execute(
+                "insert into public.routine_requests (org_id, routine_key, request) "
+                "values (%s, 'research:morning-brief', 'AI for legal work')",
+                (str(office.org_id),),
+            )
+        evening = order(
+            connection,
+            user_id=office.user_id,
+            org_id=office.org_id,
+            agent="brief-writer",
+            title="Evening question",
+            input={"kind": "evening_question", "routine": "research:morning-brief"},
+        )
+    writer = Writer()
+    result = run_next(dsn, runtime(dsn, ScriptedJev(), writer))
+
+    assert result.status == "succeeded", result.error
+    assert writer.calls == [], "fixed text, no model call"
+    with connect(dsn) as connection, as_service_role(connection) as conn:
+        output = conn.execute(
+            "select result from public.tasks where id = %s", (str(evening.id),)
+        ).fetchone()["result"]
+    assert output["summary"].startswith("Anything you want researched tomorrow morning?")
+    assert "- AI for legal work" in output["summary"]
+    assert 'scripts.department ask research "your question"' in output["summary"]

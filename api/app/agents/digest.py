@@ -47,8 +47,14 @@ QUIET_REASONS = (
 )
 
 
+#: A digest task with this `kind` is the evening question, not a brief.
+EVENING = "evening_question"
+
+
 def run(session: "Session", run: "_Run") -> dict[str, Any]:
     cursor = session.connection.cursor()
+    if _input(cursor, run).get("kind") == EVENING:
+        return _evening(cursor, run)
     cursor.execute(
         "select body from public.agent_prompts where agent_id = %s and slot = 'brief' and active",
         (str(run.agent_id),),
@@ -127,21 +133,75 @@ def run(session: "Session", run: "_Run") -> dict[str, Any]:
     return {"status": "succeeded", "reason": "completed", "output": output, "error": None}
 
 
-def _mailing_list(cursor: psycopg.Cursor, run: "_Run") -> str | None:
+def _input(cursor: psycopg.Cursor, run: "_Run") -> dict[str, Any]:
     if run.task_id is None:
-        return None
-    cursor.execute(
-        "select input->>'mailing_list' as l from public.tasks where id = %s", (str(run.task_id),)
-    )
+        return {}
+    cursor.execute("select input from public.tasks where id = %s", (str(run.task_id),))
     row = cursor.fetchone()
-    return row["l"] if row else None
+    return dict(row["input"] or {}) if row else {}
+
+
+def _mailing_list(cursor: psycopg.Cursor, run: "_Run") -> str | None:
+    return _input(cursor, run).get("mailing_list")
+
+
+def _evening(cursor: psycopg.Cursor, run: "_Run") -> dict[str, Any]:
+    """Ask the owner what to research tomorrow (Step 8.1b). Fixed text: no
+    model call. The answer is a `routine_requests` row, used once."""
+    task = _input(cursor, run)
+    routine = task.get("routine", "research:morning-brief")
+    department = routine.split(":", 1)[0]
+    cursor.execute(
+        "select task from public.triggers where org_id = %s and routine_key = %s",
+        (str(run.org_id), routine),
+    )
+    trigger = cursor.fetchone()
+    topics = list(((trigger or {}).get("task") or {}).get("topics") or [])
+    cursor.execute(
+        "select request from public.routine_requests where org_id = %s and routine_key = %s "
+        "and status = 'pending' order by created_at",
+        (str(run.org_id), routine),
+    )
+    asked = [r["request"] for r in cursor.fetchall()]
+    lines = ["Anything you want researched tomorrow morning?", ""]
+    lines += ["These run anyway:"] + [f"- {t}" for t in topics] + [""]
+    if asked:
+        lines += ["Already asked for tomorrow:"] + [f"- {a}" for a in asked] + [""]
+    lines += [
+        "To add something, run:",
+        f'uv run python -m scripts.department ask {department} "your question"',
+        "",
+        "No answer is fine: the standing topics run as usual.",
+    ]
+    body = "\n".join(lines)
+    output: dict[str, Any] = {"summary": body, "routine": routine, "pending": len(asked)}
+    list_key = task.get("mailing_list")
+    if list_key:
+        email = compose(
+            cursor,
+            org_id=run.org_id,
+            list_key=list_key,
+            body=body,
+            subject=task.get("subject") or "Tomorrow's research: anything to add?",
+            idempotency_key=f"evening:{run.task_id}",
+            task_id=run.task_id,
+            run_id=run.id,
+            agent_id=run.agent_id,
+        )
+        output["email"] = {
+            "list": list_key,
+            "id": str(email.email_id) if email.email_id else None,
+            "status": email.status,
+            **({"reason": email.reason} if email.reason else {}),
+        }
+    return {"status": "succeeded", "reason": "completed", "output": output, "error": None}
 
 
 def _since(cursor: psycopg.Cursor, run: "_Run") -> datetime:
     cursor.execute(
         "select max(finished_at) as at from public.tasks where assigned_agent_id = %s "
-        "and status = 'done' and id <> %s",
-        (str(run.agent_id), str(run.task_id)),
+        "and status = 'done' and id <> %s and coalesce(input->>'kind', '') <> %s",
+        (str(run.agent_id), str(run.task_id), EVENING),
     )
     row = cursor.fetchone()
     return row["at"] or datetime.now(UTC) - timedelta(hours=24)

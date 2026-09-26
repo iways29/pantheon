@@ -48,8 +48,11 @@ def compose(
     run_id: UUID | None = None,
     agent_id: UUID | None = None,
     now: datetime | None = None,
+    subject: str | None = None,
 ) -> Composed:
-    """Write an email for `list_key`. Writing it twice changes nothing."""
+    """Write an email for `list_key`. Writing it twice changes nothing.
+
+    `subject` replaces the list's own subject (both may use `{date}`)."""
     cursor.execute(
         "select * from public.mailing_lists where org_id = %s and key = %s",
         (str(org_id), list_key),
@@ -71,7 +74,7 @@ def compose(
         return Composed(existing["id"], existing["status"], approval_id=existing["approval_id"])
 
     when = (now or datetime.now(ZoneInfo("UTC"))).astimezone(ZoneInfo(mailing_list["timezone"]))
-    subject = mailing_list["subject"].replace("{date}", f"{when:%A %-d %B %Y}")
+    subject = (subject or mailing_list["subject"]).replace("{date}", f"{when:%A %-d %B %Y}")
     approval_id = None
     status = "ready"
     if not mailing_list["send_without_approval"]:

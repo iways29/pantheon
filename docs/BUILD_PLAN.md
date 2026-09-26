@@ -508,7 +508,9 @@ The proposal, charters and starting budgets are in
   against the owner's earlier decisions.
   **Status (2026-09-26):** built and tested (ADR 027), with the owner's go while
   8.1's mornings are pending. Executive charter final (Chief of Staff, brief
-  writer, 07:15 Monday to Saturday); `POST /orders`, `scripts.order`.
+  writer, 07:15 Monday to Saturday); `POST /orders`, `scripts.order`. The brief
+  is emailed through Resend to the `morning-brief` mailing list (ADR 028); each
+  email waits for approval unless the owner lets the list go out on its own.
 - **8.3 Marketing and Content (L).** The owner's first revenue department (chosen
   2026-09-25). Content Lead, topic researcher, writer, editor and fact-checker,
   distribution scheduler. Drafts only; every publish is an approval. Claims in drafts
@@ -618,10 +620,15 @@ configurable, with no code edits. Screens over the Step 6 backend and the Step 7
       action for good, with a typed confirmation), ADR 023;
     - standing rules for the decision desk (right-hand idea 4), listed and
       addable in plain English.
-11. **More to come.** The owner will add further features; the tab is a list of
+11. **Newsletter and email (ADR 028).** The mailing lists: sender, recipients (a
+    form to add and remove people, up to 50 per list), subject, and whether a
+    list's emails go out on their own or wait for approval; the last emails sent,
+    failed or held, with one tap to retry. Backend: `GET/PUT /mailing-lists`,
+    `GET /emails`, `POST /emails/{id}/send`.
+12. **More to come.** The owner will add further features; the tab is a list of
     sections so a new one is a new section, not a redesign.
 
-Done when: the owner can do items 1 to 6 and 10 entirely from the browser, every change is
+Done when: the owner can do items 1 to 6, 10 and 11 entirely from the browser, every change is
 audited to `events`, and none of them needed a code change or redeploy.
 
 ## Step 12: Cost review (S)

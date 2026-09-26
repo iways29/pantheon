@@ -87,6 +87,17 @@ class Settings(BaseSettings):
     # request, so a missing secret can never leave it open.
     trigger_secret: str | None = None
 
+    # --- Email (Resend, ADR 028) -----------------------------------------------
+    # Server-side only. Unset: emails are written and held, never sent. Who
+    # gets what is in the database (mailing_lists), not here.
+    resend_api_key: str | None = None
+    resend_base_url: str = "https://api.resend.com"
+
+    @field_validator("resend_base_url", mode="after")
+    @classmethod
+    def _default_resend_url(cls, value: str) -> str:
+        return value.strip() or "https://api.resend.com"
+
     # Comma-separated browser origins allowed to call this API.
     cors_allow_origins: str = ""
 

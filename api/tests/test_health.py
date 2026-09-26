@@ -79,8 +79,14 @@ def test_authed_health_rejects_a_valid_token_for_another_user(client: TestClient
 
 def test_authed_health_fails_loudly_when_verification_is_unconfigured() -> None:
     """With no secret and no JWKS source, the API must not accept tokens."""
+    # Explicitly empty, so live Supabase variables in the shell cannot fill them.
     app.dependency_overrides[get_settings] = lambda: Settings(
-        environment="test", owner_user_id=OWNER_ID
+        _env_file=None,  # type: ignore[call-arg]
+        environment="test",
+        owner_user_id=OWNER_ID,
+        supabase_url=None,
+        supabase_jwks_url=None,
+        supabase_jwt_secret=None,
     )
     try:
         response = TestClient(app, raise_server_exceptions=False).get(

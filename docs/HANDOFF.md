@@ -133,6 +133,22 @@ those; the API's 401 versus 503 answers reveal whether `TRIGGER_SECRET` is set.
    higgsfield` (opens the sign-in; a bearer token goes in `MCP_TOKEN` instead),
    `scripts.mcp tools`, `approve`, `assign`.
 
+7. Switch-on for the morning brief (owner's go, 2026-09-26; PRs #8 and #9
+   merged). Needs a session with Full network access (the pooler is not
+   HTTPS) and `DATABASE_URL` set to the pooler URL (`SUPABASE_POOLER_URL`
+   holds it), and the owner approving each live change:
+   - apply `20260926160000_newsletter.sql`; `scripts.agent seed` (adds the
+     `route_order` and `brief_rank` gates);
+   - `scripts.department sources research --days mon-sat` (keeps the topic
+     and sources), `apply research`, `enable research`;
+   - `scripts.department publish executive --starter`, `apply executive`,
+     `enable executive`;
+   - `scripts.mailing set morning-brief --from "The Unreal Lab
+     <newsletter@theunreallab.com>" --to ishanpanchaal@theunreallab.com --auto`
+     (owner confirmed both addresses and "without approval", 2026-09-26; turn
+     `--no-auto` back on before adding anyone else);
+   - Vercel `pantheon-api`: `RESEND_API_KEY`, then redeploy.
+
 ## Prompt to paste into the new chat
 
 ```

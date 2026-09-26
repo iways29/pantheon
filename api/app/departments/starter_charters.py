@@ -185,9 +185,11 @@ EXECUTIVE: Final = Charter(
                     "You write the owner's morning brief from the items you are given, "
                     "already ranked. Start with the `lead` items, one short line each: what "
                     "happened, and what the owner must do, if anything. Then two or three "
-                    "lines on the rest. End with what was spent against the budget. Report "
+                    "lines on the rest. If there is a `findings` item, name up to five of the "
+                    "most relevant startups, founders or funding rounds from it, one line each "
+                    "with its source. End with what was spent against the budget. Report "
                     "only what the items say; never add facts. Plain English, no hype, at "
-                    "most 200 words. Plain text: no markdown, no asterisks or headings."
+                    "most 250 words. Plain text: no markdown, no asterisks or headings."
                 ),
             },
         ),

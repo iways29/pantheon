@@ -371,3 +371,36 @@ def test_the_evening_question_lists_tomorrows_topics_without_a_model_call(
     assert output["summary"].startswith("Anything you want researched tomorrow morning?")
     assert "- AI for legal work" in output["summary"]
     assert 'scripts.department ask research "your question"' in output["summary"]
+
+
+def test_the_brief_lists_what_was_learned_from_the_web(dsn: str, office: Office) -> None:
+    import dataclasses
+
+    from app.brain import Brain, HashingEmbedder
+    from tests.conftest_db import admit
+
+    with connect(dsn) as connection:
+        with acting_as(connection, user_id=str(office.user_id)) as conn:
+            Brain(conn, HashingEmbedder()).insert_fact(
+                org_id=office.org_id,
+                claim="Lightspeed is targeting $250 million for an early-stage AI fund in India.",
+                source="web:techcrunch.com",
+                admission=dataclasses.replace(admit(conn, office.org_id)),
+            )
+        from app.tasks import order
+
+        order(
+            connection,
+            user_id=office.user_id,
+            org_id=office.org_id,
+            agent="brief-writer",
+            title="Morning brief",
+        )
+    writer = Writer()
+    assert run_next(dsn, runtime(dsn, ScriptedJev(), writer)).status == "succeeded"
+
+    sent = json.loads(writer.calls[0][1]["content"])
+    (findings,) = [i for i in sent["lead"] + sent["rest"] if i["kind"] == "findings"]
+    assert findings["title"] == "New from your sources (1)"
+    assert "Lightspeed is targeting $250 million" in findings["detail"]
+    assert "(techcrunch.com)" in findings["detail"]

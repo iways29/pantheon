@@ -12,6 +12,12 @@ weighted by the gate's settings, and the brief leads with the top items
 (right-hand idea 6). One short model call writes the brief from the ranked
 items, with the brief writer's own `brief` prompt, which lives in the
 database like every prompt.
+
+When the brief's task names a `mailing_list` (the Executive charter's
+routine does), the brief is also written as an email to that list (ADR 028):
+ready to send if the owner let that list's emails go out on their own,
+otherwise held for the owner's approval. It is sent after this run's
+transaction commits, never inside it.
 """
 
 import json
@@ -21,6 +27,7 @@ from typing import TYPE_CHECKING, Any
 import psycopg
 
 from app.judge.store import load_gate
+from app.mail import compose
 
 if TYPE_CHECKING:
     from app.agents.research import Session
@@ -83,6 +90,24 @@ def run(session: "Session", run: "_Run") -> dict[str, Any]:
         "lead": lead,
         "items": len(ranked),
     }
+    list_key = _mailing_list(cursor, run)
+    if list_key:
+        email = compose(
+            cursor,
+            org_id=run.org_id,
+            list_key=list_key,
+            body=output["summary"],
+            idempotency_key=f"brief:{run.task_id}",
+            task_id=run.task_id,
+            run_id=run.id,
+            agent_id=run.agent_id,
+        )
+        output["email"] = {
+            "list": list_key,
+            "id": str(email.email_id) if email.email_id else None,
+            "status": email.status,
+            **({"reason": email.reason} if email.reason else {}),
+        }
     cursor.execute(
         "insert into public.events (org_id, run_id, agent_id, type, payload) "
         "values (%s, %s, %s, 'brief_written', %s)",
@@ -100,6 +125,16 @@ def run(session: "Session", run: "_Run") -> dict[str, Any]:
         ),
     )
     return {"status": "succeeded", "reason": "completed", "output": output, "error": None}
+
+
+def _mailing_list(cursor: psycopg.Cursor, run: "_Run") -> str | None:
+    if run.task_id is None:
+        return None
+    cursor.execute(
+        "select input->>'mailing_list' as l from public.tasks where id = %s", (str(run.task_id),)
+    )
+    row = cursor.fetchone()
+    return row["l"] if row else None
 
 
 def _since(cursor: psycopg.Cursor, run: "_Run") -> datetime:

@@ -52,6 +52,7 @@ from app.gateway.factory import systemone_transport_from, tier_map_from, transpo
 from app.judge.starter_gates import STARTER_GATES
 from app.judge.store import seed_gates
 from app.knowledge.wiring import agent_services
+from app.mail import mailer_from
 from app.tools import seed_tools
 from app.tracing import tracer_from
 
@@ -169,7 +170,7 @@ def main(argv: list[str]) -> int:
         embedder=None,
         tracer=tracer_from(settings),
         systemone=systemone_transport_from(settings) if settings.typesafe_api_key else None,
-        services=agent_services(),
+        services={**agent_services(), "mailer": mailer_from(settings)},
     )
     if args.command == "ask":
         with connect(dsn) as connection:

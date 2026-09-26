@@ -4,6 +4,7 @@
     uv run python -m scripts.department seed                  # starting charters, if missing
     uv run python -m scripts.department show research         # the live charter, as JSON
     uv run python -m scripts.department publish research charter.json [--note "why"]
+    uv run python -m scripts.department publish executive --starter   # the version in code
     uv run python -m scripts.department sources research --topic "AI agents" \
         --source https://example.com/news [--source ...] [--time 06:30] [--days mon-sat]
     uv run python -m scripts.department apply research        # make agents and routine match
@@ -37,7 +38,8 @@ def main(argv: list[str]) -> int:
         commands.add_parser(name).add_argument("department")
     pub = commands.add_parser("publish")
     pub.add_argument("department")
-    pub.add_argument("path", type=Path)
+    pub.add_argument("path", type=Path, nargs="?")
+    pub.add_argument("--starter", action="store_true", help="publish the starting charter")
     pub.add_argument("--note")
     src = commands.add_parser("sources", help="set the morning routine's topics and sources")
     src.add_argument("department")
@@ -63,7 +65,12 @@ def main(argv: list[str]) -> int:
             print(f"# version {version}")
             print(to_json(charter))
         elif args.command == "publish":
-            charter = Charter.model_validate_json(args.path.read_text())
+            if args.starter:
+                charter = STARTER_CHARTERS[args.department]
+            elif args.path is not None:
+                charter = Charter.model_validate_json(args.path.read_text())
+            else:
+                parser.error("publish needs a charter file or --starter")
             print(
                 publish(
                     connection,

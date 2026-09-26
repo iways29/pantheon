@@ -31,6 +31,7 @@ from app.knowledge.fetch import FetchedPage, FetchRefused, fetch
 from app.knowledge.library import DocumentError, Library
 from app.knowledge.links import LinkError, Links, Preview
 from app.knowledge.wiring import library_from, links_from, writer_from
+from app.mail import MailingListChange
 
 router = APIRouter(tags=["owner"])
 
@@ -380,6 +381,16 @@ def get_approvals(principal: OwnerPrincipal, connection: Connection) -> list[dic
     ]
 
 
+def get_mailer(settings: Annotated[Settings, Depends(get_settings)]) -> Any:  # noqa: ANN401
+    """Resend, when RESEND_API_KEY is set (ADR 028). Tests override this."""
+    from app.mail import mailer_from
+
+    return mailer_from(settings)
+
+
+MailerDep = Annotated[Any, Depends(get_mailer)]
+
+
 class ApproveRequest(BaseModel):
     #: Replaces the held call's arguments, when the owner edited them.
     edited_arguments: dict[str, Any] | None = None
@@ -399,6 +410,7 @@ def approve(
     principal: OwnerPrincipal,
     connection: Connection,
     make_writer: WriterFactory,
+    mailer: MailerDep,
 ) -> dict[str, Any]:
     return _decide(
         connection,
@@ -408,6 +420,7 @@ def approve(
         body.note,
         body.edited_arguments,
         make_writer,
+        mailer,
     )
 
 
@@ -432,6 +445,7 @@ def _decide(
     note: str | None,
     edited: dict[str, Any] | None,
     make_writer: MakeWriter,
+    mailer: Any = None,  # noqa: ANN401 - app.mail.Mailer
 ) -> dict[str, Any]:
     from app.approvals import ApprovalError, decide, decision_statement, remember
 
@@ -444,6 +458,7 @@ def _decide(
             decision=decision,
             note=note,
             edited_arguments=edited,
+            mailer=mailer,
         )
     except ApprovalError as error:
         raise HTTPException(error.status, str(error)) from error
@@ -465,7 +480,65 @@ def _decide(
         "status": row["status"],
         "recommendation": row["recommendation"],
         "remembered": remembered,
+        **({"email_status": row["email_status"]} if "email_status" in row else {}),
     }
+
+
+# --- Mailing lists and emails (ADR 028) ------------------------------------------------
+
+
+@router.get("/mailing-lists")
+def mailing_lists(principal: OwnerPrincipal, connection: Connection) -> list[dict[str, Any]]:
+    from app.mail import get_lists
+
+    return get_lists(connection, user_id=principal.user_id)
+
+
+@router.put("/mailing-lists/{key}")
+def put_mailing_list(
+    key: str, body: MailingListChange, principal: OwnerPrincipal, connection: Connection
+) -> dict[str, Any]:
+    """Create a list or change the fields given (the recipients form)."""
+    from app.mail import set_list
+
+    try:
+        return set_list(
+            connection,
+            user_id=principal.user_id,
+            org_id=owner_org(connection, principal.user_id),
+            key=key,
+            change=body,
+        )
+    except (ValueError, psycopg.errors.CheckViolation, psycopg.errors.InvalidParameterValue) as e:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e).splitlines()[0]) from e
+
+
+@router.get("/emails")
+def emails(
+    principal: OwnerPrincipal, connection: Connection, limit: int = Query(20, le=100)
+) -> list[dict[str, Any]]:
+    with acting_as(connection, user_id=principal.user_id) as conn:
+        return conn.execute(
+            "select id, list_key, status, recipients, subject, error, attempts, approval_id, "
+            "created_at, sent_at from public.emails order by created_at desc limit %s",
+            (limit,),
+        ).fetchall()
+
+
+@router.post("/emails/{email_id}/send")
+def send_email_again(
+    email_id: UUID, principal: OwnerPrincipal, connection: Connection, mailer: MailerDep
+) -> dict[str, Any]:
+    """Retry a ready or failed email (at most three attempts in all)."""
+    from app.mail import send
+
+    with acting_as(connection, user_id=principal.user_id) as conn:
+        if (
+            conn.execute("select 1 from public.emails where id = %s", (str(email_id),)).fetchone()
+            is None
+        ):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "No such email")
+    return {"id": str(email_id), "status": send(connection, mailer, email_id)}
 
 
 class PolicyRequest(BaseModel):

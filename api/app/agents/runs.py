@@ -434,7 +434,21 @@ def _decide(runtime: Runtime, connection: psycopg.Connection, run: _Run) -> _Sto
         return _Stop("failed", "error", error=f"{error.code}: {error}")
     except Exception as error:  # recorded, not raised: the run must end in a known state
         return _Stop("failed", "error", error=f"{type(error).__name__}: {error}"[:2000])
+    _send_ready_email(runtime, connection, result.get("output"))
     return _Stop(result["status"], result["reason"], result["output"], result["error"])
+
+
+def _send_ready_email(
+    runtime: Runtime, connection: psycopg.Connection, output: dict[str, Any] | None
+) -> None:
+    """Send the brief's email once its transaction has committed (ADR 028).
+    A failed send is recorded on the email, not on the run: the brief exists."""
+    from app.mail import send
+
+    email = (output or {}).get("email") or {}
+    if email.get("status") != "ready" or not email.get("id"):
+        return
+    email["status"] = send(connection, (runtime.services or {}).get("mailer"), email["id"])
 
 
 def _next_step_blocked(

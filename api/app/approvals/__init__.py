@@ -23,6 +23,7 @@ import psycopg
 from app.brain.write_gate import BrainWriter, FactCandidate, WriteResult
 from app.db import acting_as
 from app.gateway import GatewayError
+from app.mail import Mailer
 
 Decision = Literal["approve", "cancel", "redirect"]
 
@@ -76,8 +77,12 @@ def decide(
     decision: Decision,
     note: str | None = None,
     edited_arguments: dict[str, Any] | None = None,
+    mailer: Mailer | None = None,
 ) -> dict[str, Any]:
-    """The owner's decision. Deciding twice changes nothing."""
+    """The owner's decision. Deciding twice changes nothing.
+
+    Approving a held email (`send_email`, ADR 028) sends it now, through
+    `mailer`, once the decision has committed."""
     import json
 
     if decision == "redirect" and not (note or "").strip():
@@ -97,7 +102,17 @@ def decide(
             )
         except psycopg.errors.NoDataFound as error:
             raise ApprovalNotFound(f"No approval {approval_id}") from error
-        return dict(cursor.fetchone())
+        decided = dict(cursor.fetchone())
+    if decided["action_type"] == "send_email" and decided["status"] == "approved":
+        from app.mail import send
+
+        with acting_as(connection, user_id=str(user_id)) as conn:
+            email = conn.execute(
+                "select id from public.emails where approval_id = %s", (str(decided["id"]),)
+            ).fetchone()
+        if email is not None:
+            decided["email_status"] = send(connection, mailer, email["id"])
+    return decided
 
 
 def remember(

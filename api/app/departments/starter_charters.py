@@ -179,6 +179,8 @@ EXECUTIVE: Final = Charter(
             agent="brief-writer",
             title="Morning brief",
             instructions="Write the owner's morning brief and the approvals waiting.",
+            # Also emailed to this mailing list, if the owner has set it up (ADR 028).
+            input={"mailing_list": "morning-brief"},
             # After Research's 06:30 run, Monday to Saturday.
             time="07:15",
             days=[1, 2, 3, 4, 5, 6],

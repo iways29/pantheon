@@ -32,6 +32,7 @@ from app.approvals import decide, decision_statement, list_pending, remember
 from app.config import Settings
 from app.db import acting_as, as_service_role, connect
 from app.knowledge.wiring import writer_from
+from app.mail import mailer_from
 from scripts.agent import ROOT_ENV, _Env, _setup
 
 
@@ -154,8 +155,11 @@ def main(argv: list[str]) -> int:
             decision=decision,
             note=args.note,
             edited_arguments=json.loads(args.edit) if getattr(args, "edit", None) else None,
+            mailer=mailer_from(settings),
         )
         print(f"{row['id']}  {row['status']}")
+        if "email_status" in row:
+            print(f"email: {row['email_status']}")
         if args.note and row.get("agent_id"):
             with acting_as(connection, user_id=user_id) as conn:
                 result = remember(

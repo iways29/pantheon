@@ -548,3 +548,12 @@ def test_the_scheduler_to_finished_run_path_end_to_end(
     )
     assert task[0]["status"] == "done", "the task finished with its run"
     assert task[0]["idempotency_key"].startswith(f"trigger:{trigger.id}:")
+
+
+def test_a_run_paused_by_a_provider_error_is_retried(
+    db: psycopg.Connection, tenants: Tenants, agent: uuid.UUID
+) -> None:
+    run = make_run(
+        db, tenants, agent, trigger="task", status="paused", stop_reason="upstream_error"
+    )
+    assert wakeups(db) == [run], "a rate limit passes; the morning must not stop for good"

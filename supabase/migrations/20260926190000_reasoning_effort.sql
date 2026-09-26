@@ -36,3 +36,38 @@ revoke execute on function public.audit_reasoning_flag() from public, anon, auth
 create trigger system_flags_audit_reasoning
   after insert or update on public.system_flags
   for each row execute function public.audit_reasoning_flag();
+
+-- A run paused by a passing provider error (a 429 rate limit, a 5xx) is retried
+-- like one paused at its deadline: at most five wakes, 45 seconds apart
+-- (2026-09-26: a rate-limited model otherwise stopped a morning for good).
+create or replace function public.pending_wakeups(p_limit integer default 20)
+returns setof uuid
+language sql
+set search_path = ''
+as $$
+  update public.runs r
+     set wake_count = r.wake_count + 1,
+         last_wake_at = now()
+   where r.id in (
+     select x.id
+       from public.runs x
+      where x.trigger in ('schedule', 'task')
+        and x.wake_count < 5
+        and (x.last_wake_at is null or x.last_wake_at < now() - interval '45 seconds')
+        and not public.kill_switch_on(x.org_id)
+        and (
+          x.status = 'pending'
+          or (x.status = 'paused'
+              and x.stop_reason in ('deadline', 'approved', 'redirected', 'resumed',
+                                  'upstream_error'))
+          or (x.status = 'paused' and x.stop_reason = 'awaiting_approval'
+              and not exists (select 1 from public.approvals ap
+                               where ap.run_id = x.id and ap.status = 'pending'))
+          or (x.status = 'running' and x.lease_expires_at < now())
+        )
+      order by x.created_at
+      limit p_limit
+        for update skip locked
+   )
+  returning r.id;
+$$;

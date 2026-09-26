@@ -924,6 +924,218 @@ BRIEF_RANK = StarterGate(
     fail_mode="open",
 )
 
+# --- Marketing drafts (Step 8.3, ADR 029) --------------------------------------
+#
+# The claim check: one request per sentence of a draft (right-hand idea 3).
+# State: {"sentence": ..., "facts": [public brain facts near it], "piece": title}.
+# An unsupported or contradicted claim blocks the draft and names the sentence.
+# Opinion, stance, story and calls to action are not claims.
+
+DRAFT_CLAIM = StarterGate(
+    gate="draft_claim",
+    questions=(
+        StarterQuestion(
+            key="claim",
+            type="choice",
+            instructions=(
+                "`sentence` is from a piece of public writing. Which describes it, judged "
+                "only against the statements in `facts`?"
+            ),
+            criteria={
+                "not_a_claim": (
+                    "`sentence` states no checkable fact about the world: it is an opinion, "
+                    "a belief, the writer's stance or intent, advice, a question, a call to "
+                    "action, or a story or metaphor told as such."
+                ),
+                "supported": (
+                    "`sentence` states a checkable fact (a number, date, name, event, "
+                    "product feature, or who did what), and a statement in `facts` says "
+                    "the same thing or directly implies it."
+                ),
+                "contradicted": (
+                    "`sentence` states a checkable fact that a statement in `facts` says "
+                    "is not true."
+                ),
+                "unsupported": (
+                    "`sentence` states a checkable fact that no statement in `facts` says "
+                    "or directly implies, or that `facts` supports only in part."
+                ),
+            },
+        ),
+    ),
+    policy={
+        "outcomes": ["pass", "review", "block"],
+        "rules": [
+            {
+                "question": "claim",
+                "choice_in": ["contradicted"],
+                "outcome": "block",
+                "reason": "The brain says otherwise",
+            },
+            {
+                "question": "claim",
+                "choice_in": ["unsupported"],
+                "outcome": "block",
+                "reason": "Not in the brain's public facts",
+            },
+            {
+                "question": "claim",
+                "option": "contradicted",
+                "probability_at_least": 0.2,
+                "outcome": "review",
+                "reason": "May contradict the brain",
+            },
+            {
+                "question": "claim",
+                "option": "unsupported",
+                "probability_at_least": 0.3,
+                "outcome": "review",
+                "reason": "Support in the brain is not clear",
+            },
+        ],
+        "settings": {
+            # Public facts compared per sentence, and how near they must be.
+            "facts_per_sentence": 5,
+            "max_distance": 0.9,
+            # Longer pieces are checked up to here, and the rest is flagged.
+            "max_sentences": 80,
+        },
+    },
+)
+
+# Voice and quality: one request per draft. State: {"text": ..., "channel": ...}.
+# The personality is in docs/business/the-unreal-lab.md section 6; Jev reads
+# literally, so the rubric names concrete levels and the hazards are narrow.
+
+DRAFT_VOICE = StarterGate(
+    gate="draft_voice",
+    questions=(
+        StarterQuestion(
+            key="hype",
+            type="noul",
+            instructions=(
+                "Does `text` use hype: superlatives, guarantees, exaggerated promises, or "
+                "hustle language?"
+            ),
+            criteria={
+                "true": (
+                    "For example 'revolutionary', 'game-changing', 'the best', "
+                    "'guaranteed', '10x', 'crush it', 'grind', or promises of certain success."
+                ),
+                "false": "Plain, measured statements, even confident ones.",
+            },
+        ),
+        StarterQuestion(
+            key="swagger",
+            type="noul",
+            instructions=(
+                "Does `text` boast, taunt, threaten, or talk down to competitors or readers?"
+            ),
+            criteria={
+                "true": "Bravado, trash talk, threats, catchphrases or showing off.",
+                "false": "Calm and composed, even when it takes a firm position.",
+            },
+        ),
+        StarterQuestion(
+            key="fiction_character",
+            type="noul",
+            instructions=(
+                "Does `text` name, quote or imitate a character from a television show, "
+                "film or novel?"
+            ),
+            criteria={
+                "true": "It names such a character, or repeats or imitates their lines.",
+                "false": (
+                    "It names none. Figures from mythology or history, such as Arjuna, "
+                    "Krishna or Shivaji, are not fictional characters from a show."
+                ),
+            },
+        ),
+        StarterQuestion(
+            key="filler_opening",
+            type="noul",
+            instructions="Does `text` open with filler instead of its point?",
+            criteria={
+                "true": (
+                    "For example 'In today's fast-paced world', 'Are you ready to', "
+                    "'Let's dive in', or a question asked only to start."
+                ),
+                "false": "The first sentence says something of substance.",
+            },
+        ),
+        StarterQuestion(
+            key="on_brand",
+            type="score",
+            instructions="How well does `text` match a composed, restrained, decisive voice?",
+            criteria=[
+                "Off: loud, salesy, or casual chatter.",
+                "Partly: measured, but generic.",
+                "On: calm authority, few words chosen well, a clear position, a dry "
+                "understated edge.",
+            ],
+        ),
+        StarterQuestion(
+            key="specific",
+            type="score",
+            instructions="How specific is `text`?",
+            criteria=[
+                "Vague: general statements, nothing named.",
+                "Some: a few named things or numbers.",
+                "Specific: named things, numbers and concrete examples carry it.",
+            ],
+        ),
+        StarterQuestion(
+            key="clear",
+            type="score",
+            instructions="How easy is `text` to follow?",
+            criteria=[
+                "Hard: long, tangled sentences.",
+                "Mostly clear.",
+                "Clear: short sentences, one idea per paragraph.",
+            ],
+        ),
+    ),
+    policy={
+        "outcomes": ["pass", "revise"],
+        "rules": [
+            {"question": "hype", "noul_at_least": 0.5, "outcome": "revise", "reason": "Hype"},
+            {"question": "swagger", "noul_at_least": 0.5, "outcome": "revise", "reason": "Swagger"},
+            {
+                "question": "fiction_character",
+                "noul_at_least": 0.3,
+                "outcome": "revise",
+                "reason": "Names or imitates a fictional character",
+            },
+            {
+                "question": "filler_opening",
+                "noul_at_least": 0.6,
+                "outcome": "revise",
+                "reason": "Opens with filler",
+            },
+            {
+                "question": "on_brand",
+                "score_below": 1.0,
+                "outcome": "revise",
+                "reason": "Off-brand voice",
+            },
+            {
+                "question": "clear",
+                "score_below": 1.0,
+                "outcome": "revise",
+                "reason": "Hard to read",
+            },
+        ],
+        "settings": {
+            # The voice score recorded per draft (0 to 1), a weighted mean of
+            # the three scores; a draft under `min_score` goes back.
+            "weight_on_brand": 2.0,
+            "weight_specific": 1.0,
+            "weight_clear": 1.0,
+            "min_score": 0.5,
+        },
+    },
+)
+
 STARTER_GATES: tuple[StarterGate, ...] = (
     TOOL_SELECT,
     BRAIN_CLAIM,
@@ -936,4 +1148,6 @@ STARTER_GATES: tuple[StarterGate, ...] = (
     OWNER_CONFLICT,
     ROUTE_ORDER,
     BRIEF_RANK,
+    DRAFT_CLAIM,
+    DRAFT_VOICE,
 )

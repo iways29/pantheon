@@ -1,0 +1,241 @@
+{
+  "gate": "draft_claim",
+  "about": "Sentences from Unreal Lab drafts, judged against the public facts given. Labels by the owner's rule: a checkable fact must be in the facts (else block); opinion, stance, story and calls to action pass. Written 2026-09-26 as a starting set; extend it with the owner's real drafts.",
+  "cases": [
+    {
+      "id": "supported-feature",
+      "expected": "pass",
+      "label_source": "author",
+      "state": {
+        "sentence": "Mumba.ai lets you branch any reply into parallel threads.",
+        "facts": [
+          "Mumba.ai is a branching AI canvas: any reply can be branched into parallel threads.",
+          "Mumba.ai is free during its beta, with no credit card required.",
+          "In Mumba.ai each branch can run on Claude, GPT or Gemini.",
+          "ASHVAA is open-source codebase intelligence under the MIT licence."
+        ],
+        "piece": "Branch any reply"
+      }
+    },
+    {
+      "id": "supported-free-beta",
+      "expected": "pass",
+      "label_source": "author",
+      "state": {
+        "sentence": "Mumba is free while in beta. No card needed.",
+        "facts": [
+          "Mumba.ai is a branching AI canvas: any reply can be branched into parallel threads.",
+          "Mumba.ai is free during its beta, with no credit card required.",
+          "In Mumba.ai each branch can run on Claude, GPT or Gemini.",
+          "ASHVAA is open-source codebase intelligence under the MIT licence."
+        ],
+        "piece": "Branch any reply"
+      }
+    },
+    {
+      "id": "supported-models",
+      "expected": "pass",
+      "label_source": "author",
+      "state": {
+        "sentence": "Run one branch on Claude and another on Gemini.",
+        "facts": [
+          "Mumba.ai is a branching AI canvas: any reply can be branched into parallel threads.",
+          "Mumba.ai is free during its beta, with no credit card required.",
+          "In Mumba.ai each branch can run on Claude, GPT or Gemini.",
+          "ASHVAA is open-source codebase intelligence under the MIT licence."
+        ],
+        "piece": "Branch any reply"
+      }
+    },
+    {
+      "id": "supported-license",
+      "expected": "pass",
+      "label_source": "author",
+      "state": {
+        "sentence": "ASHVAA is MIT licensed.",
+        "facts": [
+          "Mumba.ai is a branching AI canvas: any reply can be branched into parallel threads.",
+          "Mumba.ai is free during its beta, with no credit card required.",
+          "In Mumba.ai each branch can run on Claude, GPT or Gemini.",
+          "ASHVAA is open-source codebase intelligence under the MIT licence."
+        ],
+        "piece": "Branch any reply"
+      }
+    },
+    {
+      "id": "stance",
+      "expected": "pass",
+      "label_source": "author",
+      "state": {
+        "sentence": "Chat is a straight line. Thinking is not.",
+        "facts": [
+          "Mumba.ai is a branching AI canvas: any reply can be branched into parallel threads.",
+          "Mumba.ai is free during its beta, with no credit card required.",
+          "In Mumba.ai each branch can run on Claude, GPT or Gemini.",
+          "ASHVAA is open-source codebase intelligence under the MIT licence."
+        ],
+        "piece": "Branch any reply"
+      }
+    },
+    {
+      "id": "call-to-action",
+      "expected": "pass",
+      "label_source": "author",
+      "state": {
+        "sentence": "Try it on your next hard question.",
+        "facts": [
+          "Mumba.ai is a branching AI canvas: any reply can be branched into parallel threads.",
+          "Mumba.ai is free during its beta, with no credit card required.",
+          "In Mumba.ai each branch can run on Claude, GPT or Gemini.",
+          "ASHVAA is open-source codebase intelligence under the MIT licence."
+        ],
+        "piece": "Branch any reply"
+      }
+    },
+    {
+      "id": "myth-story",
+      "expected": "pass",
+      "label_source": "author",
+      "state": {
+        "sentence": "Arjuna did not need more arrows; he needed a charioteer.",
+        "facts": [
+          "Mumba.ai is a branching AI canvas: any reply can be branched into parallel threads.",
+          "Mumba.ai is free during its beta, with no credit card required.",
+          "In Mumba.ai each branch can run on Claude, GPT or Gemini.",
+          "ASHVAA is open-source codebase intelligence under the MIT licence."
+        ],
+        "piece": "Branch any reply"
+      }
+    },
+    {
+      "id": "studio-belief",
+      "expected": "pass",
+      "label_source": "author",
+      "state": {
+        "sentence": "We build one fort at a time.",
+        "facts": [
+          "Mumba.ai is a branching AI canvas: any reply can be branched into parallel threads.",
+          "Mumba.ai is free during its beta, with no credit card required.",
+          "In Mumba.ai each branch can run on Claude, GPT or Gemini.",
+          "ASHVAA is open-source codebase intelligence under the MIT licence."
+        ],
+        "piece": "Branch any reply"
+      }
+    },
+    {
+      "id": "invented-users",
+      "expected": "block",
+      "label_source": "author",
+      "state": {
+        "sentence": "Mumba.ai already has 40,000 active users.",
+        "facts": [
+          "Mumba.ai is a branching AI canvas: any reply can be branched into parallel threads.",
+          "Mumba.ai is free during its beta, with no credit card required.",
+          "In Mumba.ai each branch can run on Claude, GPT or Gemini.",
+          "ASHVAA is open-source codebase intelligence under the MIT licence."
+        ],
+        "piece": "Branch any reply"
+      }
+    },
+    {
+      "id": "invented-funding",
+      "expected": "block",
+      "label_source": "author",
+      "state": {
+        "sentence": "The Unreal Lab closed a $5 million seed round last month.",
+        "facts": [
+          "Mumba.ai is a branching AI canvas: any reply can be branched into parallel threads.",
+          "Mumba.ai is free during its beta, with no credit card required.",
+          "In Mumba.ai each branch can run on Claude, GPT or Gemini.",
+          "ASHVAA is open-source codebase intelligence under the MIT licence."
+        ],
+        "piece": "Branch any reply"
+      }
+    },
+    {
+      "id": "invented-customer",
+      "expected": "block",
+      "label_source": "author",
+      "state": {
+        "sentence": "Three Fortune 500 companies run ASHVAA in production.",
+        "facts": [
+          "Mumba.ai is a branching AI canvas: any reply can be branched into parallel threads.",
+          "Mumba.ai is free during its beta, with no credit card required.",
+          "In Mumba.ai each branch can run on Claude, GPT or Gemini.",
+          "ASHVAA is open-source codebase intelligence under the MIT licence."
+        ],
+        "piece": "Branch any reply"
+      }
+    },
+    {
+      "id": "contradicts-price",
+      "expected": "block",
+      "label_source": "author",
+      "state": {
+        "sentence": "Mumba.ai costs $20 a month.",
+        "facts": [
+          "Mumba.ai is a branching AI canvas: any reply can be branched into parallel threads.",
+          "Mumba.ai is free during its beta, with no credit card required.",
+          "In Mumba.ai each branch can run on Claude, GPT or Gemini.",
+          "ASHVAA is open-source codebase intelligence under the MIT licence."
+        ],
+        "piece": "Branch any reply"
+      }
+    },
+    {
+      "id": "contradicts-license",
+      "expected": "block",
+      "label_source": "author",
+      "state": {
+        "sentence": "ASHVAA is proprietary and closed source.",
+        "facts": [
+          "Mumba.ai is a branching AI canvas: any reply can be branched into parallel threads.",
+          "Mumba.ai is free during its beta, with no credit card required.",
+          "In Mumba.ai each branch can run on Claude, GPT or Gemini.",
+          "ASHVAA is open-source codebase intelligence under the MIT licence."
+        ],
+        "piece": "Branch any reply"
+      }
+    },
+    {
+      "id": "partial-support",
+      "expected": "block",
+      "label_source": "author",
+      "state": {
+        "sentence": "Mumba.ai supports Claude, GPT, Gemini and Llama.",
+        "facts": [
+          "Mumba.ai is a branching AI canvas: any reply can be branched into parallel threads.",
+          "Mumba.ai is free during its beta, with no credit card required.",
+          "In Mumba.ai each branch can run on Claude, GPT or Gemini.",
+          "ASHVAA is open-source codebase intelligence under the MIT licence."
+        ],
+        "piece": "Branch any reply"
+      }
+    },
+    {
+      "id": "unsupported-date",
+      "expected": "block",
+      "label_source": "author",
+      "state": {
+        "sentence": "Smart Merge shipped on 1 September 2026.",
+        "facts": [
+          "Mumba.ai is a branching AI canvas: any reply can be branched into parallel threads.",
+          "Mumba.ai is free during its beta, with no credit card required.",
+          "In Mumba.ai each branch can run on Claude, GPT or Gemini.",
+          "ASHVAA is open-source codebase intelligence under the MIT licence."
+        ],
+        "piece": "Branch any reply"
+      }
+    },
+    {
+      "id": "no-facts-given-claim",
+      "expected": "block",
+      "label_source": "author",
+      "state": {
+        "sentence": "ASHVAA scans a repository in under ten seconds.",
+        "facts": [],
+        "piece": "Branch any reply"
+      }
+    }
+  ]
+}

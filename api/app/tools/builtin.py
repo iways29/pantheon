@@ -5,7 +5,7 @@ Descriptions here are seed text for the `tools` table; the owner's edited
 version is what agents read.
 """
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -435,5 +435,223 @@ register(
                 "each naming its source. If the results do not answer, say so."
             ),
         },
+    )
+)
+
+
+# --- Marketing and Content (Step 8.3, ADR 029) ------------------------------------
+
+
+class SaveDraftArgs(_Args):
+    channel: Literal["blog", "x", "reddit", "instagram", "newsletter", "other"]
+    format: str = Field(
+        pattern=r"^[a-z][a-z0-9_-]{1,30}$",
+        description="post, thread, carousel, section, outline or idea",
+    )
+    title: str = Field(min_length=3, max_length=200)
+    body: str = Field(min_length=1, max_length=40000)
+    brief: str | None = Field(default=None, max_length=4000, description="The idea it answers")
+    fact_ids: list[str] = Field(
+        default_factory=list,
+        max_length=20,
+        description="Ids of the public brain facts the draft relies on",
+    )
+    revises: str | None = Field(
+        default=None, min_length=36, max_length=36, description="The draft this one replaces"
+    )
+
+
+def _save_draft(ctx: ToolContext, args: SaveDraftArgs) -> dict[str, Any]:
+    import hashlib
+    import json
+
+    from app.content import save
+
+    payload = json.dumps(args.model_dump(mode="json"), sort_keys=True)
+    key = f"{ctx.run_id or ctx.agent_id}:{hashlib.sha256(payload.encode()).hexdigest()[:24]}"
+    with ctx.connection.cursor() as cursor:
+        saved = save(
+            cursor,
+            org_id=ctx.org_id,
+            agent_id=ctx.agent_id,
+            channel=args.channel,
+            format=args.format,
+            title=args.title,
+            body=args.body,
+            brief=args.brief,
+            fact_ids=args.fact_ids,
+            revises=args.revises,
+            idempotency_key=key,
+            task_id=ctx.extras.get("task_id"),
+            run_id=ctx.run_id,
+        )
+    return {
+        "draft_id": str(saved.draft_id),
+        "relied_on": saved.relied_on,
+        "not_recorded": saved.skipped,
+        "next": "The editor checks it with check_draft.",
+    }
+
+
+register(
+    ToolSpec(
+        name="save_draft",
+        description=(
+            "Save a piece of content as a draft: its channel, format, title and text, and "
+            "the ids of the public brain facts it relies on. Nothing is published."
+        ),
+        args=SaveDraftArgs,
+        risk_class="R1",
+        side_effect=True,
+        handler=_save_draft,
+    )
+)
+
+
+class CheckDraftArgs(_Args):
+    draft_id: str = Field(min_length=36, max_length=36)
+
+
+def _check_draft(ctx: ToolContext, args: CheckDraftArgs) -> dict[str, Any]:
+    from app.content import check
+
+    if ctx.judge is None or ctx.brain is None:
+        raise RuntimeError("Draft checks need the judge and the brain; the draft stays a draft")
+    with ctx.connection.cursor() as cursor:
+        cursor.execute(
+            "select settings from public.tools where org_id = %s and name = 'check_draft'",
+            (str(ctx.org_id),),
+        )
+        row = cursor.fetchone()
+        settings = dict(row["settings"] or {}) if row else {}
+        result = check(
+            cursor,
+            judge=ctx.judge,
+            brain=ctx.brain,
+            org_id=ctx.org_id,
+            agent_id=ctx.agent_id,
+            draft_id=args.draft_id,
+            banned_phrases=list(settings.get("banned_phrases") or []),
+            run_id=ctx.run_id,
+        )
+    output: dict[str, Any] = {
+        "draft_id": str(result.draft_id),
+        "status": result.status,
+        "voice_score": result.voice_score,
+    }
+    if result.blocking:
+        output["fix_these"] = result.blocking
+        output["next"] = "Send the reasons back to the writer for a revised draft."
+    if result.flags:
+        output["for_the_owner"] = result.flags
+    if result.status == "ready":
+        output["next"] = "It waits for the owner's approval."
+    return output
+
+
+register(
+    ToolSpec(
+        name="check_draft",
+        description=(
+            "Check a saved draft: banned words, the output guardrail, every factual sentence "
+            "against the brain's public facts, and voice. A draft that fails goes back with "
+            "the sentences to fix; one that passes goes to the owner for approval."
+        ),
+        args=CheckDraftArgs,
+        risk_class="R1",
+        side_effect=True,
+        handler=_check_draft,
+        timeout_seconds=240,
+        settings={
+            # Exact phrases a draft may never contain (whole words, any case).
+            # The owner edits this list in the tool's settings.
+            "banned_phrases": [
+                # The characters the owner described the voice with: never named.
+                "Harvey Specter",
+                "Bobby Axelrod",
+                "Axe Capital",
+                "Thomas Shelby",
+                "Tommy Shelby",
+                "Peaky Blinders",
+                "Pearson Hardman",
+                # Hype (brief, section 4 rule 3).
+                "revolutionary",
+                "game-changing",
+                "game changer",
+                "game-changer",
+                "world-class",
+                "best-in-class",
+                "cutting-edge",
+                "unprecedented",
+                "guaranteed",
+                "skyrocket",
+                "10x",
+                "crush it",
+                "hustle",
+                "unicorn",
+                "to the moon",
+            ],
+        },
+    )
+)
+
+
+class ListDraftsArgs(_Args):
+    status: Literal["draft", "blocked", "ready", "approved", "rejected", "published"] | None = None
+    channel: Literal["blog", "x", "reddit", "instagram", "newsletter", "other"] | None = None
+    limit: int = Field(default=10, ge=1, le=30)
+
+
+def _list_drafts(ctx: ToolContext, args: ListDraftsArgs) -> dict[str, Any]:
+    """Recent drafts and the owner's verdicts: continuity and no repeats."""
+    with ctx.connection.cursor() as cursor:
+        cursor.execute(
+            """
+            select id, channel, format, title, status, owner_note,
+                   owner_body is not null as owner_edited, created_at::date as day
+              from public.drafts
+             where org_id = %s
+               and (%s::text is null or status = %s::text)
+               and (%s::text is null or channel = %s::text)
+             order by created_at desc
+             limit %s
+            """,
+            (
+                str(ctx.org_id),
+                args.status,
+                args.status,
+                args.channel,
+                args.channel,
+                args.limit,
+            ),
+        )
+        rows = cursor.fetchall()
+    return {
+        "drafts": [
+            {
+                "draft_id": str(r["id"]),
+                "channel": r["channel"],
+                "format": r["format"],
+                "title": r["title"],
+                "status": r["status"],
+                "owner_note": r["owner_note"],
+                "owner_edited": r["owner_edited"],
+                "day": str(r["day"]),
+            }
+            for r in rows
+        ]
+    }
+
+
+register(
+    ToolSpec(
+        name="list_drafts",
+        description=(
+            "List recent drafts with their status and the owner's notes: what is in "
+            "progress, what the owner approved, edited or rejected. Changes nothing."
+        ),
+        args=ListDraftsArgs,
+        risk_class="R0",
+        handler=_list_drafts,
     )
 )

@@ -107,7 +107,7 @@ those; the API's 401 versus 503 answers reveal whether `TRIGGER_SECRET` is set.
   (the graph), `runs.py` (leased, resumable runs), `prompts.py`, `triggers.py`,
   `starter_prompts.py`. `api/app/internal.py` the endpoint the scheduler calls.
 - `supabase/migrations/` versioned SQL (RLS on every table). `docs/adr/` ADRs
-  0001 to 0027. `docs/BUILD_PLAN.md` is the source of truth for order.
+  0001 to 0029. `docs/BUILD_PLAN.md` is the source of truth for order.
 
 ## What to do next
 
@@ -158,12 +158,21 @@ Live migrations go in through the Supabase connector's `apply_migration`.
 The owner's user id: `scripts.agent seed` needs `--user-id` if `OWNER_USER_ID`
 is blank.
 
-8. **Next: Step 8.3 Marketing and Content** (owner starts it next session). The
-   inputs are in `docs/business/the-unreal-lab.md` (voice, hard rules, five
-   channels, posting by hand, Higgsfield visuals, some emoji, weekly
-   newsletter, no voice samples yet). The draft charter is `MARKETING` in
-   `api/app/departments/starter_charters.py`. The owner is designing the brain
-   UI separately (Step 10 territory): do not pick the UI framework unasked.
+8. **Step 8.3 Marketing and Content: built and tested, not live** (ADR 029,
+   branch `step-8.3-marketing`). Charter v2 replaces the draft: Content Lead
+   (cheap), topic researcher (cheap), writer (standard), editor (cheap), all
+   `deep`, autonomy L1, 06:45 Monday to Friday. New: migration
+   `20260926170000_drafts.sql` (`drafts`, `artifact_claims`, only a person
+   changes `facts.visibility`), tools `save_draft`, `check_draft`,
+   `list_drafts`, gates `draft_claim` and `draft_voice`, eval sets for both,
+   the owner's `scripts.draft`. To go live, each with the owner's yes: merge
+   the PR; apply the migration through the Supabase MCP; `scripts.agent seed`
+   (or `seed_gates`/`seed_tools`) so the two gates and three tools exist;
+   `scripts.judge_eval import` and `run draft_claim` / `run draft_voice`;
+   publish charter v2 and `scripts.department apply marketing`, then enable.
+   Then clear some facts as public (`scripts.draft public <fact>`), or every
+   factual sentence blocks. Research's five mornings run from 2026-09-26; the
+   owner said not to wait on its Milestone report to keep building.
 
 Local tests: `pantheon_dev` and `pantheon_test` in the Docker container are
 behind on migrations. Use the fresh `pantheon_ci` database (482 tests pass):

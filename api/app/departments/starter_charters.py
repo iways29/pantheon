@@ -63,6 +63,9 @@ RESEARCH: Final = Charter(
             role="research",
             tier="cheap",
             runner="deep",
+            # L3: page reads and searches run without the tool-risk check;
+            # pages are still screened (owner, 2026-09-26).
+            autonomy_level="L3",
             allowed_tools=[
                 "web_search",
                 "web_fetch_preview",
@@ -93,6 +96,9 @@ RESEARCH: Final = Charter(
             role="research",
             tier="cheap",
             runner="deep",
+            # L3: page reads and searches run without the tool-risk check;
+            # pages are still screened (owner, 2026-09-26).
+            autonomy_level="L3",
             allowed_tools=[
                 "brain_hygiene_scan",
                 "brain_search",

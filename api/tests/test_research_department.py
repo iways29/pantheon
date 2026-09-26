@@ -21,7 +21,7 @@ import pytest
 
 from app.agents.runs import Runtime, advance_run
 from app.brain.embeddings import HashingEmbedder
-from app.db import as_service_role, connect
+from app.db import acting_as, as_service_role, connect
 from app.departments.apply import apply_charter, enable
 from app.departments.charter import publish, seed_charters
 from app.departments.report import department_report
@@ -284,3 +284,57 @@ def test_the_owner_steps_in_with_an_order_and_it_is_obeyed(dsn: str, lab: Lab) -
             connection, user_id=lab.user_id, org_id=lab.org_id, department="research", days=1
         )
     assert report["owner_orders"] == {"given": 1, "done": 1}
+
+
+def test_the_owners_question_joins_the_next_morning_once(dsn: str, lab: Lab) -> None:
+    with connect(dsn) as connection, acting_as(connection, user_id=str(lab.user_id)) as owner:
+        owner.execute(
+            "insert into public.routine_requests (org_id, routine_key, request) "
+            "values (%s, 'research:morning-brief', 'Who is building AI for legal work?')",
+            (str(lab.org_id),),
+        )
+
+    (task_id,) = fire(dsn)
+
+    with connect(dsn) as connection, as_service_role(connection) as conn:
+        task = conn.execute(
+            "select input, instructions from public.tasks where id = %s", (str(task_id),)
+        ).fetchone()
+        (request,) = conn.execute(
+            "select status, task_id from public.routine_requests where org_id = %s",
+            (str(lab.org_id),),
+        ).fetchall()
+        # The next morning's task no longer carries it.
+        (tomorrow,) = [
+            r["id"]
+            for r in conn.execute(
+                "select public.dispatch_due_triggers(%s::timestamptz) as id",
+                ("2026-09-29 10:35:00+00",),
+            ).fetchall()
+        ]
+        later = conn.execute(
+            "select input from public.tasks where id = %s", (str(tomorrow),)
+        ).fetchone()["input"]
+    assert task["input"]["owner_requests"] == ["Who is building AI for legal work?"]
+    assert "The owner also asked for today: Who is building AI" in task["instructions"]
+    assert task["input"]["sources"] == [SOURCE], "the standing routine is unchanged"
+    assert request["status"] == "used" and request["task_id"] == task_id
+    assert "owner_requests" not in later
+
+
+def test_only_a_person_adds_a_request(dsn: str, lab: Lab) -> None:
+    with connect(dsn) as connection, as_service_role(connection) as conn:
+        agent = conn.execute(
+            "select id from public.agents where org_id = %s and name = 'research-lead'",
+            (str(lab.org_id),),
+        ).fetchone()["id"]
+    with (
+        pytest.raises(psycopg.errors.InsufficientPrivilege),
+        connect(dsn) as connection,
+        acting_as(connection, user_id=str(lab.user_id), agent_id=str(agent)) as conn,
+    ):
+        conn.execute(
+            "insert into public.routine_requests (org_id, routine_key, request) "
+            "values (%s, 'research:morning-brief', 'An agent asking itself')",
+            (str(lab.org_id),),
+        )

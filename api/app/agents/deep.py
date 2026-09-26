@@ -39,8 +39,10 @@ from app.tools import REGISTRY, ToolContext, ToolRuntime
 
 #: The prompt slot a deep agent reads (ADR 007).
 PROMPT_SLOTS = ("system",)
-#: Each model turn's output ceiling.
-TURN_MAX_TOKENS = 1200
+#: Each model turn's output ceiling. Reasoning tokens count against it, so it
+#: leaves room for thinking plus a full tool call (2026-09-26: at 1200 a
+#: high-effort model spent it all thinking and its tool calls were cut off).
+TURN_MAX_TOKENS = 4000
 
 
 @dataclass(frozen=True)

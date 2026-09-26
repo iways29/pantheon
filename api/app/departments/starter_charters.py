@@ -246,7 +246,11 @@ MARKETING: Final = Charter(
             "list_drafts",
             "brain_search",
             "read_document",
-            "generate_image",
+            # The owner's Higgsfield MCP server (ADR 025): generation is R4,
+            # approved per image; the other two only fetch a finished job.
+            "mcp_higgsfield_generate_image",
+            "mcp_higgsfield_jobs_wait",
+            "mcp_higgsfield_show_generation_by_ids",
         ],
         prompts={
             "system": (
@@ -267,9 +271,9 @@ MARKETING: Final = Charter(
                 "Round 4: record with report_result, in plain English: the three ideas, what "
                 "was drafted, and whether it is waiting for the owner or blocked and why. "
                 "Stop.\n"
-                "You never publish; the owner posts by hand. Use generate_image only when the "
-                "owner's order asks for a visual for a specific piece; otherwise suggest a "
-                "simple visual in your report."
+                "You never publish; the owner posts by hand. Use "
+                "mcp_higgsfield_generate_image only when the owner's order asks for a visual "
+                "for a specific piece; otherwise suggest a simple visual in your report."
             ),
             "explain": EXPLAIN,
         },

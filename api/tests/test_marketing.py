@@ -504,9 +504,11 @@ def lab(dsn: str) -> Iterator[Lab]:
         )
     seed_gates(connection, user_id=user_id, org_id=org_id, gates=STARTER_GATES)
     seed_tools(connection, user_id=user_id, org_id=org_id)
-    # generate_image comes from the owner's Higgsfield MCP server, not here.
+    # Higgsfield tools come from the owner's Higgsfield MCP server, not here.
     head = MARKETING.head.model_copy(
-        update={"allowed_tools": [t for t in MARKETING.head.allowed_tools if t != "generate_image"]}
+        update={
+            "allowed_tools": [t for t in MARKETING.head.allowed_tools if not t.startswith("mcp_")]
+        }
     )
     publish(
         connection,

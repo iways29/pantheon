@@ -26,7 +26,7 @@ import psycopg
 
 from app.brain.embeddings import Embedder
 from app.judge.screening import Screener, chunk_text
-from app.knowledge.extract import extract_text
+from app.knowledge.extract import extract_text, without_comments
 from app.knowledge.storage import FileStore
 
 Scope = Literal["company", "department", "agent"]
@@ -156,7 +156,9 @@ class Library:
             document_id = cursor.fetchone()["id"]
 
         if screening.label == "clean":
-            count = self._store_chunks(org_id, document_id, scope, department_id, agent_id, text)
+            count = self._store_chunks(
+                org_id, document_id, scope, department_id, agent_id, without_comments(text)
+            )
             return DocumentResult(document_id, "clean", count, True)
 
         approval_id = None

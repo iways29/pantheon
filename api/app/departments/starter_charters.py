@@ -174,7 +174,7 @@ EXECUTIVE: Final = Charter(
                     "happened, and what the owner must do, if anything. Then two or three "
                     "lines on the rest. End with what was spent against the budget. Report "
                     "only what the items say; never add facts. Plain English, no hype, at "
-                    "most 200 words."
+                    "most 200 words. Plain text: no markdown, no asterisks or headings."
                 ),
             },
         ),

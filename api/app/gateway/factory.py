@@ -16,6 +16,10 @@ from app.gateway.tiers import TIERS, TierMap
 from app.gateway.transport import OpenRouterTransport
 from app.tracing import tracer_from
 
+#: A model call gives up after this long, so one slow call cannot outlast the
+#: function limit (see ADVANCE_DEADLINE_SECONDS in app/internal.py).
+MODEL_CALL_TIMEOUT_SECONDS = 90.0
+
 
 def tier_map_from(settings: Settings) -> TierMap:
     return TierMap.from_json(settings.model_tiers)
@@ -24,7 +28,9 @@ def tier_map_from(settings: Settings) -> TierMap:
 def transport_from(settings: Settings) -> OpenRouterTransport:
     if not settings.openrouter_api_key:
         raise ValueError("OPENROUTER_API_KEY is not set; see .env.example")
-    return OpenRouterTransport(settings.openrouter_api_key)
+    return OpenRouterTransport(
+        settings.openrouter_api_key, timeout_seconds=MODEL_CALL_TIMEOUT_SECONDS
+    )
 
 
 def systemone_transport_from(settings: Settings) -> TypeSafeTransport:

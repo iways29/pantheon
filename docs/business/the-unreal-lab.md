@@ -187,8 +187,11 @@ or as needed.** The owner owns all the accounts.
   agents derive the X post or thread, the Reddit-native version (written for the
   community, not as an advert), the Instagram carousel text, and the newsletter
   section from it, plus smaller items as needed.
-- **Visuals are code-drawn** (SVG and HTML rendered in the site's tokens), not
-  paid generation, following the owner's rule on credits.
+- **Visuals** (owner, 2026-09-26): images and video through the owner's
+  Higgsfield subscription, as MCP tools. `generate_image` (at most 10 a day)
+  and `generate_video` (at most 2 a day) are R4, approved per piece. MCP
+  generations always spend credits, even on an unlimited plan. Code-drawn
+  visuals (SVG and HTML in the site's tokens) remain the free default.
 - **Build in public** is a natural pillar for Mumba: roadmap updates and feedback
   turned into short posts, with the owner's approval.
 
@@ -213,10 +216,11 @@ or as needed.** The owner owns all the accounts.
 
 ## 9. Still open
 
-1. **Voice samples.** Two or three pieces the owner considers exactly right, once
-   there are any; and the banned words and claims beyond the rules above.
-2. **Emoji use** per channel, and the newsletter's cadence. (Sanskrit is
-   decided: website only, rule 2.)
+1. **Voice samples.** None yet (owner, 2026-09-26). Marketing is built without
+   them; the owner's edits to the first drafts become the voice examples. No
+   banned words or claims beyond section 4 so far.
+2. ~~Emoji and newsletter cadence~~ **Decided** (owner, 2026-09-26): some emoji,
+   used sparingly; the newsletter is weekly. (Sanskrit: website only, rule 2.)
 3. **Fund and LP content:** whether counsel's guidance is wanted before anything
    about the fund is published (the rule in section 4 holds meanwhile).
 4. **Morning time** (America/New_York) and how much the owner wants in the brief.

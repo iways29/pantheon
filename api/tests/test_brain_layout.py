@@ -133,3 +133,12 @@ def test_another_org_sees_no_positions(
 
 def test_claim_label_drops_small_words() -> None:
     assert layout.claim_label("The studio's pricing is simple") == "studio's pricing simple"
+
+
+def test_a_cut_name_does_not_end_on_a_small_word(
+    db: psycopg.Connection, tenants: Tenants, seeded: object
+) -> None:
+    with acting_as(db, user_id=str(tenants.user_a)) as conn, conn.cursor() as cursor:
+        first = layout.unnamed(cursor, tenants.org_a, 1)[0]["id"]
+        assert layout.name(cursor, first, "Product features and pricing") == "Product features"
+        assert layout.name(cursor, first, "The and of") is None

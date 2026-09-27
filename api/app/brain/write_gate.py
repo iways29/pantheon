@@ -243,6 +243,12 @@ class BrainWriter:
         by_outcome: dict[str, list[Fact]] = {}
         for fact, decision in judged:
             by_outcome.setdefault(decision.outcome, []).append(fact)
+        if candidate.source == "owner":
+            # The owner is never asked to review what the owner said (ADR 034):
+            # unsure whether it replaces an older statement, both are kept.
+            by_outcome.pop("review", None)
+            if len(by_outcome.get("update", [])) > 1:
+                by_outcome.pop("update")
 
         if "review" in by_outcome:
             return self._hold(texts("review"), requests, candidate, claim, org_id, run_id, key)

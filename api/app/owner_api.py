@@ -462,6 +462,18 @@ def _decide(
         )
     except ApprovalError as error:
         raise HTTPException(error.status, str(error)) from error
+    admitted = None
+    # Approving a held claim stores it (as `scripts.brain admit` does): the
+    # decision card on the screen and the command line do the same thing.
+    if decision == "approve" and row.get("action_type") == "fact_write" and row.get("agent_id"):
+        try:
+            with acting_as(connection, user_id=user_id) as conn:
+                stored = make_writer(conn, row["agent_id"]).admit_approved(
+                    row, agent_id=row["agent_id"]
+                )
+            admitted = str(stored.fact.id) if stored.fact else None
+        except ValueError:
+            admitted = None  # held before any judgment: the decision still stands
     remembered = None
     # A decision with a reason becomes an owner fact (right-hand idea 4), so
     # later proposals are checked against it.
@@ -480,6 +492,7 @@ def _decide(
         "status": row["status"],
         "recommendation": row["recommendation"],
         "remembered": remembered,
+        "fact_id": admitted,
         **({"email_status": row["email_status"]} if "email_status" in row else {}),
     }
 

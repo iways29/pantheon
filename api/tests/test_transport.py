@@ -121,3 +121,91 @@ def test_an_empty_choices_list_is_an_error_not_an_empty_string() -> None:
 def test_an_api_key_is_required() -> None:
     with pytest.raises(ValueError):
         OpenRouterTransport("")
+
+
+# --- Streaming (the chat, ADR 037) ----------------------------------------------
+
+
+def _sse(*chunks: dict[str, Any] | str) -> bytes:
+    lines = [": OPENROUTER PROCESSING", ""]
+    for chunk in chunks:
+        lines += [f"data: {chunk if isinstance(chunk, str) else json.dumps(chunk)}", ""]
+    return "\n".join(lines).encode()
+
+
+def _streaming(body: bytes, seen: list[dict[str, Any]]) -> OpenRouterTransport:
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(json.loads(request.content))
+        return httpx.Response(200, content=body, headers={"content-type": "text/event-stream"})
+
+    return OpenRouterTransport(
+        "test-key", client=httpx.Client(transport=httpx.MockTransport(handler))
+    )
+
+
+def test_a_streamed_reply_hands_over_each_piece_and_returns_the_whole() -> None:
+    seen: list[dict[str, Any]] = []
+    body = _sse(
+        {"model": "m/1", "choices": [{"delta": {"content": "Morning, "}}]},
+        {"choices": [{"delta": {"content": "boss."}}]},
+        {
+            "choices": [{"delta": {}}],
+            "usage": {"prompt_tokens": 9, "completion_tokens": 3, "cost": 0.0004},
+        },
+        "[DONE]",
+    )
+    pieces: list[str] = []
+
+    reply = _streaming(body, seen).complete(
+        model="m/1", messages=[{"role": "user", "content": "hi"}], on_text=pieces.append
+    )
+
+    assert seen[0]["stream"] is True
+    assert pieces == ["Morning, ", "boss."]
+    assert reply.text == "Morning, boss."
+    assert (reply.tokens_in, reply.tokens_out, reply.cost_usd) == (9, 3, 0.0004)
+
+
+def test_a_streamed_tool_call_is_joined_from_its_pieces() -> None:
+    body = _sse(
+        {
+            "choices": [
+                {
+                    "delta": {
+                        "tool_calls": [
+                            {
+                                "index": 0,
+                                "id": "c1",
+                                "function": {"name": "give_order", "arguments": '{"order": "find'},
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "choices": [
+                {"delta": {"tool_calls": [{"index": 0, "function": {"arguments": ' founders"}'}}]}}
+            ]
+        },
+        {"choices": [], "usage": {"prompt_tokens": 5, "completion_tokens": 7, "cost": 0.0001}},
+        "[DONE]",
+    )
+
+    reply = _streaming(body, []).complete(model="m/1", messages=[], on_text=lambda _: None)
+
+    assert [(c.name, json.loads(c.arguments)) for c in reply.tool_calls] == [
+        ("give_order", {"order": "find founders"})
+    ]
+
+
+def test_a_failure_mid_stream_raises_upstream_error() -> None:
+    body = _sse(
+        {"choices": [{"delta": {"content": "Half"}}]},
+        {
+            "error": {"code": 502, "message": "provider went away"},
+            "choices": [{"finish_reason": "error"}],
+        },
+    )
+    with pytest.raises(UpstreamError, match="stream failed"):
+        _streaming(body, []).complete(model="m/1", messages=[], on_text=lambda _: None)

@@ -25,10 +25,22 @@ function title(approval: Approval): string {
  * clash with an earlier decision), questions from the Chief of Staff, and
  * MCP tools switched off because their server changed them.
  */
-export function NeedsYou({ onOpen }: { onOpen?: (approval: Approval) => void }) {
+export function NeedsYou({
+  onOpen,
+  limit,
+  onMore,
+}: {
+  onOpen?: (approval: Approval) => void;
+  /** Show at most this many, with a way to the rest. */
+  limit?: number;
+  onMore?: () => void;
+}) {
   const { approvals, changedTools } = useCompany();
-  const questions = approvals.filter((a) => a.action_type === 'route_order');
-  const others = approvals.filter((a) => a.action_type !== 'route_order');
+  const cap = limit ?? Infinity;
+  const questions = approvals.filter((a) => a.action_type === 'route_order').slice(0, cap);
+  const others = approvals
+    .filter((a) => a.action_type !== 'route_order')
+    .slice(0, Math.max(0, cap - questions.length));
   const total = approvals.length + changedTools.length;
 
   return (
@@ -62,7 +74,7 @@ export function NeedsYou({ onOpen }: { onOpen?: (approval: Approval) => void }) 
                 </span>
                 <span style={{ lineHeight: 1.35 }}>{q.explanation || title(q)}</span>
                 <span className="faint" style={{ fontSize: 12 }}>
-                  Answer in chat
+                  Tap to answer
                 </span>
               </button>
             </li>
@@ -120,6 +132,11 @@ export function NeedsYou({ onOpen }: { onOpen?: (approval: Approval) => void }) 
           ))}
         </ul>
       )}
+      {limit !== undefined && total > limit && onMore ? (
+        <button className="btn sm glass" onClick={onMore}>
+          See all {total}
+        </button>
+      ) : null}
     </section>
   );
 }

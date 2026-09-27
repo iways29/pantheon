@@ -249,6 +249,22 @@ def test_an_unclear_contradiction_is_held_for_review_once(
     assert len(facts(db, tenants)) == 1
 
 
+def test_the_owners_words_are_never_held_on_an_unclear_neighbour(
+    db: psycopg.Connection, tenants: Tenants, agent: UUID
+) -> None:
+    """Seen live 2026-09-27: a second question about Mumbai was held for the
+    owner because Jev could not tell if it replaced the first (ADR 034)."""
+    propose(db, tenants, agent, ScriptedJev())
+    claim = "Acme Corp was founded in 2021 in Leeds."
+    jev = ScriptedJev(nouls={"contradicts": 0.5})
+
+    kept = propose(db, tenants, agent, jev, claim=claim, source_text=claim, source="owner")
+
+    assert kept.outcome in ("accepted", "disputed") and kept.fact is not None
+    assert rows(db, "select * from public.approvals where org_id = %s", str(tenants.org_a)) == []
+    assert len(facts(db, tenants)) == 2
+
+
 def test_a_newer_value_supersedes_the_old_fact(
     db: psycopg.Connection, tenants: Tenants, agent: UUID
 ) -> None:

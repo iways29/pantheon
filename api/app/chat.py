@@ -16,7 +16,10 @@ so the answer is never kept waiting for it; `remembered_at` marks it done.
 """
 
 import json
-from collections.abc import Callable
+import queue
+import threading
+from collections.abc import Callable, Iterator
+from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated, Any
@@ -25,6 +28,7 @@ from zoneinfo import ZoneInfo
 
 import psycopg
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.auth import OwnerPrincipal
@@ -147,7 +151,23 @@ def get_remember(settings: Annotated[Settings, Depends(get_settings)]) -> Rememb
     return remember
 
 
+OpenConnection = Callable[[], AbstractContextManager[psycopg.Connection]]
+
+
+def get_connection_opener(settings: Annotated[Settings, Depends(get_settings)]) -> OpenConnection:
+    """A connection of its own for a streamed reply, which outlives the request
+    handler. Overridden in tests."""
+
+    def open_() -> AbstractContextManager[psycopg.Connection]:
+        if not settings.database_url:
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "DATABASE_URL is not set")
+        return connect(settings.database_url)
+
+    return open_
+
+
 TalkFactory = Annotated[MakeTalk, Depends(get_talk_factory)]
+OpenerDep = Annotated[OpenConnection, Depends(get_connection_opener)]
 RememberDep = Annotated[Remember, Depends(get_remember)]
 
 
@@ -349,15 +369,90 @@ def say(
 ) -> dict[str, Any]:
     """Say something to an agent and get its answer. When the owner asked for
     work, the answer names the order or task it started."""
+    org_id = owner_org(connection, principal.user_id)
+    out, later = converse(connection, principal.user_id, org_id, agent, body, make_talk)
+    if later:
+        background.add_task(remember, org_id, principal.user_id, *later)
+    return out
+
+
+@router.post("/chat/{agent}/stream")
+def say_streamed(
+    agent: str,
+    body: Say,
+    principal: OwnerPrincipal,
+    connection: Connection,
+    make_talk: TalkFactory,
+    remember: RememberDep,
+    open_connection: OpenerDep,
+) -> StreamingResponse:
+    """The same turn, streamed as server-sent events: `delta` events carry the
+    reply as it is written, then one `done` event carries both messages (and
+    any work started), or an `error` event says why there is no answer."""
+    org_id = owner_org(connection, principal.user_id)
+    with acting_as(connection, user_id=principal.user_id) as conn, conn.cursor() as cursor:
+        _talker(cursor, agent)  # an unknown agent or a worker is refused before streaming
+    if not body.text.strip():
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Say something first")
+
+    events: queue.Queue[tuple[str, Any] | None] = queue.Queue()
+
+    def work() -> None:
+        try:
+            with open_connection() as own:
+                out, later = converse(
+                    own,
+                    principal.user_id,
+                    org_id,
+                    agent,
+                    body,
+                    make_talk,
+                    on_text=lambda piece: events.put(("delta", {"text": piece})),
+                )
+            events.put(("done", out))
+            if later:
+                remember(org_id, principal.user_id, *later)
+        except HTTPException as error:
+            events.put(("error", {"detail": error.detail}))
+        except Exception as error:
+            events.put(("error", {"detail": f"{agent} could not answer: {error}"}))
+        finally:
+            events.put(None)
+
+    threading.Thread(target=work, daemon=True).start()
+
+    def stream() -> Iterator[str]:
+        while (item := events.get()) is not None:
+            kind, data = item
+            yield f"event: {kind}\ndata: {json.dumps(data, default=str)}\n\n"
+
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+def converse(
+    connection: psycopg.Connection,
+    user_id: str,
+    org_id: str,
+    agent: str,
+    body: Say,
+    make_talk: MakeTalk,
+    on_text: Callable[[str], None] | None = None,
+) -> tuple[dict[str, Any], tuple[str, str] | None]:
+    """One turn of the conversation: the owner's message kept, the agent's
+    answer (streamed through `on_text` when given), any work it started.
+    Returns the pair of messages, and what to sort into memory afterwards."""
     from app.tasks import TaskError, order
 
-    org_id = owner_org(connection, principal.user_id)
     text = body.text.strip()
     if not text:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Say something first")
     key = f"chat:{body.key or uuid4()}"
 
-    with acting_as(connection, user_id=principal.user_id) as conn, conn.cursor() as cursor:
+    with acting_as(connection, user_id=user_id) as conn, conn.cursor() as cursor:
         talker = _talker(cursor, agent)
         cursor.execute(
             "select id from public.chat_messages where org_id = %s and idempotency_key = %s",
@@ -374,7 +469,8 @@ def say(
             )
             pair = cursor.fetchall()
             if len(pair) > 1 and pair[1]["role"] == "agent":
-                return {"said": _message(pair[0], cursor), "reply": _message(pair[1], cursor)}
+                done = {"said": _message(pair[0], cursor), "reply": _message(pair[1], cursor)}
+                return done, None
             said = pair[0]  # saved, but never answered: answer it now
         else:
             cursor.execute(
@@ -382,7 +478,7 @@ def say(
                 "(org_id, agent_id, role, body, idempotency_key, created_by) "
                 "values (%s, %s, 'owner', %s, %s, %s) "
                 "returning id, role, body, created_at, task_id",
-                (org_id, str(talker["id"]), text, key, principal.user_id),
+                (org_id, str(talker["id"]), text, key, user_id),
             )
             said = cursor.fetchone()
         conf = _settings(cursor, org_id)
@@ -400,7 +496,7 @@ def say(
 
     talk = make_talk(connection, talker["id"])
     facts: list[str] = []
-    with acting_as(connection, user_id=principal.user_id) as conn, conn.cursor() as cursor:
+    with acting_as(connection, user_id=user_id) as conn, conn.cursor() as cursor:
         if talk.brain is not None and int(conf["facts"]) > 0:
             try:
                 facts = [m.fact.claim for m in talk.brain.search(text, limit=int(conf["facts"]))]
@@ -410,8 +506,9 @@ def say(
 
     role = talker["role_type"]
     try:
-        with acting_as(connection, user_id=principal.user_id):
+        with acting_as(connection, user_id=user_id):
             response = talk.gateway.complete(
+                on_text=on_text,
                 agent_id=talker["id"],
                 max_tokens=int(conf["max_tokens"]),
                 messages=[
@@ -440,7 +537,7 @@ def say(
         try:
             task = order(
                 connection,
-                user_id=principal.user_id,
+                user_id=user_id,
                 org_id=org_id,
                 agent=talker["name"],
                 title=title,
@@ -453,14 +550,14 @@ def say(
             if not reply_text:
                 reply_text = f"On it: {title}. I will report back here."
             try:
-                with acting_as(connection, user_id=principal.user_id) as conn:
+                with acting_as(connection, user_id=user_id) as conn:
                     conn.execute("select public.start_now()")
             except psycopg.Error:
                 pass  # the minute tick starts it instead
     if not reply_text:
         reply_text = "I have nothing to add."
 
-    with acting_as(connection, user_id=principal.user_id) as conn, conn.cursor() as cursor:
+    with acting_as(connection, user_id=user_id) as conn, conn.cursor() as cursor:
         cursor.execute(
             "update public.chat_messages set task_id = %s where id = %s",
             (str(task.id) if task else None, str(said["id"])),
@@ -494,6 +591,5 @@ def say(
 
     # An order to the Chief of Staff is remembered by the router as it takes
     # it (ADR 034); everything else said is sorted here.
-    if not (task and role == "chief_of_staff"):
-        background.add_task(remember, org_id, principal.user_id, str(talker["id"]), str(said["id"]))
-    return out
+    later = None if task and role == "chief_of_staff" else (str(talker["id"]), str(said["id"]))
+    return out, later

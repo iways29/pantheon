@@ -1,14 +1,15 @@
 """Where each fact sits on the brain screen (Step 10, ADR 036).
 
 Facts near in meaning sit near each other. The first time, every fact's
-embedding is projected to two dimensions (the two strongest directions of the
-embeddings, a principal-component projection) and the facts are grouped into
+embedding is projected to three dimensions (the three strongest directions of
+the embeddings, a principal-component projection), inside a ball: the brain
+screen draws them as a globe (ADR 036). The facts are grouped into
 neighbourhoods (k-means by meaning). The projection is kept
 (`brain_layouts`), and from then on:
 
 - a new fact is placed beside its nearest placed facts (by meaning) and joins
   their neighbourhood;
-- a fact on a new topic (nothing near enough) goes to the rim, in the
+- a fact on a new topic (nothing near enough) goes near the surface, in the
   direction the projection gives it, and starts a neighbourhood there;
 - a placed fact never moves, so the owner's map stays the owner's map.
 
@@ -42,7 +43,7 @@ DEFAULTS: dict[str, Any] = {
     "names_per_run": 3,
     "name_max_tokens": 200,
 }
-#: The fitted facts fill this much of the unit disc (95th percentile).
+#: The fitted facts fill this much of the unit ball (95th percentile).
 FILL = 0.85
 MAX_RADIUS = 0.97
 
@@ -52,6 +53,7 @@ class Placement:
     fact_id: UUID
     x: float
     y: float
+    z: float
     neighbourhood_id: UUID | None
     placed_by: str
 
@@ -89,7 +91,7 @@ def fit(connection: psycopg.Connection, org_id: UUID | str) -> dict[str, int]:
 
         vectors = _unit(np.array([_array(r["embedding"]) for r in rows]))
         mean = vectors.mean(axis=0)
-        axes = _axes(vectors - mean)
+        axes = _axes(vectors - mean, 3)
         projected = (vectors - mean) @ axes.T
         radii = np.linalg.norm(projected, axis=1)
         top = float(np.percentile(radii, 95)) if len(rows) > 1 else 0.0
@@ -98,13 +100,14 @@ def fit(connection: psycopg.Connection, org_id: UUID | str) -> dict[str, int]:
 
         cursor.execute(
             "insert into public.brain_layouts "
-            "(org_id, mean, axis_x, axis_y, spread, embedding_model, fact_count) "
-            "values (%s, %s, %s, %s, %s, %s, %s)",
+            "(org_id, mean, axis_x, axis_y, axis_z, spread, embedding_model, fact_count) "
+            "values (%s, %s, %s, %s, %s, %s, %s, %s)",
             (
                 str(org_id),
                 mean.tolist(),
                 axes[0].tolist(),
                 axes[1].tolist(),
+                axes[2].tolist(),
                 spread,
                 rows[0]["embedding_model"],
                 len(rows),
@@ -116,12 +119,11 @@ def fit(connection: psycopg.Connection, org_id: UUID | str) -> dict[str, int]:
         neighbourhoods: dict[int, UUID] = {}
         for group in sorted(set(groups)):
             members = [points[i] for i, g in enumerate(groups) if g == group]
-            cx = sum(p[0] for p in members) / len(members)
-            cy = sum(p[1] for p in members) / len(members)
+            centre = [sum(p[i] for p in members) / len(members) for i in range(3)]
             cursor.execute(
-                "insert into public.brain_neighbourhoods (org_id, x, y) values (%s, %s, %s) "
-                "returning id",
-                (str(org_id), cx, cy),
+                "insert into public.brain_neighbourhoods (org_id, x, y, z) "
+                "values (%s, %s, %s, %s) returning id",
+                (str(org_id), *centre),
             )
             neighbourhoods[group] = cursor.fetchone()["id"]
 
@@ -129,7 +131,7 @@ def fit(connection: psycopg.Connection, org_id: UUID | str) -> dict[str, int]:
             _insert(
                 cursor,
                 org_id,
-                Placement(row["id"], point[0], point[1], neighbourhoods[group], "fit"),
+                Placement(row["id"], *point, neighbourhoods[group], "fit"),
             )
         for neighbourhood_id in neighbourhoods.values():
             relabel(cursor, neighbourhood_id)
@@ -166,52 +168,60 @@ def place(
     conf = settings(cursor, org_id)
     vector = _array(embedding)
     cursor.execute(
-        "select p.x, p.y, p.neighbourhood_id, (f.embedding <=> %s::vector) as distance "
+        "select p.x, p.y, coalesce(p.z, 0) as z, p.neighbourhood_id, "
+        "(f.embedding <=> %s::vector) as distance "
         "from public.fact_positions p join public.facts f on f.id = p.fact_id "
         "where p.org_id = %s and f.embedding is not null and f.id <> %s "
         "order by f.embedding <=> %s::vector limit %s",
         (vector.tolist(), str(org_id), str(fact_id), vector.tolist(), int(conf["neighbours"])),
     )
     near = cursor.fetchall()
-    jx, jy = _jitter(fact_id, float(conf["jitter"]))
+    jitter = np.array(_jitter(fact_id, float(conf["jitter"])))
 
     if near and float(near[0]["distance"]) <= float(conf["new_topic_distance"]):
         weights = [1.0 / (float(n["distance"]) + 0.05) for n in near]
         total = sum(weights)
-        x = sum(w * n["x"] for w, n in zip(weights, near, strict=True)) / total
-        y = sum(w * n["y"] for w, n in zip(weights, near, strict=True)) / total
+        centre = np.array(
+            [
+                sum(w * n[axis] for w, n in zip(weights, near, strict=True)) / total
+                for axis in ("x", "y", "z")
+            ]
+        )
         placement = Placement(
-            fact_id, *_clamp(np.array([x + jx, y + jy])), near[0]["neighbourhood_id"], "neighbours"
+            fact_id, *_clamp(centre + jitter), near[0]["neighbourhood_id"], "neighbours"
         )
         _insert(cursor, org_id, placement)
         return placement
 
-    # A new topic: at the rim, in the direction the projection points.
+    # A new topic: near the surface, in the direction the projection points.
     unit = vector / (np.linalg.norm(vector) or 1.0)
     centred = unit - _array(layout["mean"])
     direction = np.array(
-        [float(centred @ _array(layout["axis_x"])), float(centred @ _array(layout["axis_y"]))]
+        [
+            float(centred @ _array(layout[axis])) if layout.get(axis) is not None else 0.0
+            for axis in ("axis_x", "axis_y", "axis_z")
+        ]
     )
     length = float(np.linalg.norm(direction))
     if length < 1e-9:
-        angle = (fact_id.int % 3600) / 3600 * 2 * math.pi
-        direction, length = np.array([math.cos(angle), math.sin(angle)]), 1.0
+        direction, length = np.array(_jitter(fact_id, 1.0)), 1.0
+        length = float(np.linalg.norm(direction)) or 1.0
     radius = float(conf["edge_radius"])
-    x, y = _clamp(direction / length * radius + np.array([jx, jy]))
+    x, y, z = _clamp(direction / length * radius + jitter)
     neighbourhood_id = None
     cursor.execute(
         "select count(*) as n from public.brain_neighbourhoods where org_id = %s", (str(org_id),)
     )
     if cursor.fetchone()["n"] < int(conf["max_neighbourhoods"]):
         cursor.execute(
-            "insert into public.brain_neighbourhoods (org_id, x, y) values (%s, %s, %s) "
-            "returning id",
-            (str(org_id), x, y),
+            "insert into public.brain_neighbourhoods (org_id, x, y, z) "
+            "values (%s, %s, %s, %s) returning id",
+            (str(org_id), x, y, z),
         )
         neighbourhood_id = cursor.fetchone()["id"]
     elif near:
         neighbourhood_id = near[0]["neighbourhood_id"]
-    placement = Placement(fact_id, x, y, neighbourhood_id, "edge")
+    placement = Placement(fact_id, x, y, z, neighbourhood_id, "edge")
     _insert(cursor, org_id, placement)
     if neighbourhood_id is not None:
         relabel(cursor, neighbourhood_id)
@@ -295,6 +305,9 @@ SMALL_WORDS = frozenset(
 def claim_label(claim: str, words: int = 3) -> str:
     """The first few words of a claim, without the small ones at the ends."""
     small = SMALL_WORDS
+    # The owner's memories open with who and when (ADR 034): name what was said.
+    if re.match(r"^(On \d|The owner|How the owner)", claim) and ": " in claim:
+        claim = claim.split(": ", 1)[1]
     tokens = re.findall(r"[\w'\u2019-]+", claim)
     picked = [t for t in tokens if t.lower() not in small][:words]
     return " ".join(picked)[:60]
@@ -354,16 +367,16 @@ def _unit(matrix: np.ndarray) -> np.ndarray:
     return matrix / np.where(norms == 0, 1.0, norms)
 
 
-def _axes(centred: np.ndarray) -> np.ndarray:
-    """The two strongest directions, each with a fixed sign so a refit of the
-    same facts draws the same map. Fewer than two facts: any two directions."""
+def _axes(centred: np.ndarray, count: int) -> np.ndarray:
+    """The strongest directions, each with a fixed sign so a refit of the same
+    facts draws the same globe. Too few facts: any other directions."""
     dims = centred.shape[1]
     axes: list[np.ndarray] = []
     if centred.shape[0] >= 2 and np.any(centred):
         _, _, vt = np.linalg.svd(centred, full_matrices=False)
-        axes = [v for v in vt[:2] if np.linalg.norm(v) > 0]
+        axes = [v for v in vt[:count] if np.linalg.norm(v) > 1e-9]
     for i in range(dims):
-        if len(axes) == 2:
+        if len(axes) == count:
             break
         basis = np.zeros(dims)
         basis[i] = 1.0
@@ -400,28 +413,38 @@ def _kmeans(vectors: np.ndarray, k: int, rounds: int = 25) -> list[int]:
     return [order.setdefault(int(g), len(order)) for g in groups]
 
 
-def _clamp(point: np.ndarray) -> tuple[float, float]:
+def _clamp(point: np.ndarray) -> tuple[float, ...]:
     radius = float(np.linalg.norm(point))
     if radius > MAX_RADIUS:
         point = point / radius * MAX_RADIUS
-    return float(point[0]), float(point[1])
+    return tuple(float(v) for v in point)
 
 
-def _jitter(fact_id: UUID, size: float) -> tuple[float, float]:
-    angle = (fact_id.int % 3600) / 3600 * 2 * math.pi
-    radius = size * ((fact_id.int >> 12) % 1000) / 1000
-    return radius * math.cos(angle), radius * math.sin(angle)
+def _jitter(fact_id: UUID, size: float) -> tuple[float, float, float]:
+    """A small, fixed nudge in 3D, from the fact's id: the same fact always
+    lands in the same place."""
+    theta = (fact_id.int % 3600) / 3600 * 2 * math.pi
+    cos_phi = ((fact_id.int >> 12) % 2000) / 1000 - 1
+    sin_phi = math.sqrt(max(0.0, 1 - cos_phi * cos_phi))
+    radius = size * ((fact_id.int >> 24) % 1000) / 1000
+    return (
+        radius * sin_phi * math.cos(theta),
+        radius * sin_phi * math.sin(theta),
+        radius * cos_phi,
+    )
 
 
 def _insert(cursor: psycopg.Cursor, org_id: UUID | str, placement: Placement) -> None:
     cursor.execute(
-        "insert into public.fact_positions (fact_id, org_id, x, y, neighbourhood_id, placed_by) "
-        "values (%s, %s, %s, %s, %s, %s) on conflict (fact_id) do nothing",
+        "insert into public.fact_positions "
+        "(fact_id, org_id, x, y, z, neighbourhood_id, placed_by) "
+        "values (%s, %s, %s, %s, %s, %s, %s) on conflict (fact_id) do nothing",
         (
             str(placement.fact_id),
             str(org_id),
             placement.x,
             placement.y,
+            placement.z,
             str(placement.neighbourhood_id) if placement.neighbourhood_id else None,
             placement.placed_by,
         ),

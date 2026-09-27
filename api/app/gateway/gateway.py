@@ -12,6 +12,7 @@ nothing.
 
 import dataclasses
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
@@ -115,8 +116,13 @@ class Gateway:
         tools: list[dict[str, Any]] | None = None,
         tool_choice: str | dict[str, Any] | None = None,
         plugins: list[dict[str, Any]] | None = None,
+        on_text: Callable[[str], None] | None = None,
     ) -> ModelResponse:
         """Run one model call on behalf of an agent.
+
+        `on_text` streams the reply: each piece of text is handed over as it
+        arrives (the chat, ADR 037). Every gate, the budget and the cost log
+        apply exactly as without it.
 
         `sensitive=True` restricts routing to providers that will not retain or
         train on the input. It is opt-in per call rather than a property of the
@@ -161,6 +167,8 @@ class Gateway:
                 if agent.reasoning:
                     # How hard the tier's model thinks: data, not code.
                     extra["reasoning"] = agent.reasoning
+                if on_text is not None:
+                    extra["on_text"] = on_text
                 response = self._transport.complete(
                     model=model,
                     messages=messages,

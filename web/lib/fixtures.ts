@@ -69,6 +69,7 @@ export function previewSnapshot(state: PreviewState): {
     id: `n${i}`,
     x,
     y,
+    z: Math.sin(i * 2.1) * 0.45,
     label,
     named_by: 'model' as const,
     size: 0,
@@ -77,6 +78,7 @@ export function previewSnapshot(state: PreviewState): {
     const hood = neighbourhoods[i % neighbourhoods.length]!;
     const angle = rnd() * Math.PI * 2;
     const r = Math.sqrt(rnd()) * 0.2;
+    const depth = (rnd() - 0.5) * 0.3;
     const roll = rnd();
     hood.size += 1;
     facts.push({
@@ -88,6 +90,7 @@ export function previewSnapshot(state: PreviewState): {
       at: at('09:00'),
       x: hood.x + Math.cos(angle) * r,
       y: hood.y + Math.sin(angle) * r,
+      z: hood.z + depth,
       n: hood.id,
       agent: null,
     });

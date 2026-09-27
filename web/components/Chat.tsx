@@ -1,10 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 
 import { Icon } from '@/components/Icon';
 import { AGENT_MARK, AGENT_WORDS, Mark } from '@/components/Mark';
-import { api } from '@/lib/api';
+import { api, stream } from '@/lib/api';
 import { useCompany } from '@/lib/company';
 import { previewThread, previewTalkers } from '@/lib/fixtures';
 import { agentName, departmentName, money, when } from '@/lib/format';
@@ -40,6 +40,26 @@ export function Chat() {
   const [thread, setThread] = useState<ChatMessage[] | null>(null);
   const [text, setText] = useState('');
   const [waiting, setWaiting] = useState<string | null>(null);
+  const [streamed, setStreamed] = useState('');
+  const [menu, setMenu] = useState(false);
+  const box = useRef<HTMLTextAreaElement>(null);
+  const picker = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menu) return;
+    const close = (event: MouseEvent) => {
+      if (picker.current && !picker.current.contains(event.target as Node)) setMenu(false);
+    };
+    const onEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') setMenu(false);
+    };
+    window.addEventListener('mousedown', close);
+    window.addEventListener('keydown', onEscape);
+    return () => {
+      window.removeEventListener('mousedown', close);
+      window.removeEventListener('keydown', onEscape);
+    };
+  }, [menu]);
   const [error, setError] = useState<string | null>(null);
   const log = useRef<HTMLDivElement>(null);
 
@@ -58,6 +78,18 @@ export function Chat() {
       })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
   }, [preview]);
+
+  // "Talk" on an agent's panel opens its conversation here.
+  useEffect(() => {
+    const onTalk = (event: Event) => {
+      const name = (event as CustomEvent<string>).detail;
+      setWho(name);
+      setMenu(false);
+      box.current?.focus();
+    };
+    window.addEventListener('pantheon:talk', onTalk);
+    return () => window.removeEventListener('pantheon:talk', onTalk);
+  }, []);
 
   const load = useCallback(async () => {
     if (!who) return;
@@ -83,24 +115,51 @@ export function Chat() {
   const count = (thread?.length ?? 0) + (waiting ? 2 : 0);
   useEffect(() => {
     log.current?.scrollTo({ top: log.current.scrollHeight });
-  }, [count]);
+  }, [count, streamed]);
 
-  async function send(event: FormEvent) {
-    event.preventDefault();
+  // The box grows with what is written, up to six lines.
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 150)}px`;
+  }, [text]);
+
+  async function send(event?: FormEvent) {
+    event?.preventDefault();
     const said = text.trim();
     if (!said || waiting || !who) return;
     setWaiting(said);
+    setStreamed('');
     setText('');
     setError(null);
     try {
       if (preview) throw new Error('The preview does not send messages.');
-      await api.post(`chat/${encodeURIComponent(who)}`, { text: said, key: crypto.randomUUID() });
+      let failed: string | null = null;
+      await stream(
+        `chat/${encodeURIComponent(who)}/stream`,
+        { text: said, key: crypto.randomUUID() },
+        (kind, data) => {
+          if (kind === 'delta') setStreamed((so) => so + (data as { text: string }).text);
+          if (kind === 'error') failed = String((data as { detail: unknown }).detail);
+        },
+      );
+      if (failed) throw new Error(failed);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setText(said);
     } finally {
       setWaiting(null);
+      setStreamed('');
+    }
+  }
+
+  function onKey(event: KeyboardEvent<HTMLTextAreaElement>) {
+    // Enter sends; Shift+Enter starts a new line.
+    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+      event.preventDefault();
+      void send();
     }
   }
 
@@ -144,18 +203,46 @@ export function Chat() {
         </div>
       </div>
       {talkers.length > 1 ? (
-        <div className="chat-who" role="tablist" aria-label="Talk with">
-          {talkers.map((t) => (
-            <button
-              key={t.name}
-              role="tab"
-              aria-selected={t.name === who}
-              className="chip who"
-              onClick={() => setWho(t.name)}
-            >
-              {t.role === 'chief_of_staff' ? 'Chief of Staff' : departmentName(t.department)}
-            </button>
-          ))}
+        <div className="chat-who" ref={picker}>
+          <button
+            className="btn sm glass who-button"
+            aria-haspopup="listbox"
+            aria-expanded={menu}
+            onClick={() => setMenu((v) => !v)}
+          >
+            <span className="faint">Talk with</span>
+            {talker ? title(talker) : 'Choose'}
+            <Icon name="chevron" size={14} />
+          </button>
+          {menu ? (
+            <ul className="glass who-menu" role="listbox" aria-label="Talk with">
+              {talkers.map((t) => {
+                const state = agents.find((a) => a.name === t.name)?.state;
+                return (
+                  <li key={t.name}>
+                    <button
+                      role="option"
+                      aria-selected={t.name === who}
+                      className="who-option"
+                      onClick={() => {
+                        setWho(t.name);
+                        setMenu(false);
+                      }}
+                    >
+                      {state ? <Mark kind={AGENT_MARK[state]} /> : <span className="gl idle" />}
+                      <span style={{ display: 'grid' }}>
+                        <span>{title(t)}</span>
+                        <span className="faint" style={{ fontSize: 12 }}>
+                          {agentName(t.name)}
+                          {t.last ? ` · ${when(t.last.at)}` : ''}
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
         </div>
       ) : null}
 
@@ -181,11 +268,17 @@ export function Chat() {
             <div className="msg you">
               <span style={{ whiteSpace: 'pre-wrap' }}>{waiting}</span>
             </div>
-            <div className="msg cos g2 typing" role="status" aria-label="Thinking">
-              <span />
-              <span />
-              <span />
-            </div>
+            {streamed ? (
+              <div className="msg cos g2" aria-busy="true">
+                <span style={{ whiteSpace: 'pre-wrap' }}>{streamed}</span>
+              </div>
+            ) : (
+              <div className="msg cos g2 typing" role="status" aria-label="Thinking">
+                <span />
+                <span />
+                <span />
+              </div>
+            )}
           </>
         ) : null}
       </div>
@@ -194,16 +287,17 @@ export function Chat() {
         <label htmlFor="order-input" className="vh">
           Message
         </label>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <input
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+          <textarea
             id="order-input"
-            className="inp"
+            ref={box}
+            className="inp chat-box"
+            rows={1}
             placeholder={talker?.role === 'head' ? 'Ask, or give work' : 'Ask, or give an order'}
-            style={{ borderRadius: 999, padding: '0 18px' }}
             value={text}
             onChange={(event) => setText(event.target.value)}
+            onKeyDown={onKey}
             maxLength={4000}
-            autoComplete="off"
           />
           <button
             className="btn pri ibtn"
@@ -220,7 +314,7 @@ export function Chat() {
           </span>
         ) : (
           <span className="faint" style={{ fontSize: 12, paddingLeft: 18 }}>
-            Work you start shows its path in the brain.
+            Enter sends · Shift+Enter for a new line
           </span>
         )}
       </form>

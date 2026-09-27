@@ -70,6 +70,8 @@ export interface MapFact {
   at: string;
   x: number | null;
   y: number | null;
+  /** Depth in the globe (ADR 036); 0 on a map drawn before the globe. */
+  z: number | null;
   n: string | null;
   agent: string | null;
 }
@@ -78,6 +80,7 @@ export interface Neighbourhood {
   id: string;
   x: number;
   y: number;
+  z: number;
   label: string;
   named_by: 'model' | 'entity' | 'claim';
   size: number;

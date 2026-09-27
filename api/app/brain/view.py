@@ -22,7 +22,7 @@ def facts_on_the_map(cursor: psycopg.Cursor) -> list[dict[str, Any]]:
     cursor.execute(
         f"""
         select f.id, left(f.claim, {SHORT_CLAIM}) as claim, f.status, f.kind, f.visibility,
-               f.created_at, p.x, p.y, p.neighbourhood_id, r.agent_id
+               f.created_at, p.x, p.y, p.z, p.neighbourhood_id, r.agent_id
           from public.facts f
           left join public.fact_positions p on p.fact_id = f.id
           left join public.runs r on r.id = f.created_by_run_id
@@ -39,6 +39,7 @@ def facts_on_the_map(cursor: psycopg.Cursor) -> list[dict[str, Any]]:
             "at": r["created_at"].isoformat(),
             "x": None if r["x"] is None else round(r["x"], 4),
             "y": None if r["y"] is None else round(r["y"], 4),
+            "z": None if r["x"] is None else round(r["z"] or 0.0, 4),
             "n": str(r["neighbourhood_id"]) if r["neighbourhood_id"] else None,
             "agent": str(r["agent_id"]) if r["agent_id"] else None,
         }
@@ -49,7 +50,7 @@ def facts_on_the_map(cursor: psycopg.Cursor) -> list[dict[str, Any]]:
 def neighbourhoods(cursor: psycopg.Cursor) -> list[dict[str, Any]]:
     cursor.execute(
         """
-        select n.id, n.x, n.y, n.label, n.label_source, count(p.fact_id) as size
+        select n.id, n.x, n.y, n.z, n.label, n.label_source, count(p.fact_id) as size
           from public.brain_neighbourhoods n
           left join public.fact_positions p on p.neighbourhood_id = n.id
          group by n.id order by size desc, n.id
@@ -60,6 +61,7 @@ def neighbourhoods(cursor: psycopg.Cursor) -> list[dict[str, Any]]:
             "id": str(r["id"]),
             "x": round(r["x"], 4),
             "y": round(r["y"], 4),
+            "z": round(r["z"], 4),
             "label": r["label"],
             "named_by": r["label_source"],
             "size": r["size"],
@@ -100,7 +102,7 @@ def fact_detail(cursor: psycopg.Cursor, fact_id: UUID) -> dict[str, Any] | None:
                f.confidence, f.created_at, f.review_after, f.superseded_by, f.admitted_by,
                f.document_id, d.title as document_title,
                r.id as run_id, a.id as agent_id, a.name as agent, dep.name as department,
-               p.x, p.y, p.neighbourhood_id, n.label as neighbourhood
+               p.x, p.y, p.z, p.neighbourhood_id, n.label as neighbourhood
           from public.facts f
           left join public.documents d on d.id = f.document_id
           left join public.runs r on r.id = f.created_by_run_id
@@ -222,6 +224,7 @@ def fact_detail(cursor: psycopg.Cursor, fact_id: UUID) -> dict[str, Any] | None:
             else {
                 "x": fact["x"],
                 "y": fact["y"],
+                "z": fact["z"] or 0.0,
                 "neighbourhood_id": str(hood) if hood else None,
                 "neighbourhood": fact["neighbourhood"],
             }

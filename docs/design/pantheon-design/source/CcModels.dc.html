@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Control Center, models and spend</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&amp;family=Hanken+Grotesk:wght@400;500;600&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="{{root}}" style="position: relative; width: 1440px; height: 900px; overflow: hidden; color: var(--ink); font-family: 'Hanken Grotesk', system-ui, sans-serif">
+<dc-import name="CcShell" screen="models" theme="{{theme}}" hint-size="1440px,900px"></dc-import>
+<main style="position: absolute; left: 264px; top: 72px; width: 1160px; height: 772px; box-sizing: border-box; padding: 16px 8px 0 8px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px">
+<div><h1 class="disp" style="margin: 0; font-size: 30px">Models and spend</h1><p class="muted" style="margin: 4px 0 0; font-size: 14px">Three tiers for the whole company, with budgets under one monthly ceiling.</p></div>
+<button class="btn"><svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"></circle><path d="M8 5v3l2 1.5"></path></svg>History</button>
+</div>
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 14px">
+<section class="surf" aria-label="Tiers" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 8px">
+<div class="sech"><h2 style="font-size: 18px">Tiers</h2><span class="faint" style="font-size: 12px">Prices per million tokens, in and out</span></div>
+<div class="tbl">
+<div class="row" style="grid-template-columns: 86px minmax(0, 1fr) 150px; border-top: 0"><span class="nm">Cheap</span><span class="code">[vendor]/[small model]</span><span class="num muted">[$ in] / [$ out]</span></div>
+<div class="row" style="grid-template-columns: 86px minmax(0, 1fr) 150px"><span class="nm">Standard</span><span class="code">[vendor]/[mid model]</span><span class="num muted">[$ in] / [$ out]</span></div>
+<div class="row" style="grid-template-columns: 86px minmax(0, 1fr) 150px"><span class="nm">Frontier</span><span class="code">[vendor]/[large model]</span><span class="num muted">[$ in] / [$ out]</span></div>
+</div>
+<div style="display: flex; align-items: center; gap: 10px; font-size: 13px; padding-top: 6px; border-top: 1px solid var(--line)"><span class="faint">Override</span><span>Research uses <b>frontier</b> for its deep runner</span><span style="flex-grow: 1"></span><button class="btn quiet" style="height: 28px">Add override</button></div>
+</section>
+<section class="surf" aria-label="This month" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+<div class="sech"><h2 style="font-size: 18px">September</h2><span class="faint" style="font-size: 12px">Ceiling $200</span></div>
+<div style="display: flex; align-items: baseline; gap: 10px"><span class="disp num" style="font-size: 34px">$118</span><span class="muted" style="font-size: 13px">spent, about $142 by the 30th</span></div>
+<div role="img" aria-label="Spent 118 dollars of a 200 dollar ceiling; target 50 to 200; projected 142" style="position: relative; height: 34px">
+<span style="position: absolute; left: 25%; right: 0; top: 8px; height: 10px; border-radius: 3px; border: 1px dashed var(--ink3); box-sizing: border-box"></span>
+<span style="position: absolute; left: 0; width: 59%; top: 10px; height: 6px; border-radius: 3px; background: var(--gold)"></span>
+<span style="position: absolute; left: 59%; width: 12%; top: 10px; height: 6px; border-radius: 3px; background: repeating-linear-gradient(90deg, var(--gold) 0 3px, transparent 3px 6px); opacity: .7"></span>
+<span class="faint num" style="position: absolute; left: 25%; top: 22px; font-size: 11px">$50 target starts</span>
+<span class="faint num" style="position: absolute; right: 0; top: 22px; font-size: 11px">$200</span>
+</div>
+<div role="img" aria-label="Daily spend over the last 30 days" style="display: flex; align-items: flex-end; gap: 3px; height: 48px">
+<sc-for list="{{bars}}" as="b" hint-placeholder-count="30"><span style="flex: 1; height: {{b}}px; border-radius: 2px; background: var(--gold); opacity: .7"></span></sc-for>
+</div>
+</section>
+</div>
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 14px">
+<section aria-label="Budgets" class="surf" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 6px">
+<div class="sech"><h2 style="font-size: 18px">Budgets</h2><div class="seg" role="group" aria-label="Group by"><button aria-pressed="true">Departments</button><button aria-pressed="false">Agents</button></div></div>
+<div class="tbl">
+<div class="th" style="grid-template-columns: minmax(0, 1fr) 90px repeat(3, 120px)"><span>Department</span><span>Budget</span><span>Today</span><span>7 days</span><span>30 days</span></div>
+<sc-for list="{{budgets}}" as="b" hint-placeholder-count="4">
+<div class="row" style="grid-template-columns: minmax(0, 1fr) 90px repeat(3, 120px)">
+<span class="nm">{{b.n}}</span><span class="num">{{b.bud}}</span>
+<span style="display: flex; flex-direction: column; gap: 4px"><span class="num">{{b.t}}</span><span class="{{b.tc}}"><i style="width: {{b.tp}}%"></i></span></span>
+<span style="display: flex; flex-direction: column; gap: 4px"><span class="num">{{b.w}}</span><span class="{{b.wc}}"><i style="width: {{b.wp}}%"></i></span></span>
+<span style="display: flex; flex-direction: column; gap: 4px"><span class="num">{{b.m}}</span><span class="bar"><i style="width: {{b.mp}}%"></i></span></span>
+</div>
+</sc-for>
+</div>
+<span class="faint" style="font-size: 12px">Striped means over budget. Research went over on Tuesday; it paused new work and asked you.</span>
+</section>
+<section class="surf" aria-label="Suggested tier" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 6px">
+<div class="sech"><h2 style="font-size: 18px">Suggested and used tier</h2></div>
+<div class="tbl">
+<div class="th" style="grid-template-columns: minmax(0, 1fr) 76px 76px 52px"><span>Order</span><span>Suggested</span><span>Used</span><span>Cost</span></div>
+<div class="row" style="grid-template-columns: minmax(0, 1fr) 76px 76px 52px"><span>Three Ashvas competitors</span><span>standard</span><span>standard</span><span class="num">$1.84</span></div>
+<div class="row" style="grid-template-columns: minmax(0, 1fr) 76px 76px 52px"><span>Weekly brief</span><span>cheap</span><span>cheap</span><span class="num">$0.92</span></div>
+<div class="row" style="grid-template-columns: minmax(0, 1fr) 76px 76px 52px"><span>Pricing teardown<span class="sub" style="color: var(--ice)">Used a higher tier than suggested</span></span><span>standard</span><span style="font-weight: 600">frontier ↑</span><span class="num">$3.10</span></div>
+<div class="row" style="grid-template-columns: minmax(0, 1fr) 76px 76px 52px"><span>LinkedIn post draft</span><span>cheap</span><span>cheap</span><span class="num">$0.21</span></div>
+</div>
+</section>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var theme = this.props.theme || 'dark';
+    var seed = 9, rnd = function () { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; };
+    var bars = []; for (var i = 0; i < 30; i++) bars.push(Math.round(i < 25 ? 10 + rnd() * 34 : 0) || 2);
+    var B = function (n, bud, t, tp, w, wp, m, mp) { return { n: n, bud: bud, t: t, tp: Math.min(100, tp), tc: tp > 100 ? 'bar over' : 'bar', w: w, wp: Math.min(100, wp), wc: wp > 100 ? 'bar over' : 'bar', m: m, mp: mp }; };
+    return {
+      root: 'pan ' + theme, theme: theme, bars: bars,
+      budgets: [
+        B('Executive Office', '$3.00', '$1.12', 37, '$14.60', 70, '$38.20', 42),
+        B('Research', '$6.00', '$2.46', 41, '$44.10', 105, '$64.10', 36),
+        B('Marketing', '$2.00', '$0.54', 27, '$9.10', 65, '$15.70', 26),
+        B('Sales', '$0.00', '—', 0, '—', 0, '—', 0)
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

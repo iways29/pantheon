@@ -1,0 +1,419 @@
+{
+  "v": 3,
+  "attachments": {},
+  "boards": {
+    "Agent.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "2b · Agent detail",
+      "w": 1440,
+      "x": 1520,
+      "y": 1020
+    },
+    "Approval.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "2c · Approval card",
+      "w": 1440,
+      "x": 3040,
+      "y": 1020
+    },
+    "Busy.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "1b · Brain busy",
+      "w": 1440,
+      "x": 1520,
+      "y": 0
+    },
+    "CcAgents.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "CC 2 · Agents, intake and list",
+      "w": 1440,
+      "x": 4560,
+      "y": 5700
+    },
+    "CcAgentsLight.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "CC · Light mode",
+      "w": 1440,
+      "x": 1520,
+      "y": 9780
+    },
+    "CcAutonomy.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "CC 8 · Autonomy and limits",
+      "w": 1440,
+      "x": 4560,
+      "y": 7740
+    },
+    "CcDepts.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "CC 1a · Departments and charter",
+      "w": 1440,
+      "x": 0,
+      "y": 5700
+    },
+    "CcDeptsHistory.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "CC 1c · History drawer",
+      "w": 1440,
+      "x": 3040,
+      "y": 5700
+    },
+    "CcDeptsPreview.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "CC 1b · Preview before apply",
+      "w": 1440,
+      "x": 1520,
+      "y": 5700
+    },
+    "CcJudge.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "CC 9 · Judge (Jev)",
+      "w": 1440,
+      "x": 0,
+      "y": 8760
+    },
+    "CcKnowledge.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "CC 5 · Knowledge",
+      "w": 1440,
+      "x": 3040,
+      "y": 6720
+    },
+    "CcLog.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "CC · Company change log",
+      "w": 1440,
+      "x": 4560,
+      "y": 8760
+    },
+    "CcMail.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "CC 11 · Newsletter and email",
+      "w": 1440,
+      "x": 3040,
+      "y": 8760
+    },
+    "CcModels.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "CC 6 · Models and spend",
+      "w": 1440,
+      "x": 4560,
+      "y": 6720
+    },
+    "CcPatterns.dc.html": {
+      "h": 1180,
+      "title": "CC · Shared patterns",
+      "w": 1440,
+      "x": 0,
+      "y": 9780
+    },
+    "CcPhone.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "title": "CC phone · Change log",
+      "w": 390,
+      "x": 4560,
+      "y": 9780
+    },
+    "CcPhoneDepts.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "title": "CC phone · Departments",
+      "w": 390,
+      "x": 5500,
+      "y": 9780
+    },
+    "CcPhoneEmail.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "title": "CC phone · Recipients",
+      "w": 390,
+      "x": 5970,
+      "y": 9780
+    },
+    "CcPhoneRoutines.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "title": "CC phone · Routines",
+      "w": 390,
+      "x": 5030,
+      "y": 9780
+    },
+    "CcPhoneTools.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "title": "CC phone · Re-approve tools",
+      "w": 390,
+      "x": 6440,
+      "y": 9780
+    },
+    "CcPrompts.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "CC 3 · Prompts, versions and compare",
+      "w": 1440,
+      "x": 0,
+      "y": 6720
+    },
+    "CcRoutines.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "CC 4 · Morning routine",
+      "w": 1440,
+      "x": 1520,
+      "y": 6720
+    },
+    "CcRules.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "CC 10 · Standing rules",
+      "w": 1440,
+      "x": 1520,
+      "y": 8760
+    },
+    "CcShell.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "CC · Shell and first-run empty state",
+      "w": 1440,
+      "x": 3040,
+      "y": 9780
+    },
+    "CcTools.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "CC 7a · Built-in tools",
+      "w": 1440,
+      "x": 0,
+      "y": 7740
+    },
+    "CcToolsAssign.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "CC 7c · Assign tools",
+      "w": 1440,
+      "x": 3040,
+      "y": 7740
+    },
+    "CcToolsMcp.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "CC 7b · MCP servers, changed tool",
+      "w": 1440,
+      "x": 1520,
+      "y": 7740
+    },
+    "Events.dc.html": {
+      "h": 1260,
+      "title": "6 · How events look and move",
+      "w": 1440,
+      "x": 1880,
+      "y": 3060
+    },
+    "Fact.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "2a · Fact detail",
+      "w": 1440,
+      "x": 0,
+      "y": 1020
+    },
+    "Field.dc.html": {
+      "h": 784,
+      "is_interactive": true,
+      "title": "Component · Brain lens (drag, scroll, open hubs)",
+      "w": 760,
+      "x": 4560,
+      "y": 1020
+    },
+    "KillConfirm.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "4b · Kill, typed confirmation",
+      "w": 1440,
+      "x": 1520,
+      "y": 2040
+    },
+    "Killed.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "4c · Killed",
+      "w": 1440,
+      "x": 3040,
+      "y": 2040
+    },
+    "Light.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "1d · Light mode",
+      "w": 1440,
+      "x": 4560,
+      "y": 0
+    },
+    "Main.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "1a · Brain at rest (evening)",
+      "w": 1440,
+      "x": 0,
+      "y": 0
+    },
+    "NeedsYou.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "1c · Something needs you + chat question",
+      "w": 1440,
+      "x": 3040,
+      "y": 0
+    },
+    "Paused.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "4a · Paused",
+      "w": 1440,
+      "x": 0,
+      "y": 2040
+    },
+    "Phone.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "title": "5a · Phone, pulse + needs you",
+      "w": 390,
+      "x": 0,
+      "y": 3060
+    },
+    "PhoneApproval.dc.html": {
+      "h": 844,
+      "title": "5b · Phone, approval",
+      "w": 390,
+      "x": 470,
+      "y": 3060
+    },
+    "PhoneChat.dc.html": {
+      "h": 844,
+      "title": "5c · Phone, chat",
+      "w": 390,
+      "x": 940,
+      "y": 3060
+    },
+    "PhoneKill.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "title": "5d · Phone, kill",
+      "w": 390,
+      "x": 1410,
+      "y": 3060
+    },
+    "ScaleClaims.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "7c · Zoomed into claims",
+      "w": 1440,
+      "x": 3040,
+      "y": 4440
+    },
+    "ScaleNotes.dc.html": {
+      "h": 900,
+      "title": "7d · Built to grow",
+      "w": 1440,
+      "x": 4560,
+      "y": 4440
+    },
+    "ScaleOverview.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "7a · Grown company, zoomed out (53 agents, 12k facts)",
+      "w": 1440,
+      "x": 0,
+      "y": 4440
+    },
+    "ScalePanned.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "7b · Panned lens, rim markers, departments open",
+      "w": 1440,
+      "x": 1520,
+      "y": 4440
+    }
+  },
+  "createdOnFiles": {
+    "at": "2026-09-25T18:00:00Z",
+    "v": 1
+  },
+  "designSystems": [],
+  "launch": {
+    "view": "canvas"
+  },
+  "notes": {
+    "ccTitle": {
+      "kind": "title1",
+      "maxW": 5900,
+      "text": "Control Center",
+      "w": 240,
+      "x": 0,
+      "y": 5440
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "Busy.dc.html",
+    "NeedsYou.dc.html",
+    "Light.dc.html",
+    "Fact.dc.html",
+    "Agent.dc.html",
+    "Approval.dc.html",
+    "Field.dc.html",
+    "Paused.dc.html",
+    "KillConfirm.dc.html",
+    "Killed.dc.html",
+    "Phone.dc.html",
+    "PhoneApproval.dc.html",
+    "PhoneChat.dc.html",
+    "PhoneKill.dc.html",
+    "Events.dc.html",
+    "ScaleOverview.dc.html",
+    "ScalePanned.dc.html",
+    "ScaleClaims.dc.html",
+    "ScaleNotes.dc.html",
+    "CcDepts.dc.html",
+    "CcDeptsPreview.dc.html",
+    "CcDeptsHistory.dc.html",
+    "CcAgents.dc.html",
+    "CcPrompts.dc.html",
+    "CcRoutines.dc.html",
+    "CcKnowledge.dc.html",
+    "CcModels.dc.html",
+    "CcTools.dc.html",
+    "CcToolsMcp.dc.html",
+    "CcToolsAssign.dc.html",
+    "CcAutonomy.dc.html",
+    "CcJudge.dc.html",
+    "CcRules.dc.html",
+    "CcMail.dc.html",
+    "CcLog.dc.html",
+    "CcPatterns.dc.html",
+    "CcAgentsLight.dc.html",
+    "CcShell.dc.html",
+    "CcPhone.dc.html",
+    "CcPhoneRoutines.dc.html",
+    "CcPhoneDepts.dc.html",
+    "CcPhoneEmail.dc.html",
+    "CcPhoneTools.dc.html"
+  ],
+  "pages": [],
+  "title": "Pantheon — The Brain"
+}

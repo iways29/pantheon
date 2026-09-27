@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pantheon, the brain</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&amp;family=Hanken+Grotesk:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+.pan.dark{--bg:#070B18;--ink:#ECE6D6;--ink2:#AEB4C6;--ink3:#8189A0;--gold:#E8BC62;--goldS:rgba(232,188,98,.16);--ice:#94BBFF;--iceS:rgba(148,187,255,.16);--verm:#FF8466;--vermS:rgba(255,132,102,.14);--glass:rgba(24,32,60,.46);--glass2:rgba(40,52,92,.5);--edge:rgba(255,255,255,.11);--hi:rgba(255,255,255,.14);--shadow:0 18px 50px rgba(0,0,0,.45);--glow:rgba(232,188,98,.15);--veil:rgba(7,11,24,.5);--line:rgba(236,230,214,.12);--rimA:rgba(255,255,255,.34);--rimB:rgba(255,255,255,.04)}
+.pan.light{--bg:#E9ECF3;--ink:#141A2E;--ink2:#3C4560;--ink3:#566079;--gold:#96650F;--goldS:rgba(150,101,15,.12);--ice:#2C5BC8;--iceS:rgba(44,91,200,.12);--verm:#B93D14;--vermS:rgba(185,61,20,.10);--glass:rgba(255,255,255,.52);--glass2:rgba(255,255,255,.72);--edge:rgba(20,26,46,.10);--hi:rgba(255,255,255,.9);--shadow:0 18px 50px rgba(40,50,90,.16);--glow:rgba(150,101,15,.10);--veil:rgba(233,236,243,.55);--line:rgba(20,26,46,.12);--rimA:rgba(255,255,255,.95);--rimB:rgba(255,255,255,.2)}
+.glass{position:relative;isolation:isolate;background:var(--glass);-webkit-backdrop-filter:blur(26px) saturate(170%);backdrop-filter:blur(26px) saturate(170%);border:1px solid var(--edge);box-shadow:inset 0 1px 0 var(--hi),var(--shadow)}
+.glass::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;pointer-events:none;background:linear-gradient(165deg,rgba(255,255,255,.09),rgba(255,255,255,0) 36%)}
+.glass::after{content:"";position:absolute;inset:-1px;border-radius:inherit;padding:1px;pointer-events:none;background:linear-gradient(150deg,var(--rimA),var(--rimB) 34%,rgba(255,255,255,0) 62%,var(--rimB));-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
+.glass .glass{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--glass2);box-shadow:inset 0 1px 0 var(--hi)}
+.glass .glass::before,.glass .glass::after{display:none}
+@media (prefers-reduced-transparency:reduce){.glass{-webkit-backdrop-filter:blur(40px);backdrop-filter:blur(40px);background:var(--bg)}}
+@media (prefers-contrast:more){.glass{border:1.5px solid var(--ink2)}.glass::after{display:none}}
+.light .glass::before{background:linear-gradient(165deg,rgba(255,255,255,.7),rgba(255,255,255,0) 42%)}
+.g2{background:var(--glass2);border:1px solid var(--edge)}
+.disp{font-family:'Marcellus',Georgia,serif;font-weight:400;letter-spacing:.01em}
+.ic{fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:999px;font:500 14px/1 'Hanken Grotesk',system-ui,sans-serif;color:var(--ink);cursor:pointer;white-space:nowrap;box-sizing:border-box;text-decoration:none}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.btn.pri{background:var(--ink);color:var(--bg);border:1px solid var(--ink)}
+.btn.kill{background:transparent;border:1px solid var(--verm);color:var(--verm)}
+.btn.killfill{background:var(--verm);border:1px solid var(--verm);color:#fff}
+.dark .btn.killfill{color:#1A0A05}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.ibtn{width:40px;padding:0}
+button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--ice);outline-offset:2px}
+.seg{display:flex;gap:2px;padding:3px;border-radius:999px}
+.seg button{height:32px;padding:0 13px;border:0;border-radius:999px;background:transparent;color:var(--ink2);font:500 13px/1 'Hanken Grotesk',sans-serif;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--glass2);color:var(--ink);box-shadow:inset 0 1px 0 var(--hi)}
+.sw{position:relative;width:30px;height:18px;border-radius:999px;background:var(--line);flex:none}
+.sw::after{content:"";position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:50%;background:var(--ink2)}
+.muted{color:var(--ink2)}
+.faint{color:var(--ink3)}
+.num{font-variant-numeric:tabular-nums}
+.gl{display:inline-block;flex:none;width:10px;height:10px;box-sizing:border-box;position:relative}
+.gl.idle{border:1.5px solid var(--ink2);border-radius:50%}
+.gl.work{background:var(--gold);border-radius:50%;box-shadow:0 0 8px var(--gold)}
+.gl.work::after{content:"";position:absolute;inset:-5px;border-radius:50%;border:1.5px solid transparent;border-top-color:var(--gold);animation:spin 3.2s linear infinite}
+.gl.wait{border:1.5px solid var(--ice);background:var(--iceS);transform:rotate(45deg);border-radius:2px}
+.gl.pause{background:linear-gradient(90deg,var(--ink2) 0 34%,transparent 34% 66%,var(--ink2) 66%)}
+.gl.stop{border:1.5px solid var(--ink3);border-radius:1px}
+.gl.done{background:var(--ink3);border-radius:50%;transform:scale(.7)}
+.gl.todo{border:1.5px dotted var(--ink3);border-radius:50%}
+.gl.f-act{width:8px;height:8px;background:var(--gold);border-radius:50%;box-shadow:0 0 6px var(--gold)}
+.gl.f-dis{width:6px;height:6px;margin:0 1px;background:var(--verm);border-radius:50%}
+.gl.f-dis::after{content:"";position:absolute;inset:-3px;border-radius:50%;border:1px dashed var(--verm)}
+.gl.f-sup{width:8px;height:8px;border:1px solid var(--ink3);border-radius:50%}
+.gl.f-held{width:8px;height:8px;border:1.3px solid var(--ice);transform:rotate(45deg);border-radius:1.5px}
+.gl.big{transform:scale(1.6)}
+.gl.wait.big{transform:rotate(45deg) scale(1.6)}
+.run-dot{width:8px;height:8px;border-radius:50%;background:var(--gold);box-shadow:0 0 0 0 var(--goldS);animation:breatheG 3.6s ease-in-out infinite;flex:none}
+.run-dot.quiet{background:var(--ink2);animation:none}
+@keyframes breatheG{0%,100%{box-shadow:0 0 0 0 var(--goldS)}50%{box-shadow:0 0 0 6px var(--goldS)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+.card{display:flex;flex-direction:column;gap:6px;width:100%;text-align:left;padding:12px 14px;border-radius:16px;font:inherit;color:inherit;cursor:pointer;box-sizing:border-box}
+.card:hover{border-color:var(--ice)}
+.kicker{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink2)}
+.rec{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:999px;border:1px solid var(--edge);font-size:12px;color:var(--ink)}
+.clash{display:flex;gap:8px;align-items:flex-start;font-size:12px;line-height:1.4;color:var(--verm)}
+.msg{max-width:88%;padding:10px 14px;border-radius:18px;font-size:14px;line-height:1.45}
+.msg.you{align-self:flex-end;background:var(--ink);color:var(--bg);border-bottom-right-radius:6px}
+.msg.cos{align-self:flex-start;border-bottom-left-radius:6px}
+.msg.q{align-self:stretch;max-width:none;border:1px solid var(--ice);box-shadow:0 0 0 4px var(--iceS)}
+.chip{display:inline-flex;align-items:center;gap:6px;margin-top:8px;height:28px;padding:0 10px;border-radius:999px;border:1px solid var(--edge);background:transparent;color:var(--ice);font:500 12px/1 'Hanken Grotesk',sans-serif;cursor:pointer}
+.sys{align-self:center;font-size:12px;color:var(--ink3);text-align:center;padding:0 12px}
+.step{display:grid;grid-template-columns:16px minmax(0,1fr) auto;column-gap:10px;align-items:center;min-height:30px;font-size:13px}
+.step .w{color:var(--ink)}
+.step .d{color:var(--ink3);font-size:12px}
+.dl{display:grid;grid-template-columns:96px minmax(0,1fr);row-gap:10px;column-gap:12px;font-size:13px;line-height:1.45;margin:0}
+.dl dt{color:var(--ink3)}
+.dl dd{margin:0;color:var(--ink)}
+.rel{display:flex;gap:10px;align-items:flex-start;font-size:13px;line-height:1.45}
+.rel .gl{margin-top:5px}
+.meter{display:flex;gap:3px}
+.meter i{display:block;width:26px;height:6px;border-radius:3px;background:var(--line)}
+.meter i.on{background:var(--gold)}
+.field-veil{position:absolute;inset:0;background:var(--veil);display:flex;align-items:center;justify-content:center}
+.scrim{position:absolute;inset:0;background:var(--veil);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center}
+.inp{height:44px;border-radius:12px;border:1px solid var(--edge);background:var(--glass2);color:var(--ink);font:500 15px/1 'Hanken Grotesk',sans-serif;padding:0 14px;box-sizing:border-box;width:100%}
+.inp::placeholder{color:var(--ink3)}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.hubmini{width:12px;height:12px;box-sizing:border-box;border-radius:50%;border:1.5px solid var(--ink2);box-shadow:0 0 0 2px var(--bg),0 0 0 3px var(--ink3)}
+.rm *,.rm *::after{animation:none!important}
+@media (prefers-reduced-motion:reduce){.run-dot,.gl.work::after{animation:none}}
+</style>
+</helmet>
+<div class="{{rootCls}}" style="position: relative; width: 1440px; height: 900px; overflow: hidden; background: var(--bg); color: var(--ink); font-family: 'Hanken Grotesk', system-ui, sans-serif">
+<div aria-hidden="true" style="position: absolute; right: -220px; top: -300px; width: 760px; height: 760px; border-radius: 50%; background: radial-gradient(circle, var(--iceS) 0%, transparent 64%)"></div>
+<div aria-hidden="true" style="position: absolute; left: -260px; bottom: -320px; width: 800px; height: 800px; border-radius: 50%; background: radial-gradient(circle, var(--goldS) 0%, transparent 64%)"></div>
+
+<header style="position: absolute; left: 0; top: 0; width: 1440px; height: 64px; box-sizing: border-box; padding: 0 16px 0 24px; display: flex; align-items: center; gap: 20px">
+<div style="display: flex; align-items: center; gap: 10px; width: 250px">
+<svg class="ic" width="26" height="26" viewBox="0 0 24 24" aria-hidden="true" style="color: var(--gold)"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="5.5"></circle><path d="M12 2v3M12 12l4.5-5.5"></path></svg>
+<span class="disp" style="font-size: 20px">Pantheon</span>
+<span class="faint" style="font-size: 14px">The brain</span>
+</div>
+<nav aria-label="Filters" style="flex-grow: 1; display: flex; align-items: center; justify-content: center; gap: 12px">
+<div class="seg glass" role="group" aria-label="Department">
+<button aria-pressed="true">All</button>
+<button aria-pressed="false">Executive Office</button>
+<button aria-pressed="false">Research</button>
+<button aria-pressed="false">Marketing</button>
+</div>
+<button class="btn sm glass" aria-label="Time range: today">Today<svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4"></path></svg></button>
+<button class="btn sm glass" role="switch" aria-checked="false">
+<span class="sw" aria-hidden="true"></span>Only what needs me<sc-if value="{{hasNeeds}}" hint-placeholder-val="{{ true }}"><span class="num" style="display: inline-flex; align-items: center; gap: 6px; color: var(--ice)"><span class="gl wait" aria-hidden="true"></span>{{pulse.wait}}</span></sc-if>
+</button>
+</nav>
+<div style="display: flex; align-items: center; gap: 10px">
+<div class="glass" role="status" style="display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 16px; border-radius: 999px; box-sizing: border-box">
+<span class="{{pill.gc}}" aria-hidden="true"></span>
+<span style="font-size: 14px; font-weight: 600">{{pill.t}}</span>
+<span class="faint" style="font-size: 13px">{{pill.s}}</span>
+</div>
+<sc-if value="{{canResume}}" hint-placeholder-val="{{ false }}">
+<button class="btn pri" onClick="{{onPause}}"><svg class="ic" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.5l7 4.5-7 4.5z"></path></svg>Resume</button>
+</sc-if>
+<sc-if value="{{canPause}}" hint-placeholder-val="{{ true }}">
+<button class="btn glass" onClick="{{onPause}}"><svg class="ic" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 3.5v9M10.5 3.5v9"></path></svg>Pause</button>
+</sc-if>
+<button class="btn kill" onClick="{{onKill}}" disabled="{{killDisabled}}"><svg class="ic" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"></circle><rect x="6" y="6" width="4" height="4"></rect></svg>Kill</button>
+<button class="btn ibtn glass" aria-label="Display and motion settings"><svg class="ic" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 5h7M12.5 5h1M2.5 11h1M6.5 11h7"></path><circle cx="11" cy="5" r="1.5"></circle><circle cx="5" cy="11" r="1.5"></circle></svg></button>
+</div>
+</header>
+
+<main style="position: absolute; left: 300px; top: 64px; width: 760px; height: 784px">
+<dc-import name="Field" mode="{{fieldMode}}" theme="{{theme}}" size="{{ 760 }}" bg="{{ false }}" reduced-motion="{{rm}}" company="{{company}}" zoom="{{zoom}}" pan-x="{{panX}}" pan-y="{{panY}}" open="{{open}}" hint-size="760px,784px"></dc-import>
+<div style="position: absolute; left: 16px; top: 12px; display: flex; flex-direction: column; gap: 2px; pointer-events: none">
+<h1 class="disp" style="margin: 0; font-size: 24px">The brain</h1>
+<span class="faint num" style="font-size: 13px">{{factLine}}</span>
+<span class="faint num" style="font-size: 13px">{{agentLine}}</span>
+</div>
+<div class="glass" style="position: absolute; left: 16px; bottom: 16px; padding: 12px 14px; border-radius: 16px; display: grid; grid-template-columns: 12px auto auto; column-gap: 10px; row-gap: 7px; align-items: center; font-size: 12px">
+<span class="gl f-act" aria-hidden="true"></span><span>Active</span><span class="faint num" style="text-align: right">1,038</span>
+<span class="gl f-dis" aria-hidden="true"></span><span>Disputed</span><span class="faint num" style="text-align: right">31</span>
+<span class="gl f-sup" aria-hidden="true"></span><span>Superseded</span><span class="faint num" style="text-align: right">212</span>
+<span class="gl f-held" aria-hidden="true"></span><span>Held for you</span><span class="faint num" style="text-align: right">{{heldCount}}</span>
+</div>
+<div class="glass" style="position: absolute; right: 16px; bottom: 16px; padding: 12px 14px; border-radius: 16px; display: grid; grid-template-columns: 12px auto; column-gap: 10px; row-gap: 7px; align-items: center; font-size: 12px">
+<span class="gl idle" aria-hidden="true"></span><span>Idle</span>
+<span class="gl work" aria-hidden="true" style="animation: none"></span><span>Working</span>
+<span class="gl wait" aria-hidden="true"></span><span>Waiting for you</span>
+<span class="gl pause" aria-hidden="true"></span><span>Paused</span>
+<span class="gl stop" aria-hidden="true"></span><span>Stopped</span>
+<span class="hubmini" aria-hidden="true"></span><span>Closed department</span>
+</div>
+<sc-if value="{{isPaused}}" hint-placeholder-val="{{ false }}">
+<div class="field-veil">
+<div class="glass" style="width: 340px; padding: 28px; border-radius: 28px; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center">
+<span class="gl pause" aria-hidden="true" style="width: 18px; height: 22px"></span>
+<h2 class="disp" style="margin: 0; font-size: 26px">Everything is paused</h2>
+<p class="muted" style="margin: 0; font-size: 14px; line-height: 1.5">Five tasks are holding mid-step. Nothing is lost, and nothing new starts until you resume.</p>
+<button class="btn pri" onClick="{{onPause}}" style="margin-top: 6px"><svg class="ic" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.5l7 4.5-7 4.5z"></path></svg>Resume all work</button>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{isKilled}}" hint-placeholder-val="{{ false }}">
+<div class="field-veil">
+<div class="glass" style="width: 360px; padding: 28px; border-radius: 28px; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center">
+<span class="gl stop" aria-hidden="true" style="width: 18px; height: 18px"></span>
+<h2 class="disp" style="margin: 0; font-size: 26px">All work is stopped</h2>
+<p class="muted" style="margin: 0; font-size: 14px; line-height: 1.5">You cancelled 5 tasks and 2 waiting approvals at 14:38. The brain and its 1,284 facts are intact.</p>
+<p class="faint" style="margin: 0; font-size: 13px">To start again, give the Chief of Staff a new order.</p>
+</div>
+</div>
+</sc-if>
+</main>
+
+<aside class="glass" aria-label="Needs you and orders" style="position: absolute; left: 16px; top: 72px; width: 272px; height: 772px; box-sizing: border-box; padding: 18px 16px; border-radius: 26px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: baseline; justify-content: space-between">
+<h2 class="disp" style="margin: 0; font-size: 20px">Needs you</h2>
+<span class="num" style="font-size: 13px; color: var(--ice)">{{needsLabel}}</span>
+</div>
+<sc-if value="{{hasNeeds}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; flex-direction: column; gap: 8px">
+<button class="card g2" onClick="{{openApproval}}">
+<span class="kicker"><span class="gl wait" aria-hidden="true"></span>Approval<span class="faint num" style="margin-left: auto">14:29</span></span>
+<span style="font-size: 14px; font-weight: 500; line-height: 1.35">Publish the Ashvas beta post on LinkedIn</span>
+<span style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+<span class="rec"><svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"></path><circle cx="8" cy="8" r="2"></circle></svg>Jev: look closer</span>
+<span class="clash"><svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5l6 10.5H2zM8 7v2.5M8 11.3v.1"></path></svg>Clashes with 12 Sep</span>
+</span>
+</button>
+<button class="card g2" onClick="{{noop}}">
+<span class="kicker"><svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" style="color: var(--ice)"><path d="M2.5 4a1.5 1.5 0 011.5-1.5h8A1.5 1.5 0 0113.5 4v6a1.5 1.5 0 01-1.5 1.5H7l-3 2.5v-2.5A1.5 1.5 0 012.5 10z"></path></svg>Question from Chief of Staff<span class="faint num" style="margin-left: auto">14:31</span></span>
+<span style="font-size: 14px; line-height: 1.35">Does “this year” mean 2026 so far, or the last 12 months?</span>
+<span class="faint" style="font-size: 12px">Answer in chat</span>
+</button>
+<button class="card g2" onClick="{{noop}}">
+<span class="kicker"><svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" style="color: var(--ice)"><path d="M10 2.5a3.5 3.5 0 00-3.3 4.6L2.5 11.3l2.2 2.2 4.2-4.2A3.5 3.5 0 0013.5 6l-2 2-1.8-.3-.3-1.8 2-2A3.5 3.5 0 0010 2.5z"></path></svg>Tool changed<span class="faint num" style="margin-left: auto">13:58</span></span>
+<span style="font-size: 14px; line-height: 1.35">Web search now asks to write files</span>
+<span class="faint" style="font-size: 12px">Research can’t use it until you re-approve</span>
+</button>
+</div>
+</sc-if>
+<sc-if value="{{noNeeds}}" hint-placeholder-val="{{ false }}">
+<div class="g2" style="border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 14px">Nothing needs you.</span>
+<span class="faint" style="font-size: 13px; line-height: 1.45">When an agent needs a decision, it waits here and in chat.</span>
+</div>
+</sc-if>
+<div style="height: 1px; background: var(--line); margin: 4px 0"></div>
+<div style="display: flex; flex-direction: column; gap: 8px; min-height: 0">
+<div style="display: flex; align-items: baseline; justify-content: space-between">
+<h2 class="disp" style="margin: 0; font-size: 18px">{{order.h}}</h2>
+<button class="chip" style="margin: 0" onClick="{{noop}}"><svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="3.5" cy="12.5" r="1.5"></circle><circle cx="12.5" cy="3.5" r="1.5"></circle><path d="M5 12.5h4a2.5 2.5 0 000-5H7a2.5 2.5 0 010-5h4"></path></svg>Path</button>
+</div>
+<p style="margin: 0; font-size: 14px; line-height: 1.4">{{order.title}}</p>
+<ol aria-label="Order path" style="list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column">
+<sc-for list="{{order.steps}}" as="s" hint-placeholder-count="6">
+<li class="step" style="padding-left: {{s.ind}}px"><span class="{{s.gc}}" aria-hidden="true"></span><span><span class="w">{{s.who}}</span> <span class="d">{{s.what}}</span></span><span class="faint num" style="font-size: 12px">{{s.cost}}</span></li>
+</sc-for>
+</ol>
+<div style="display: flex; justify-content: space-between; align-items: baseline; padding-top: 8px; border-top: 1px solid var(--line); font-size: 13px">
+<span class="muted">{{order.totalL}}</span><span class="num" style="font-weight: 600">{{order.total}}</span>
+</div>
+</div>
+</aside>
+
+<aside class="glass" aria-label="Chat with the Chief of Staff" style="position: absolute; left: 1068px; top: 72px; width: 356px; height: 772px; box-sizing: border-box; border-radius: 26px; display: flex; flex-direction: column">
+<div style="display: flex; align-items: center; gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--line)">
+<span class="{{cosGl}}" aria-hidden="true" style="width: 12px; height: 12px"></span>
+<div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1">
+<h2 class="disp" style="margin: 0; font-size: 18px">Chief of Staff</h2>
+<span class="faint" style="font-size: 12px">{{cosState}}</span>
+</div>
+<button class="btn ibtn sm glass" aria-label="Open chat full screen" style="width: 32px"><svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M9.5 2.5h4v4M13.5 2.5L9 7M6.5 13.5h-4v-4M2.5 13.5L7 9"></path></svg></button>
+</div>
+<div role="log" aria-label="Messages" style="flex-grow: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; gap: 12px; padding: 16px">
+<sc-for list="{{msgs}}" as="mg" hint-placeholder-count="4">
+<sc-if value="{{mg.isDay}}" hint-placeholder-val="{{ false }}"><div class="sys" style="display: flex; align-items: center; gap: 10px; align-self: stretch"><span style="flex-grow: 1; height: 1px; background: var(--line)"></span>{{mg.x}}<span style="flex-grow: 1; height: 1px; background: var(--line)"></span></div></sc-if>
+<sc-if value="{{mg.isSys}}" hint-placeholder-val="{{ false }}"><div class="sys">{{mg.x}}</div></sc-if>
+<sc-if value="{{mg.isYou}}" hint-placeholder-val="{{ false }}"><div class="msg you">{{mg.x}}<div style="font-size: 11px; opacity: .6; margin-top: 4px; text-align: right" class="num">{{mg.t}}</div></div></sc-if>
+<sc-if value="{{mg.isCos}}" hint-placeholder-val="{{ true }}"><div class="msg cos g2">{{mg.x}}<sc-if value="{{mg.link}}" hint-placeholder-val="{{ false }}"><div><button class="chip" onClick="{{noop}}"><svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="3.5" cy="12.5" r="1.5"></circle><circle cx="12.5" cy="3.5" r="1.5"></circle><path d="M5 12.5h4a2.5 2.5 0 000-5H7a2.5 2.5 0 010-5h4"></path></svg>{{mg.link}}</button></div></sc-if><div class="faint num" style="font-size: 11px; margin-top: 4px">{{mg.t}}</div></div></sc-if>
+<sc-if value="{{mg.isQ}}" hint-placeholder-val="{{ false }}"><div class="msg q g2">
+<div class="kicker" style="color: var(--ice); margin-bottom: 6px"><span class="gl wait" aria-hidden="true"></span>Waiting for you<span class="faint num" style="margin-left: auto">{{mg.t}}</span></div>
+{{mg.x}}
+<div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px">
+<button class="btn sm glass" onClick="{{noop}}">2026 so far</button>
+<button class="btn sm glass" onClick="{{noop}}">Last 12 months</button>
+</div>
+</div></sc-if>
+</sc-for>
+</div>
+<form style="padding: 12px 14px 16px; display: flex; flex-direction: column; gap: 8px" onSubmit="{{noop}}">
+<label for="order-input" class="vh">Order for the Chief of Staff</label>
+<div style="display: flex; gap: 8px; align-items: center">
+<input id="order-input" class="inp" placeholder="Give an order in plain words" style="border-radius: 999px; padding: 0 18px">
+<button class="btn pri ibtn" aria-label="Send order" style="width: 44px; height: 44px; flex: none"><svg class="ic" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13V3M4 7l4-4 4 4"></path></svg></button>
+</div>
+<span class="faint" style="font-size: 12px; padding-left: 18px">Each order shows its path in the brain.</span>
+</form>
+</aside>
+
+<footer aria-label="Today’s pulse" style="position: absolute; left: 0; top: 852px; width: 1440px; height: 48px; box-sizing: border-box; padding: 0 24px; display: flex; align-items: center; gap: 36px; font-size: 13px">
+<span class="disp" style="font-size: 16px">Today</span>
+<span style="display: flex; align-items: center; gap: 10px"><span class="faint">Spend</span><span class="num" style="font-weight: 600">{{pulse.spend}}</span><span class="faint num">of $15.00</span><span aria-hidden="true" style="width: 72px; height: 4px; border-radius: 2px; background: var(--line); display: block; position: relative"><span style="position: absolute; left: 0; top: 0; bottom: 0; width: {{pulse.pct}}%; border-radius: 2px; background: var(--gold)"></span></span></span>
+<span style="display: flex; align-items: center; gap: 10px"><span class="faint">Facts</span><span class="num" style="font-weight: 600">+{{pulse.added}} added</span><span class="faint num">{{pulse.rej}} rejected</span></span>
+<span style="display: flex; align-items: center; gap: 10px"><span class="faint">Tasks</span><span class="num" style="font-weight: 600">{{pulse.done}}</span></span>
+<span style="display: flex; align-items: center; gap: 10px"><span class="faint">Waiting for you</span><span class="gl wait" aria-hidden="true"></span><span class="num" style="font-weight: 600; color: var(--ice)">{{pulse.wait}}</span></span>
+<span style="flex-grow: 1"></span>
+<span style="display: flex; align-items: center; gap: 8px" class="muted"><span class="{{liveGl}}" aria-hidden="true"></span>{{liveLabel}}</span>
+<button class="btn sm glass"><svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3v3.5h3.5"></path><path d="M3.4 6.5A5.5 5.5 0 1 1 3 9"></path></svg>Replay the day</button>
+</footer>
+
+<sc-if value="{{showFact}}" hint-placeholder-val="{{ false }}">
+<section class="glass" aria-label="Fact detail" style="position: absolute; left: 316px; top: 76px; width: 368px; box-sizing: border-box; padding: 20px 22px 22px; border-radius: 26px; display: flex; flex-direction: column; gap: 16px">
+<div class="kicker"><span class="gl f-act" aria-hidden="true"></span>Fact, active<span style="flex-grow: 1"></span><button class="btn ibtn sm glass" aria-label="Close" onClick="{{closeSheet}}" style="width: 32px"><svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"></path></svg></button></div>
+<p class="disp" style="margin: 0; font-size: 22px; line-height: 1.3">Vireo Security raised a $12M Series A, announced on 4 March 2026.</p>
+<dl class="dl">
+<dt>Source</dt><dd><a href="#" style="color: var(--ice)">vireosecurity.com/news/series-a</a></dd>
+<dt>From</dt><dd>Press page, second paragraph</dd>
+<dt>Found by</dt><dd style="display: flex; align-items: center; gap: 8px"><span class="gl work" aria-hidden="true"></span>Market scanner, Research</dd>
+<dt>Admitted</dt><dd class="num">Today, 14:21</dd>
+<dt>Jev’s check</dt><dd><span style="display: inline-flex; align-items: center; gap: 6px; font-weight: 500"><svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" style="color: var(--gold)"><path d="M3 8.5l3 3 7-7"></path></svg>Supported.</span> The amount matches the company’s own announcement and one independent report.</dd>
+</dl>
+<div style="display: flex; flex-direction: column; gap: 10px; padding-top: 14px; border-top: 1px solid var(--line)">
+<div class="rel"><span class="gl f-sup" aria-hidden="true"></span><span><span class="faint">Replaced</span><br>Vireo Security raised about $10M (reported February 2026).</span></div>
+<div class="rel"><span class="gl f-dis" aria-hidden="true"></span><span><span class="faint">Contradicts</span><br>Vireo’s round was a seed extension. One source, disputed.</span></div>
+<div class="rel"><span class="gl f-act" aria-hidden="true" style="box-shadow: none; opacity: .6"></span><span><span class="faint">Nearby</span><br>4 facts in Funding rounds</span></div>
+</div>
+<div style="display: flex; gap: 8px">
+<button class="btn sm glass">Dispute this fact</button>
+<button class="btn sm glass">Open source</button>
+</div>
+</section>
+</sc-if>
+
+<sc-if value="{{showAgent}}" hint-placeholder-val="{{ false }}">
+<section class="glass" aria-label="Agent detail" style="position: absolute; left: 316px; top: 76px; width: 368px; box-sizing: border-box; padding: 20px 22px 22px; border-radius: 26px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: center; gap: 14px">
+<span class="gl work big" aria-hidden="true" style="margin: 0 4px"></span>
+<div style="flex-grow: 1"><h2 class="disp" style="margin: 0; font-size: 22px">Market scanner</h2><span class="faint" style="font-size: 13px">Research, worker</span></div>
+<button class="btn ibtn sm glass" aria-label="Close" onClick="{{closeSheet}}" style="width: 32px"><svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"></path></svg></button>
+</div>
+<div class="g2" style="border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px">
+<span class="faint" style="font-size: 12px">Working now, for 27 min</span>
+<span style="font-size: 14px; line-height: 1.4">Reading funding news for AI code-security companies</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px">
+<span class="faint" style="font-size: 12px">Last results</span>
+<div class="rel"><span class="gl f-act" aria-hidden="true"></span><span>Admitted 6 facts on funding rounds <span class="faint num">14:21</span></span></div>
+<div class="rel"><span class="gl f-dis" aria-hidden="true" style="background: transparent"></span><span>1 fact rejected by Jev: the source reposted a rumour <span class="faint num">14:18</span></span></div>
+<div class="rel"><span class="gl done" aria-hidden="true"></span><span>Handed 3 company pages to Source reader <span class="faint num">14:12</span></span></div>
+</div>
+<dl class="dl">
+<dt>Tools</dt><dd style="display: flex; flex-direction: column; gap: 4px"><span style="display: flex; align-items: center; gap: 8px">Web search <span class="rec" style="height: 20px; color: var(--ice); border-color: var(--ice)"><span class="gl wait" aria-hidden="true" style="width: 7px; height: 7px"></span>needs re-approval</span></span><span>Page reader</span><span>Brain, read and write</span></dd>
+<dt>Autonomy</dt><dd style="display: flex; flex-direction: column; gap: 6px"><span class="meter" role="img" aria-label="Level 2 of 4"><i class="on"></i><i class="on"></i><i></i><i></i></span><span class="muted" style="font-size: 12px">Acts alone under $1 a task; asks above it</span></dd>
+<dt>Spend today</dt><dd class="num" style="font-weight: 600">$0.86</dd>
+</dl>
+<div style="display: flex; gap: 8px">
+<button class="btn sm glass"><svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 3.5v9M10.5 3.5v9"></path></svg>Pause this agent</button>
+<button class="btn sm glass">Message</button>
+</div>
+</section>
+</sc-if>
+
+<sc-if value="{{showApproval}}" hint-placeholder-val="{{ false }}">
+<section class="glass" role="dialog" aria-label="Approval" style="position: absolute; left: 612px; top: 76px; width: 440px; box-sizing: border-box; padding: 20px 22px 22px; border-radius: 28px; display: flex; flex-direction: column; gap: 14px">
+<div class="kicker"><span class="gl wait" aria-hidden="true"></span>Approval requested by Marketing head<span class="faint num" style="margin-left: 4px">14:29</span><span style="flex-grow: 1"></span><button class="btn ibtn sm glass" aria-label="Close" onClick="{{closeSheet}}" style="width: 32px"><svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"></path></svg></button></div>
+<h2 class="disp" style="margin: 0; font-size: 24px; line-height: 1.25">Publish the Ashvas beta announcement on LinkedIn</h2>
+<blockquote class="g2" style="margin: 0; border-radius: 16px; padding: 12px 14px; font-size: 14px; line-height: 1.5">Ashvas is in open beta. It reads your codebase the way an attacker would, and tells you what it found before anyone else does.<span class="faint" style="display: block; font-size: 12px; margin-top: 6px">Draft, 212 words and one image</span></blockquote>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<span class="faint" style="font-size: 12px">Jev recommends</span>
+<span style="display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 600"><svg class="ic" width="18" height="18" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"></path><circle cx="8" cy="8" r="2"></circle></svg>Look closer</span>
+<span class="muted" style="font-size: 13px; line-height: 1.45">The post holds up against three of four facts, but it announces a public launch, which you ruled out.</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px">
+<span class="faint" style="font-size: 12px">Facts checked</span>
+<div class="rel"><span class="gl f-act" aria-hidden="true"></span><span>Scans private repositories without uploading code</span></div>
+<div class="rel"><span class="gl f-act" aria-hidden="true"></span><span>Beta is open to teams under 50 people</span></div>
+<div class="rel"><span class="gl f-act" aria-hidden="true"></span><span>Sign-up page is live</span></div>
+<div class="rel"><span class="gl f-dis" aria-hidden="true"></span><span>“First scan finishes in under a minute.” Disputed: one benchmark shows three minutes.</span></div>
+</div>
+<div style="border: 1px dashed var(--verm); border-radius: 16px; padding: 12px 14px; display: flex; gap: 10px; background: var(--vermS)">
+<svg class="ic" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" style="color: var(--verm); margin-top: 2px"><path d="M8 2.5l6 10.5H2zM8 7v2.5M8 11.3v.1"></path></svg>
+<div style="font-size: 13px; line-height: 1.45"><span style="font-weight: 600">Clashes with your decision of 12 September</span><br>“No public launch claims until the security review is done.” The review is not marked done.</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="note" class="faint" style="font-size: 12px">Note for Marketing</label>
+<textarea id="note" class="inp" rows="2" placeholder="Optional. Say what to change, or why." style="height: 60px; padding: 10px 14px; resize: none; font-size: 14px; line-height: 1.4"></textarea>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px">
+<button class="btn sm pri" style="padding: 0 8px"><svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3 3 7-7"></path></svg>Approve</button>
+<button class="btn sm glass" style="padding: 0 8px">Edit</button>
+<button class="btn sm glass" style="padding: 0 8px">Reject</button>
+<button class="btn sm glass" style="padding: 0 8px">Redirect</button>
+</div>
+</section>
+</sc-if>
+
+<sc-if value="{{isKillConfirm}}" hint-placeholder-val="{{ false }}">
+<div class="scrim">
+<section class="glass" role="alertdialog" aria-labelledby="kill-h" style="width: 480px; box-sizing: border-box; padding: 28px; border-radius: 28px; display: flex; flex-direction: column; gap: 16px">
+<div class="kicker" style="color: var(--ink2)"><span class="gl pause" aria-hidden="true"></span>Everything is paused while you decide</div>
+<h2 id="kill-h" class="disp" style="margin: 0; font-size: 28px">Kill all unfinished work?</h2>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+<div class="g2" style="border-radius: 16px; padding: 12px 14px; font-size: 13px; line-height: 1.6"><span class="faint" style="display: block; margin-bottom: 2px">Cancelled for good</span>5 tasks in progress<br>2 approvals waiting<br>1 open question</div>
+<div class="g2" style="border-radius: 16px; padding: 12px 14px; font-size: 13px; line-height: 1.6"><span class="faint" style="display: block; margin-bottom: 2px">Kept</span>1,284 facts in the brain<br>Results already delivered<br>Today’s full event log</div>
+</div>
+<p class="muted" style="margin: 0; font-size: 14px; line-height: 1.5">This can’t be undone. If you only need a break, pause instead.</p>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="kill-in" style="font-size: 13px">Type <span style="font-weight: 600; color: var(--verm)">kill</span> to confirm</label>
+<input id="kill-in" class="inp" autocomplete="off" value="{{typed}}" onChange="{{onType}}">
+</div>
+<div style="display: flex; justify-content: flex-end; gap: 8px">
+<button class="btn glass" onClick="{{cancelKill}}">Keep paused</button>
+<button class="btn glass" onClick="{{resumeFromKill}}">Resume</button>
+<button class="btn killfill" onClick="{{confirmKill}}" disabled="{{killBlocked}}">Kill all work</button>
+</div>
+</section>
+</div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"mode":{"editor":"enum","options":["rest","busy","needs","fact","agent","approval","paused","killconfirm","killed"],"default":"rest"},"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"reducedMotion":{"editor":"boolean","default":false},"company":{"editor":"enum","options":["now","grown"],"default":"now"},"zoom":{"editor":"float","min":0.3,"max":6,"step":0.05,"default":1},"panX":{"editor":"int","default":0},"panY":{"editor":"int","default":0},"open":{"editor":"text","default":""},"typedPreview":{"editor":"text","default":""},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var self = this;
+    var st = this.state || {};
+    var m = st.m || this.props.mode || 'rest';
+    var theme = this.props.theme || 'dark';
+    var rm = !!this.props.reducedMotion;
+    var typed = st.typed !== undefined ? st.typed : (this.props.typedPreview || '');
+    var running = ['rest', 'busy', 'needs', 'fact', 'agent', 'approval'].indexOf(m) >= 0;
+    var isPaused = m === 'paused';
+    var isKilled = m === 'killed';
+    var hasNeeds = ['needs', 'fact', 'agent', 'approval', 'paused', 'killconfirm'].indexOf(m) >= 0;
+    var base = m === 'rest' ? 'rest' : m === 'busy' ? 'busy' : isKilled ? 'killed' : (m === 'paused' || m === 'killconfirm') ? 'paused' : 'needs';
+
+    var pills = {
+      rest: { gc: 'run-dot quiet', t: 'Running', s: 'all agents idle' },
+      busy: { gc: 'run-dot', t: 'Running', s: '7 agents at work' },
+      needs: { gc: 'run-dot', t: 'Running', s: '4 at work, 2 waiting' },
+      paused: { gc: 'gl pause', t: 'Paused', s: m === 'killconfirm' ? 'while you decide' : 'since 14:36' },
+      killed: { gc: 'gl stop', t: 'Stopped', s: 'at 14:38' }
+    };
+    var pulses = {
+      rest: { spend: '$6.40', pct: 43, added: 52, rej: 9, done: '21 done', wait: 0 },
+      busy: { spend: '$3.46', pct: 23, added: 31, rej: 5, done: '11 done', wait: 0 },
+      needs: { spend: '$4.12', pct: 27, added: 38, rej: 6, done: '14 done', wait: 3 },
+      paused: { spend: '$4.12', pct: 27, added: 38, rej: 6, done: '14 done', wait: 3 },
+      killed: { spend: '$4.14', pct: 28, added: 38, rej: 6, done: '14 done, 5 cancelled', wait: 0 }
+    };
+    var S = function (who, what, cost, gc, ind) { return { who: who, what: what, cost: cost, gc: 'gl ' + gc, ind: ind ? 18 : 0 }; };
+    var wk = base === 'paused' ? 'pause' : base === 'killed' ? 'stop' : 'work';
+    var orders = {
+      rest: { h: 'Last order', title: 'Draft the weekly brief from this week’s decisions.', steps: [
+        S('You', 'gave the order, 09:12', '', 'done'), S('Chief of Staff', 'routed to Executive Office', '$0.03', 'done'),
+        S('Briefing writer', 'drafted the brief', '$0.71', 'done', 1), S('Ledger keeper', 'added spend notes', '$0.18', 'done', 1),
+        S('Chief of Staff', 'delivered, 18:40', '', 'done') ], totalL: 'Whole chain', total: '$0.92' },
+      busy: { h: 'Order in motion', title: 'Find three competitors to Ashvas that raised money this year.', steps: [
+        S('You', 'gave the order, 14:02', '', 'done'), S('Chief of Staff', 'routed to Research', '$0.04', 'done'),
+        S('Research head', 'split it in two', '$0.07', 'done'), S('Market scanner', 'funding news', '$0.86', 'work', 1),
+        S('Source reader', 'company pages', '$0.61', 'work', 1), S('Chief of Staff', 'brief due Friday', '', 'todo') ],
+        totalL: 'So far, of about $3.00', total: '$1.58' },
+      needs: { h: 'Order in motion', title: 'Find three competitors to Ashvas that raised money this year.', steps: [
+        S('You', 'gave the order, 14:02', '', 'done'), S('Chief of Staff', 'routed to Research', '$0.04', 'done'),
+        S('Research head', 'split it in two', '$0.07', 'done'), S('Market scanner', 'funding news', '$0.98', wk, 1),
+        S('Source reader', 'company pages', '$0.75', wk, 1), S('Chief of Staff', 'asked you a question', '', base === 'killed' ? 'stop' : 'wait'),
+        S('Chief of Staff', 'brief due Friday', '', base === 'killed' ? 'stop' : 'todo') ],
+        totalL: base === 'killed' ? 'Spent before cancelling' : 'So far, of about $3.00', total: '$1.84' }
+    };
+    var order = orders[base] || orders.needs;
+
+    var M = function (k, x, t, link) { return { isDay: k === 'day', isSys: k === 'sys', isYou: k === 'you', isCos: k === 'cos', isQ: k === 'q', x: x, t: t || '', link: link || '' }; };
+    var busyMsgs = [
+      M('you', 'Find three competitors to Ashvas that raised money this year. Brief me by Friday.', '14:02'),
+      M('cos', 'Routed to Research. Two workers are on it, and I expect it to cost under $3.00.', '14:03', 'Follow this order in the brain'),
+      M('sys', 'Research admitted 11 facts and rejected 2.')
+    ];
+    var q = M('q', 'Before I narrow the list: does “this year” mean 2026 so far, or the last 12 months?', '14:31');
+    var msgs;
+    if (base === 'rest') msgs = [
+      M('day', 'Today'),
+      M('you', 'Draft the weekly brief from this week’s decisions.', '09:12'),
+      M('cos', 'The weekly brief is ready. Three of your decisions from this week are now facts in the brain.', '18:40', 'Open the brief'),
+      M('cos', 'All quiet. $6.40 of today’s $15.00 spent, and nothing needs you.', '21:05')
+    ];
+    else if (base === 'busy') msgs = busyMsgs;
+    else if (base === 'paused') msgs = busyMsgs.concat([q, M('sys', 'You paused everything at 14:36. Nothing is lost.')]);
+    else if (base === 'killed') msgs = busyMsgs.concat([M('sys', 'You killed all unfinished work at 14:38. 5 tasks cancelled.'),
+      M('cos', 'Understood. The 11 facts found so far stay in the brain. Give me a new order when you’re ready.', '14:38')]);
+    else msgs = busyMsgs.concat([q]);
+
+    var cosG = { rest: ['gl idle', 'Idle, listening for orders'], busy: ['gl work', 'Working, routing your order'], needs: ['gl wait', 'Waiting for your answer'], paused: ['gl pause', 'Paused'], killed: ['gl stop', 'Stopped. Listening for a new order'] }[base];
+    var pulse = pulses[base];
+
+    var company = this.props.company || 'now';
+    return {
+      rootCls: 'pan ' + theme + (rm ? ' rm' : ''),
+      theme: theme, rm: rm,
+      company: company,
+      zoom: this.props.zoom || 1, panX: this.props.panX || 0, panY: this.props.panY || 0, open: this.props.open || '',
+      factLine: company === 'grown' ? '12,406 facts in 19 neighbourhoods' : '1,284 facts in 19 neighbourhoods',
+      agentLine: company === 'grown' ? '53 agents in 7 departments' : '12 agents in 3 departments',
+      fieldMode: m === 'killconfirm' ? 'paused' : m,
+      pill: pills[base],
+      canPause: running, canResume: isPaused,
+      killDisabled: isKilled,
+      hasNeeds: hasNeeds, noNeeds: !hasNeeds,
+      needsLabel: hasNeeds ? '3 waiting' : 'none',
+      heldCount: hasNeeds ? '3' : '0',
+      isPaused: isPaused, isKilled: isKilled, isKillConfirm: m === 'killconfirm',
+      showFact: m === 'fact', showAgent: m === 'agent', showApproval: m === 'approval',
+      order: order, msgs: msgs, cosGl: cosG[0], cosState: cosG[1],
+      pulse: pulse,
+      liveGl: running ? 'run-dot' : (isPaused || m === 'killconfirm') ? 'gl pause' : 'gl stop',
+      liveLabel: running ? 'Live' : 'Held at the last event',
+      typed: typed,
+      killBlocked: typed.trim().toLowerCase() !== 'kill',
+      noop: function (e) { if (e && e.preventDefault) e.preventDefault(); },
+      onPause: function () {
+        if (running) self.setState({ m: 'paused', prev: m });
+        else if (m === 'paused') self.setState({ m: st.prev || 'needs' });
+      },
+      onKill: function () { self.setState({ m: 'killconfirm', prev: running ? m : (st.prev || 'needs'), typed: '' }); },
+      onType: function (e) { self.setState({ typed: e.target.value }); },
+      cancelKill: function () { self.setState({ m: 'paused' }); },
+      resumeFromKill: function () { self.setState({ m: st.prev || 'needs' }); },
+      confirmKill: function () { if (typed.trim().toLowerCase() === 'kill') self.setState({ m: 'killed' }); },
+      openApproval: function () { self.setState({ m: 'approval' }); },
+      closeSheet: function () { self.setState({ m: 'needs' }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

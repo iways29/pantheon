@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Built to grow</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&amp;family=Hanken+Grotesk:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+.pan.dark{--bg:#070B18;--ink:#ECE6D6;--ink2:#AEB4C6;--ink3:#8189A0;--gold:#E8BC62;--goldS:rgba(232,188,98,.16);--ice:#94BBFF;--iceS:rgba(148,187,255,.16);--glass:rgba(24,32,60,.46);--glass2:rgba(40,52,92,.5);--edge:rgba(255,255,255,.11);--hi:rgba(255,255,255,.14);--line:rgba(236,230,214,.12)}
+.glass{background:var(--glass);border:1px solid var(--edge);box-shadow:inset 0 1px 0 var(--hi)}
+.disp{font-family:'Marcellus',Georgia,serif;font-weight:400}
+.tile{position:relative;width:196px;height:196px;border-radius:50%;border:1px solid var(--line);overflow:hidden;background:radial-gradient(circle,rgba(232,188,98,.07),transparent 70%)}
+.cloud{position:absolute;border-radius:50%;transform:translate(-50%,-50%);background:radial-gradient(circle,var(--gold) 0%,rgba(0,0,0,0) 66%)}
+.dot{position:absolute;border-radius:50%;background:var(--gold);transform:translate(-50%,-50%)}
+.cap{position:absolute;transform:translate(-50%,0);font:400 11px/1.25 'Marcellus',serif;color:var(--ink2);white-space:nowrap;text-align:center}
+.cap span{display:block;font:400 10px 'Hanken Grotesk',sans-serif;color:var(--ink3)}
+.tag{position:absolute;font:400 10.5px/1.3 'Hanken Grotesk',sans-serif;background:var(--glass2);border:1px solid var(--edge);border-radius:8px;padding:4px 7px;width:112px;box-sizing:border-box;color:var(--ink)}
+.hubcore{position:absolute;width:44px;height:44px;margin:-22px 0 0 -22px;box-sizing:border-box;border-radius:50%;border:2px solid var(--gold);background:var(--glass2);display:grid;place-items:center;font:600 16px/1 'Hanken Grotesk',sans-serif;box-shadow:0 0 0 7px var(--iceS)}
+.pip{position:absolute;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;box-sizing:border-box}
+.pip.w{background:var(--gold)}
+.pip.i{border:1.3px solid var(--ink3)}
+.pip.q{width:8px;height:8px;margin:-4px 0 0 -4px;border:1.5px solid var(--ice);border-radius:0;transform:rotate(45deg)}
+.callout{position:absolute;font-size:12px;line-height:1.4;color:var(--ink2);width:170px}
+.callout b{display:block;color:var(--ink);font-weight:600}
+.lead{position:absolute;height:1px;background:var(--ink3);opacity:.6;transform-origin:0 0}
+.rule{display:flex;gap:12px;font-size:13.5px;line-height:1.5;color:var(--ink2)}
+.rule b{color:var(--ink);font-weight:600}
+.edgechev{display:inline-block;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:8px solid var(--gold);flex:none;margin-top:6px}
+</style>
+</helmet>
+<div class="pan dark" style="width: 1440px; height: 900px; box-sizing: border-box; padding: 56px 64px; background: var(--bg); color: var(--ink); font-family: 'Hanken Grotesk', system-ui, sans-serif; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 64px">
+<section style="display: flex; flex-direction: column; gap: 22px">
+<div>
+<h1 class="disp" style="margin: 0 0 8px; font-size: 38px">The brain is a lens</h1>
+<p style="margin: 0; font-size: 15px; line-height: 1.55; color: var(--ink2); max-width: 560px">The disc is a window onto a space with no edge. Drag to move, scroll or pinch to zoom. The dial and the agent ring stay fixed; only the brain moves.</p>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 10px">
+<div class="tile" aria-hidden="true">
+<sc-for list="{{far}}" as="c" hint-placeholder-count="6"><div class="cloud" style="left: {{c.x}}px; top: {{c.y}}px; width: {{c.s}}px; height: {{c.s}}px; opacity: {{c.o}}"></div><div class="cap" style="left: {{c.x}}px; top: {{c.ly}}px">{{c.n}}<span>{{c.cnt}}</span></div></sc-for>
+</div>
+<span style="font-weight: 600; font-size: 14px">Neighbourhoods</span><span style="font-size: 12px; color: var(--ink3); text-align: center">Zoomed out. Clouds with counts; only facts that need you show as points.</span>
+</div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 10px">
+<div class="tile" aria-hidden="true">
+<sc-for list="{{mid}}" as="d" hint-placeholder-count="80"><div class="dot" style="left: {{d.x}}px; top: {{d.y}}px; width: {{d.s}}px; height: {{d.s}}px; opacity: {{d.o}}"></div></sc-for>
+</div>
+<span style="font-weight: 600; font-size: 14px">Facts</span><span style="font-size: 12px; color: var(--ink3); text-align: center">The working level. Every fact is a point with its status shape.</span>
+</div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 10px">
+<div class="tile" aria-hidden="true">
+<sc-for list="{{near}}" as="d" hint-placeholder-count="20"><div class="dot" style="left: {{d.x}}px; top: {{d.y}}px; width: {{d.s}}px; height: {{d.s}}px; opacity: {{d.o}}; box-shadow: 0 0 8px var(--gold)"></div></sc-for>
+<div class="tag" style="left: 70px; top: 58px">Vireo raised a $12M Series A</div>
+<div class="tag" style="left: 26px; top: 118px">Ashline closed a $4M seed</div>
+</div>
+<span style="font-weight: 600; font-size: 14px">Claims</span><span style="font-size: 12px; color: var(--ink3); text-align: center">Zoomed in. The nearest facts show their claim; tap any to open it.</span>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div class="rule"><span class="edgechev" aria-hidden="true"></span><span><b>Activity outside the view</b> shows as a chevron on the rim, pointing to where it happened. Threads to a neighbourhood outside the view end at the rim.</span></div>
+<div class="rule"><span aria-hidden="true" style="flex: none; width: 10px; height: 10px; margin-top: 5px; border-radius: 50%; border: 1.5px solid var(--ice)"></span><span><b>The view never moves on its own.</b> Events don’t pull the lens around. “Follow this order” and tapping a rim chevron move it smoothly, and only when you ask.</span></div>
+<div class="rule"><span aria-hidden="true" style="flex: none; width: 10px; height: 10px; margin-top: 5px; border-radius: 2px; border: 1.5px solid var(--ink3)"></span><span><b>Places stay put.</b> Positions come from similarity and are only ever added to. A new fact lands beside its nearest neighbours, and a new topic grows at the edge of the space, so what you remember is where you left it.</span></div>
+<div class="rule"><span aria-hidden="true" style="flex: none; width: 10px; height: 10px; margin-top: 5px; border-radius: 50%; background: var(--gold)"></span><span><b>Past 50,000 facts</b> neighbourhoods group into regions, such as Market or Products, which adds one more zoom level above the ones shown here.</span></div>
+</div>
+</section>
+<section style="display: flex; flex-direction: column; gap: 22px">
+<div>
+<h1 class="disp" style="margin: 0 0 8px; font-size: 38px">Departments open and close</h1>
+<p style="margin: 0; font-size: 15px; line-height: 1.55; color: var(--ink2); max-width: 560px">A closed department is one hub on the ring. You can still read how it is doing without opening it.</p>
+</div>
+<div class="glass" style="position: relative; height: 290px; border-radius: 24px" aria-hidden="true">
+<sc-for list="{{pips}}" as="p" hint-placeholder-count="14"><span class="{{p.c}}" style="left: {{p.x}}px; top: {{p.y}}px"></span></sc-for>
+<div class="hubcore" style="left: 300px; top: 140px">14</div>
+<div class="lead" style="left: 330px; top: 90px; width: 150px; transform: rotate(-8deg)"></div>
+<div class="callout" style="left: 486px; top: 58px"><b>One dot per agent</b>Filled is working, hollow is idle, a diamond is waiting for you.</div>
+<div class="lead" style="left: 322px; top: 140px; width: 158px"></div>
+<div class="callout" style="left: 486px; top: 128px"><b>Count in the centre</b>Gold ring when anyone is working.</div>
+<div class="lead" style="left: 330px; top: 188px; width: 150px; transform: rotate(10deg)"></div>
+<div class="callout" style="left: 486px; top: 196px"><b>Blue halo</b>Someone inside needs you.</div>
+<div class="callout" style="left: 40px; top: 118px; text-align: right; width: 180px"><b>Engineering</b>6 at work, 1 waiting</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div class="rule"><b style="flex: none; width: 150px">Tap a hub</b><span>It opens in place. Its agents spread along its arc, and a small close button sits at the start of the arc.</span></div>
+<div class="rule"><b style="flex: none; width: 150px">When space runs out</b><span>Agents move closer together. Workers lose their labels; heads and anyone waiting keep them. Hover or focus shows the name.</span></div>
+<div class="rule"><b style="flex: none; width: 150px">Threads still work</b><span>A thread to an agent in a closed department ends at its hub, so an order’s path stays visible.</span></div>
+<div class="rule"><b style="flex: none; width: 150px">By default</b><span>The Executive Office and any department you filter to are open. Nothing opens or closes by itself, so the ring never shifts under you.</span></div>
+<div class="rule"><b style="flex: none; width: 150px">Past 12 departments</b><span>Departments group into divisions, one more level of hub, opened the same way.</span></div>
+</div>
+</section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var seed = 42;
+    var rnd = function () { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; };
+    var far = [
+      { x: 70, y: 70, s: 70, o: .55, n: 'Funding', cnt: '560' },
+      { x: 128, y: 62, s: 54, o: .35, n: 'Competitors', cnt: '580' },
+      { x: 60, y: 130, s: 60, o: .3, n: 'Audience', cnt: '450' },
+      { x: 130, y: 128, s: 80, o: .25, n: 'Archive', cnt: '580' },
+      { x: 98, y: 100, s: 40, o: .5, n: '', cnt: '' }
+    ].map(function (c) { c.ly = c.y + c.s * .22; return c; });
+    var mid = [], near = [];
+    var ctrs = [[70, 80], [130, 70], [100, 140]];
+    for (var i = 0; i < 90; i++) {
+      var c = ctrs[i % 3], a = rnd() * 6.283, r = Math.sqrt(rnd()) * 30;
+      mid.push({ x: Math.round(c[0] + Math.cos(a) * r), y: Math.round(c[1] + Math.sin(a) * r), s: 2 + Math.round(rnd() * 2), o: .4 + rnd() * .6 });
+    }
+    for (var j = 0; j < 14; j++) {
+      var a2 = rnd() * 6.283, r2 = Math.sqrt(rnd()) * 80;
+      near.push({ x: Math.round(98 + Math.cos(a2) * r2), y: Math.round(98 + Math.sin(a2) * r2), s: 6, o: .5 + rnd() * .5 });
+    }
+    var st = ['w', 'w', 'i', 'w', 'q', 'i', 'w', 'i', 'w', 'i', 'i', 'w', 'i', 'i'];
+    var pips = st.map(function (s, n) { var aa = n / st.length * 6.283; return { c: 'pip ' + s, x: Math.round(300 + Math.sin(aa) * 38), y: Math.round(140 - Math.cos(aa) * 38) }; });
+    return { far: far, mid: mid, near: near, pips: pips };
+  }
+}
+</script>
+</body>
+</html>

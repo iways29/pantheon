@@ -13,6 +13,7 @@ from uuid import UUID
 
 import psycopg
 
+from app.brain import layout
 from app.brain.embeddings import Embedder
 
 _FACT_COLUMNS = """
@@ -175,7 +176,10 @@ class Brain:
 
         if row is None:
             raise BrainError("Insert returned no row; RLS may have rejected it")
-        return Fact.from_row(row)
+        fact = Fact.from_row(row)
+        # Its place on the brain screen, beside its nearest facts (ADR 036).
+        layout.place_quietly(self._connection, org_id, fact.id, embedding)
+        return fact
 
     def get(self, fact_id: UUID | str) -> Fact | None:
         with self._connection.cursor() as cursor:

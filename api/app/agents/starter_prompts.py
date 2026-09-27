@@ -44,6 +44,14 @@ STARTER_PROMPTS: Final[dict[str, dict[str, str]]] = {
             "where from and to are names from things. At most 6 things and 6 links. Reply "
             '{"things": [], "links": []} when the fact names nothing specific.'
         ),
+        # The brain screen (ADR 036): a name for a group of facts that sit together.
+        "name_neighbourhood": (
+            "You name one group of related facts from a company's knowledge base, for a "
+            "label on a map of what the company knows. Reply with a name of one to three "
+            "plain words, in sentence case, that says what the facts have in common, for "
+            "example Pricing, Brand voice or Early founders. No punctuation, no quotes, "
+            "nothing else."
+        ),
     },
     # The Step 9 comparison (ADR 032): one answer from given pages, no tools.
     "benchmark": {

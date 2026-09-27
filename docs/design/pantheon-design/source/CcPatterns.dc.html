@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Control Center, shared patterns</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&amp;family=Hanken+Grotesk:wght@400;500;600&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="pan dark" style="position: relative; width: 1440px; height: 1180px; overflow: hidden; background: var(--bg); color: var(--ink); font-family: 'Hanken Grotesk', system-ui, sans-serif">
+<dc-import name="CcShell" bare="{{ true }}" hint-size="0px,0px"></dc-import>
+<div aria-hidden="true" style="position: absolute; right: -200px; top: -260px; width: 760px; height: 760px; border-radius: 50%; background: radial-gradient(circle, var(--iceS) 0%, transparent 64%)"></div>
+<div aria-hidden="true" style="position: absolute; left: -240px; bottom: -300px; width: 820px; height: 820px; border-radius: 50%; background: radial-gradient(circle, var(--goldS) 0%, transparent 64%)"></div>
+<div style="position: relative; padding: 52px 64px; display: flex; flex-direction: column; gap: 26px">
+<div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 40px">
+<div><h1 class="disp" style="margin: 0; font-size: 42px">Shared patterns</h1><p class="muted" style="margin: 6px 0 0; font-size: 15px; max-width: 620px; line-height: 1.5">Designed once, used on every Control Center screen. The approval card, agent detail, Pause, Kill, status marks and pulse strip come straight from the Brain.</p></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px">
+
+<section class="surf" style="padding: 18px; display: flex; flex-direction: column; gap: 10px">
+<h2 class="disp" style="margin: 0; font-size: 20px">1. Versioned things</h2>
+<p class="muted" style="margin: 0; font-size: 13px; line-height: 1.45">Prompts, charters, judge questions and gates. The live version, the history with a note, any two compared, and a way back.</p>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="display: flex; align-items: center; gap: 8px; font-size: 13px"><input type="checkbox" checked="" aria-label="Compare v12" style="accent-color: var(--gold)"><b class="num">v12</b><span class="tag live">Live</span><span class="faint" style="margin-left: auto; font-size: 12px">You, 08:55</span></div>
+<div style="display: flex; align-items: center; gap: 8px; font-size: 13px"><input type="checkbox" checked="" aria-label="Compare v11" style="accent-color: var(--gold)"><b class="num">v11</b><span class="muted">“Tighter scope”</span><button class="btn quiet" style="height: 24px; padding: 0; margin-left: auto; color: var(--ice); font-size: 12px">Make live</button></div>
+</div>
+<div class="diffcol"><div class="dl del"><span class="mk">−</span><span>Use any news source you can find.</span></div><div class="dl add"><span class="mk">+</span><span>Prefer the company’s own announcement.</span></div></div>
+<span class="faint" style="font-size: 12px">Removed lines are struck through and marked −. Added lines are marked +.</span>
+</section>
+
+<section class="surf" style="padding: 18px; display: flex; flex-direction: column; gap: 10px">
+<h2 class="disp" style="margin: 0; font-size: 20px">2. Preview before apply</h2>
+<p class="muted" style="margin: 0; font-size: 13px; line-height: 1.45">Anything that creates or removes things shows one plain sentence first, then the list.</p>
+<div class="glass" style="padding: 16px; border-radius: 20px; display: flex; flex-direction: column; gap: 10px">
+<span style="font-size: 14px; line-height: 1.45">Creates 3 agents (switched off), updates 1 prompt, switches off 1 routine.</span>
+<div style="display: flex; flex-direction: column; gap: 4px; font-size: 12.5px"><span><b style="color: var(--ice)">+</b> Patent watcher, Trend spotter, Paper reader</span><span><b class="faint">~</b> Research head <span class="code">system</span> v5</span><span><b style="color: var(--verm)">−</b> 08:30 Old digest</span></div>
+<div style="display: flex; gap: 8px; justify-content: flex-end"><button class="btn">Cancel</button><button class="btn pri">Apply</button></div>
+</div>
+</section>
+
+<section class="surf" style="padding: 18px; display: flex; flex-direction: column; gap: 10px">
+<h2 class="disp" style="margin: 0; font-size: 20px">3. Created switched off</h2>
+<p class="muted" style="margin: 0; font-size: 13px; line-height: 1.45">New agents, departments, routines and tools start off. Switching on is its own step, and it says what it unlocks.</p>
+<div class="row new" style="grid-template-columns: minmax(0, 1fr) auto; border-radius: 12px; border-top: 0"><span><span class="nm">Patent watcher</span> <span class="tag off" style="margin-left: 4px">Off, new</span></span><button class="tog" role="switch" aria-checked="false"><span class="tr"></span>Off</button></div>
+<div class="glass" style="padding: 14px 16px; border-radius: 18px; display: flex; flex-direction: column; gap: 8px">
+<span style="font-size: 14px; font-weight: 600">Switch on Patent watcher?</span>
+<span class="muted" style="font-size: 12.5px; line-height: 1.45">It can spend up to $0.40 a day, use Web search and file facts to the brain after Jev checks them.</span>
+<div style="display: flex; gap: 8px; justify-content: flex-end"><button class="btn">Not now</button><button class="btn pri">Switch on</button></div>
+</div>
+</section>
+
+<section class="surf" style="padding: 18px; display: flex; flex-direction: column; gap: 10px">
+<h2 class="disp" style="margin: 0; font-size: 20px">4. Change log</h2>
+<p class="muted" style="margin: 0; font-size: 13px; line-height: 1.45">Every screen has a History drawer. Each line reads as a sentence, before → after, who, when.</p>
+<div style="display: flex; flex-direction: column">
+<div class="ev"><span class="gl idle"></span><span>Research budget $0.25 → $0.50<span class="w num">You, 09:14</span></span></div>
+<div class="ev"><span class="gl idle"></span><span>Morning brief: added sales@theunreallab.com<span class="w num">You, yesterday 11:40</span></span></div>
+<div class="ev"><span class="gl wait"></span><span>search_web changed; switched off until you approve<span class="w num">Pantheon, 13:58</span></span></div>
+</div>
+</section>
+
+<section class="surf" style="padding: 18px; display: flex; flex-direction: column; gap: 10px">
+<h2 class="disp" style="margin: 0; font-size: 20px">5. Locked rules</h2>
+<p class="muted" style="margin: 0; font-size: 13px; line-height: 1.45">Fixed for safety, and they look fixed: a lock, a hatched surface, no control, and one line of reason.</p>
+<div class="lock"><svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5"></rect><path d="M5.5 7V5a2.5 2.5 0 015 0v2"></path></svg><span><b>R4 tools always ask.</b> Public or permanent actions need you.</span></div>
+<div class="lock"><svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5"></rect><path d="M5.5 7V5a2.5 2.5 0 015 0v2"></path></svg><span><b>Only a person can pause, kill or decide an approval.</b></span></div>
+<div class="lock"><svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5"></rect><path d="M5.5 7V5a2.5 2.5 0 015 0v2"></path></svg><span><b>A changed MCP tool stays off</b> until you approve the new definition.</span></div>
+</section>
+
+<section class="surf" style="padding: 18px; display: flex; flex-direction: column; gap: 10px">
+<h2 class="disp" style="margin: 0; font-size: 20px">6. Cost beside the setting</h2>
+<p class="muted" style="margin: 0; font-size: 13px; line-height: 1.45">Any setting that spends money shows its budget, today and the last 7 days, right next to it.</p>
+<div class="fld"><span class="lbl">Daily budget</span><div style="display: flex; gap: 10px; align-items: center"><input class="inp num" value="$6.00" aria-label="Daily budget" style="width: 90px"><span class="cost"><span>Today <b>$2.46</b></span><span>7 days <b>$19.80</b></span><span class="spark" aria-hidden="true"><i style="height: 9px"></i><i style="height: 12px"></i><i style="height: 8px"></i><i style="height: 14px"></i><i style="height: 11px"></i><i style="height: 13px"></i><i style="height: 10px"></i></span></span></div></div>
+<div style="display: flex; flex-direction: column; gap: 4px"><span class="bar over"><i style="width: 100%"></i></span><span class="faint" style="font-size: 12px">Over budget is striped as well as coloured.</span></div>
+</section>
+
+<section class="surf" style="padding: 18px; display: flex; flex-direction: column; gap: 10px">
+<h2 class="disp" style="margin: 0; font-size: 20px">7. Empty states</h2>
+<p class="muted" style="margin: 0; font-size: 13px; line-height: 1.45">Say what to do first. Never “no data”.</p>
+<div class="empty"><span style="font-weight: 600">No routines yet</span><span class="muted" style="font-size: 13px; line-height: 1.45">A routine starts work before you’re up. Most owners begin with a morning brief.</span><button class="btn pri">Add the morning brief</button></div>
+<div class="empty" style="padding: 14px 16px"><span style="font-weight: 600">No MCP servers</span><span class="muted" style="font-size: 13px">Paste a server’s address to see its tools before anything is switched on.</span></div>
+</section>
+
+<section class="surf" style="padding: 18px; display: flex; flex-direction: column; gap: 10px">
+<h2 class="disp" style="margin: 0; font-size: 20px">8. Status marks</h2>
+<p class="muted" style="margin: 0; font-size: 13px; line-height: 1.45">Every status has a shape and a word. Colour only confirms it.</p>
+<div style="display: flex; flex-wrap: wrap; gap: 8px"><span class="tag live">Live</span><span class="tag draft">Draft</span><span class="tag off">Off</span><span class="tag flag">Needs you</span><span class="tag err">Error</span><span class="tag ok">Clean</span></div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; font-size: 12.5px">
+<span style="display: flex; gap: 8px; align-items: center"><span class="gl work"></span>Working</span><span style="display: flex; gap: 8px; align-items: center"><span class="gl idle"></span>Idle</span>
+<span style="display: flex; gap: 8px; align-items: center"><span class="gl wait"></span>Waiting for you</span><span style="display: flex; gap: 8px; align-items: center"><span class="gl pause"></span>Paused</span>
+<span style="display: flex; gap: 8px; align-items: center"><span class="gl done"></span>Done</span><span style="display: flex; gap: 8px; align-items: center"><span class="gl fail"></span>Failed</span>
+</div>
+<div style="display: flex; gap: 8px"><span class="cell run" style="height: 28px"><span class="m"></span>Runs</span><span class="cell jev" style="height: 28px"><span class="m"></span>Jev checks</span><span class="cell ask" style="height: 28px"><span class="m"></span>Asks you</span></div>
+</section>
+
+<section class="surf" style="padding: 18px; display: flex; flex-direction: column; gap: 10px">
+<h2 class="disp" style="margin: 0; font-size: 20px">9. Where glass goes</h2>
+<p class="muted" style="margin: 0; font-size: 13px; line-height: 1.45">Liquid Glass is for controls that float over content, never for the content itself.</p>
+<div style="display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; line-height: 1.45">
+<span><b>Glass:</b> tabs, the section nav, drawers, dialogs, sticky action bars, the brain’s lens.</span>
+<span><b>Not glass:</b> lists, forms, tables and text. They sit on flat surfaces.</span>
+<span><b>Never glass on glass.</b> A button inside a glass panel uses a flat fill.</span>
+<span><b>Needs something behind it.</b> Soft light and the astrolabe rings give it something to bend.</span>
+<span><b>Reduce transparency</b> frosts it almost solid; <b>more contrast</b> gives it a solid edge.</span>
+</div>
+</section>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1180}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pantheon on phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&amp;family=Hanken+Grotesk:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+.pan.dark{--bg:#070B18;--ink:#ECE6D6;--ink2:#AEB4C6;--ink3:#8189A0;--gold:#E8BC62;--goldS:rgba(232,188,98,.16);--ice:#94BBFF;--iceS:rgba(148,187,255,.16);--verm:#FF8466;--vermS:rgba(255,132,102,.14);--glass:rgba(24,32,60,.46);--glass2:rgba(40,52,92,.5);--edge:rgba(255,255,255,.11);--hi:rgba(255,255,255,.14);--shadow:0 18px 50px rgba(0,0,0,.45);--glow:rgba(232,188,98,.15);--veil:rgba(7,11,24,.6);--line:rgba(236,230,214,.12);--rimA:rgba(255,255,255,.34);--rimB:rgba(255,255,255,.04)}
+.pan.light{--bg:#E9ECF3;--ink:#141A2E;--ink2:#3C4560;--ink3:#566079;--gold:#96650F;--goldS:rgba(150,101,15,.12);--ice:#2C5BC8;--iceS:rgba(44,91,200,.12);--verm:#B93D14;--vermS:rgba(185,61,20,.10);--glass:rgba(255,255,255,.52);--glass2:rgba(255,255,255,.72);--edge:rgba(20,26,46,.10);--hi:rgba(255,255,255,.9);--shadow:0 18px 50px rgba(40,50,90,.16);--glow:rgba(150,101,15,.10);--veil:rgba(233,236,243,.6);--line:rgba(20,26,46,.12);--rimA:rgba(255,255,255,.95);--rimB:rgba(255,255,255,.2)}
+.glass{position:relative;isolation:isolate;background:var(--glass);-webkit-backdrop-filter:blur(26px) saturate(170%);backdrop-filter:blur(26px) saturate(170%);border:1px solid var(--edge);box-shadow:inset 0 1px 0 var(--hi),var(--shadow)}
+.glass::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;pointer-events:none;background:linear-gradient(165deg,rgba(255,255,255,.09),rgba(255,255,255,0) 36%)}
+.glass::after{content:"";position:absolute;inset:-1px;border-radius:inherit;padding:1px;pointer-events:none;background:linear-gradient(150deg,var(--rimA),var(--rimB) 34%,rgba(255,255,255,0) 62%,var(--rimB));-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
+.glass .glass{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--glass2);box-shadow:inset 0 1px 0 var(--hi)}
+.glass .glass::before,.glass .glass::after{display:none}
+@media (prefers-reduced-transparency:reduce){.glass{-webkit-backdrop-filter:blur(40px);backdrop-filter:blur(40px);background:var(--bg)}}
+@media (prefers-contrast:more){.glass{border:1.5px solid var(--ink2)}.glass::after{display:none}}
+.g2{background:var(--glass2);border:1px solid var(--edge)}
+.disp{font-family:'Marcellus',Georgia,serif;font-weight:400}
+.ic{fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 16px;border-radius:999px;font:500 15px/1 'Hanken Grotesk',system-ui,sans-serif;color:var(--ink);cursor:pointer;white-space:nowrap;box-sizing:border-box}
+.btn.pri{background:var(--ink);color:var(--bg);border:1px solid var(--ink)}
+.btn.kill{background:transparent;border:1px solid var(--verm);color:var(--verm)}
+.btn.killfill{background:var(--verm);border:1px solid var(--verm);color:#1A0A05}
+.btn:disabled{opacity:.4}
+button:focus-visible,input:focus-visible{outline:2px solid var(--ice);outline-offset:2px}
+.muted{color:var(--ink2)}.faint{color:var(--ink3)}.num{font-variant-numeric:tabular-nums}
+.gl{display:inline-block;flex:none;width:10px;height:10px;box-sizing:border-box;position:relative}
+.gl.idle{border:1.5px solid var(--ink2);border-radius:50%}
+.gl.work{background:var(--gold);border-radius:50%;box-shadow:0 0 8px var(--gold)}
+.gl.wait{border:1.5px solid var(--ice);background:var(--iceS);transform:rotate(45deg);border-radius:2px}
+.gl.pause{background:linear-gradient(90deg,var(--ink2) 0 34%,transparent 34% 66%,var(--ink2) 66%)}
+.gl.f-act{width:8px;height:8px;background:var(--gold);border-radius:50%;box-shadow:0 0 6px var(--gold)}
+.gl.f-dis{width:6px;height:6px;margin:0 1px;background:var(--verm);border-radius:50%}
+.gl.f-dis::after{content:"";position:absolute;inset:-3px;border-radius:50%;border:1px dashed var(--verm)}
+.run-dot{width:8px;height:8px;border-radius:50%;background:var(--gold);animation:breatheG 3.6s ease-in-out infinite;flex:none}
+@keyframes breatheG{0%,100%{box-shadow:0 0 0 0 var(--goldS)}50%{box-shadow:0 0 0 6px var(--goldS)}}
+.row{display:flex;align-items:center;gap:12px;min-height:56px;padding:0 14px;border-radius:16px;width:100%;box-sizing:border-box;text-align:left;font:inherit;color:inherit;cursor:pointer}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;height:56px;border:0;background:transparent;color:var(--ink3);font:500 11px/1 'Hanken Grotesk',sans-serif;border-radius:22px;cursor:pointer}
+.tab[aria-current="page"]{color:var(--ink);background:var(--glass2)}
+.msg{max-width:86%;padding:10px 14px;border-radius:18px;font-size:15px;line-height:1.45}
+.msg.you{align-self:flex-end;background:var(--ink);color:var(--bg);border-bottom-right-radius:6px}
+.msg.cos{align-self:flex-start;border-bottom-left-radius:6px}
+.rel{display:flex;gap:10px;align-items:flex-start;font-size:14px;line-height:1.45}
+.rel .gl{margin-top:6px}
+.inp{height:48px;border-radius:14px;border:1px solid var(--edge);background:var(--glass2);color:var(--ink);font:500 16px/1 'Hanken Grotesk',sans-serif;padding:0 14px;box-sizing:border-box;width:100%}
+.inp::placeholder{color:var(--ink3)}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media (prefers-reduced-motion:reduce){.run-dot{animation:none}}
+</style>
+</helmet>
+<div class="{{rootCls}}" style="position: relative; width: 390px; height: 844px; overflow: hidden; background: var(--bg); color: var(--ink); font-family: 'Hanken Grotesk', system-ui, sans-serif">
+<div aria-hidden="true" style="position: absolute; right: -200px; top: -220px; width: 520px; height: 520px; border-radius: 50%; background: radial-gradient(circle, var(--iceS) 0%, transparent 64%)"></div>
+<div aria-hidden="true" style="position: absolute; left: -220px; bottom: -200px; width: 560px; height: 560px; border-radius: 50%; background: radial-gradient(circle, var(--goldS) 0%, transparent 64%)"></div>
+
+<sc-if value="{{showHome}}" hint-placeholder-val="{{ true }}">
+<div style="position: absolute; inset: 0; padding: 12px 16px 0; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; gap: 10px; height: 44px">
+<svg class="ic" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" style="color: var(--gold)"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="5.5"></circle><path d="M12 2v3M12 12l4.5-5.5"></path></svg>
+<span class="disp" style="font-size: 20px; flex-grow: 1">Pantheon</span>
+<div class="glass" role="status" style="display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; border-radius: 999px; font-size: 14px; font-weight: 600"><span class="{{pillGl}}" aria-hidden="true"></span>{{pillText}}</div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+<button class="btn glass"><svg class="ic" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 3.5v9M10.5 3.5v9"></path></svg>Pause</button>
+<button class="btn kill"><svg class="ic" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"></circle><rect x="6" y="6" width="4" height="4"></rect></svg>Kill</button>
+</div>
+<div style="position: relative; height: 270px; display: flex; justify-content: center">
+<dc-import name="Field" mode="{{fieldMode}}" theme="{{theme}}" size="{{ 262 }}" compact="{{ true }}" bg="{{ false }}" hint-size="262px,270px"></dc-import>
+<span class="faint num" style="position: absolute; left: 2px; top: 0; font-size: 12px">1,284 facts</span>
+</div>
+<section class="glass" aria-label="Today’s pulse" style="border-radius: 22px; padding: 14px 16px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 12px; column-gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 4px"><span class="faint" style="font-size: 12px">Spend today</span><span class="num" style="font-size: 17px; font-weight: 600">$4.12 <span class="faint" style="font-size: 13px; font-weight: 400">of $15.00</span></span><span aria-hidden="true" style="height: 4px; border-radius: 2px; background: var(--line); position: relative; display: block"><span style="position: absolute; left: 0; top: 0; bottom: 0; width: 27%; border-radius: 2px; background: var(--gold)"></span></span></div>
+<div style="display: flex; flex-direction: column; gap: 4px"><span class="faint" style="font-size: 12px">Facts</span><span class="num" style="font-size: 17px; font-weight: 600">+38 <span class="faint" style="font-size: 13px; font-weight: 400">6 rejected</span></span></div>
+<div style="display: flex; flex-direction: column; gap: 4px"><span class="faint" style="font-size: 12px">Tasks</span><span class="num" style="font-size: 17px; font-weight: 600">14 done</span></div>
+<div style="display: flex; flex-direction: column; gap: 4px"><span class="faint" style="font-size: 12px">Waiting for you</span><span class="num" style="font-size: 17px; font-weight: 600; color: var(--ice); display: flex; align-items: center; gap: 8px"><span class="gl wait" aria-hidden="true"></span>3</span></div>
+</section>
+<section aria-label="Needs you" style="display: flex; flex-direction: column; gap: 6px">
+<h2 class="disp" style="margin: 2px 0 2px 4px; font-size: 18px">Needs you</h2>
+<button class="row g2"><span class="gl wait" aria-hidden="true"></span><span style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px; font-weight: 500">Publish the Ashvas beta post</span><span class="faint" style="font-size: 12px">Approval. Jev: look closer</span></span><svg class="ic" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5l4.5 4.5L6 12.5"></path></svg></button>
+<button class="row g2"><svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" style="color: var(--ice)"><path d="M2.5 4a1.5 1.5 0 011.5-1.5h8A1.5 1.5 0 0113.5 4v6a1.5 1.5 0 01-1.5 1.5H7l-3 2.5v-2.5A1.5 1.5 0 012.5 10z"></path></svg><span style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px; font-weight: 500">What does “this year” mean?</span><span class="faint" style="font-size: 12px">Question from Chief of Staff</span></span><svg class="ic" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5l4.5 4.5L6 12.5"></path></svg></button>
+<button class="row g2"><svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" style="color: var(--ice)"><path d="M10 2.5a3.5 3.5 0 00-3.3 4.6L2.5 11.3l2.2 2.2 4.2-4.2A3.5 3.5 0 0013.5 6l-2 2-1.8-.3-.3-1.8 2-2A3.5 3.5 0 0010 2.5z"></path></svg><span style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px; font-weight: 500">Web search tool changed</span><span class="faint" style="font-size: 12px">Re-approve before Research uses it</span></span><svg class="ic" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5l4.5 4.5L6 12.5"></path></svg></button>
+</section>
+</div>
+</sc-if>
+
+<sc-if value="{{showApproval}}" hint-placeholder-val="{{ false }}">
+<div style="position: absolute; inset: 0; display: flex; flex-direction: column">
+<div style="display: flex; align-items: center; gap: 8px; padding: 12px 12px 8px">
+<button class="btn glass" style="height: 44px; padding: 0 14px 0 10px"><svg class="ic" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5L5.5 8l4.5 4.5"></path></svg>Needs you</button>
+<span style="flex-grow: 1"></span>
+<span class="faint num" style="font-size: 13px; padding-right: 6px">1 of 3</span>
+</div>
+<div style="flex-grow: 1; overflow: hidden; padding: 4px 18px 0; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: center; gap: 8px; font-size: 13px" class="muted"><span class="gl wait" aria-hidden="true"></span>Approval from Marketing head, 14:29</div>
+<h1 class="disp" style="margin: 0; font-size: 26px; line-height: 1.22">Publish the Ashvas beta announcement on LinkedIn</h1>
+<div class="glass" style="border-radius: 20px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px">
+<span class="faint" style="font-size: 12px">Jev recommends</span>
+<span style="display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 600"><svg class="ic" width="18" height="18" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"></path><circle cx="8" cy="8" r="2"></circle></svg>Look closer</span>
+<span class="muted" style="font-size: 14px; line-height: 1.45">Holds up against three of four facts, but it announces a public launch, which you ruled out.</span>
+</div>
+<div style="border: 1px dashed var(--verm); background: var(--vermS); border-radius: 18px; padding: 12px 14px; font-size: 14px; line-height: 1.45"><span style="font-weight: 600; color: var(--verm)">Clashes with your decision of 12 September</span><br>“No public launch claims until the security review is done.”</div>
+<div style="display: flex; flex-direction: column; gap: 8px">
+<span class="faint" style="font-size: 12px">Facts checked</span>
+<div class="rel"><span class="gl f-act" aria-hidden="true"></span><span>Scans private repositories without uploading code</span></div>
+<div class="rel"><span class="gl f-act" aria-hidden="true"></span><span>Beta is open to teams under 50 people</span></div>
+<div class="rel"><span class="gl f-act" aria-hidden="true"></span><span>Sign-up page is live</span></div>
+<div class="rel"><span class="gl f-dis" aria-hidden="true"></span><span>First scan under a minute. Disputed.</span></div>
+</div>
+<button class="btn glass" style="align-self: flex-start; height: 44px">Read the draft</button>
+</div>
+<div class="glass" style="margin: 0 12px 16px; border-radius: 28px; padding: 12px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+<button class="btn pri"><svg class="ic" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3 3 7-7"></path></svg>Approve</button>
+<button class="btn glass">Edit</button>
+<button class="btn glass">Reject</button>
+<button class="btn glass">Redirect with note</button>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{showChat}}" hint-placeholder-val="{{ false }}">
+<div style="position: absolute; inset: 0; display: flex; flex-direction: column">
+<div style="display: flex; align-items: center; gap: 12px; padding: 16px 18px 12px; border-bottom: 1px solid var(--line)">
+<span class="gl wait" aria-hidden="true" style="width: 12px; height: 12px"></span>
+<div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1"><h1 class="disp" style="margin: 0; font-size: 20px">Chief of Staff</h1><span class="faint" style="font-size: 12px">Waiting for your answer</span></div>
+<div class="glass" role="status" style="display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border-radius: 999px; font-size: 13px; font-weight: 600"><span class="run-dot" aria-hidden="true"></span>Running</div>
+</div>
+<div role="log" aria-label="Messages" style="flex-grow: 1; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; gap: 12px; padding: 16px">
+<div class="msg you">Find three competitors to Ashvas that raised money this year. Brief me by Friday.<div class="num" style="font-size: 11px; opacity: .6; margin-top: 4px; text-align: right">14:02</div></div>
+<div class="msg cos g2">Routed to Research. Two workers are on it, and I expect it to cost under $3.00.<div><button class="btn glass" style="height: 32px; font-size: 13px; margin-top: 8px; color: var(--ice)">Follow this order</button></div></div>
+<div class="faint" style="align-self: center; font-size: 12px">Research admitted 11 facts and rejected 2.</div>
+<div class="msg g2" style="max-width: none; border: 1px solid var(--ice); box-shadow: 0 0 0 4px var(--iceS)">
+<div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ice); margin-bottom: 6px"><span class="gl wait" aria-hidden="true"></span>Waiting for you<span class="faint num" style="margin-left: auto">14:31</span></div>
+Before I narrow the list: does “this year” mean 2026 so far, or the last 12 months?
+<div style="display: flex; gap: 8px; margin-top: 10px"><button class="btn glass" style="flex: 1">2026 so far</button><button class="btn glass" style="flex: 1">Last 12 months</button></div>
+</div>
+</div>
+<form style="padding: 0 12px 96px; display: flex; gap: 8px">
+<label for="p-order" class="vh">Order for the Chief of Staff</label>
+<input id="p-order" class="inp" placeholder="Give an order in plain words" style="border-radius: 999px; padding: 0 18px">
+<button class="btn pri" aria-label="Send order" style="width: 48px; height: 48px; padding: 0; flex: none"><svg class="ic" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13V3M4 7l4-4 4 4"></path></svg></button>
+</form>
+</div>
+</sc-if>
+
+<sc-if value="{{showTabs}}" hint-placeholder-val="{{ true }}">
+<nav class="glass" aria-label="Sections" style="position: absolute; left: 16px; right: 16px; bottom: 16px; height: 68px; border-radius: 30px; display: flex; align-items: center; gap: 4px; padding: 6px; box-sizing: border-box">
+<button class="tab" aria-current="{{tabBrain}}"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="4.5"></circle></svg>Brain</button>
+<button class="tab" aria-current="false"><span class="gl wait" aria-hidden="true" style="width: 12px; height: 12px; margin: 4px"></span>Needs you, 3</button>
+<button class="tab" aria-current="{{tabChat}}"><svg class="ic" width="20" height="20" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4a1.5 1.5 0 011.5-1.5h8A1.5 1.5 0 0113.5 4v6a1.5 1.5 0 01-1.5 1.5H7l-3 2.5v-2.5A1.5 1.5 0 012.5 10z"></path></svg>Chat</button>
+</nav>
+</sc-if>
+
+<sc-if value="{{showKill}}" hint-placeholder-val="{{ false }}">
+<div style="position: absolute; inset: 0; background: var(--veil); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px)"></div>
+<section class="glass" role="alertdialog" aria-labelledby="pk-h" style="position: absolute; left: 8px; right: 8px; bottom: 8px; border-radius: 32px; padding: 22px 20px 20px; display: flex; flex-direction: column; gap: 14px">
+<div aria-hidden="true" style="align-self: center; width: 40px; height: 4px; border-radius: 2px; background: var(--line); margin-top: -8px"></div>
+<div style="display: flex; align-items: center; gap: 8px; font-size: 13px" class="muted"><span class="gl pause" aria-hidden="true"></span>Everything is paused while you decide</div>
+<h2 id="pk-h" class="disp" style="margin: 0; font-size: 26px">Kill all unfinished work?</h2>
+<p class="muted" style="margin: 0; font-size: 15px; line-height: 1.5">5 tasks, 2 approvals and 1 question are cancelled for good. The brain’s 1,284 facts and everything delivered stay.</p>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="pk-in" style="font-size: 14px">Type <span style="font-weight: 600; color: var(--verm)">kill</span> to confirm</label>
+<input id="pk-in" class="inp" autocomplete="off" value="{{typed}}" onChange="{{onType}}">
+</div>
+<button class="btn killfill" disabled="{{killBlocked}}">Kill all work</button>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+<button class="btn glass">Keep paused</button>
+<button class="btn glass">Resume</button>
+</div>
+</section>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"view":{"editor":"enum","options":["pulse","approval","chat","kill"],"default":"pulse"},"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var self = this;
+    var st = this.state || {};
+    var view = this.props.view || 'pulse';
+    var theme = this.props.theme || 'dark';
+    var typed = st.typed !== undefined ? st.typed : (view === 'kill' ? 'kil' : '');
+    var home = view === 'pulse' || view === 'kill';
+    return {
+      rootCls: 'pan ' + theme,
+      theme: theme,
+      fieldMode: view === 'kill' ? 'paused' : 'needs',
+      showHome: home, showApproval: view === 'approval', showChat: view === 'chat',
+      showTabs: view === 'pulse' || view === 'chat', showKill: view === 'kill',
+      tabBrain: view === 'pulse' ? 'page' : 'false', tabChat: view === 'chat' ? 'page' : 'false',
+      pillGl: view === 'kill' ? 'gl pause' : 'run-dot', pillText: view === 'kill' ? 'Paused' : 'Running',
+      typed: typed, killBlocked: typed.trim().toLowerCase() !== 'kill',
+      onType: function (e) { self.setState({ typed: e.target.value }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

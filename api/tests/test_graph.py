@@ -68,7 +68,18 @@ class Reader:
     calls: list[str] = field(default_factory=list)
 
     def complete(self, *, model: str, messages: list[dict[str, Any]], **kw: Any) -> ModelResponse:
-        fact = json.loads(messages[-1]["content"])["fact"]
+        asked = json.loads(messages[-1]["content"])
+        if "facts" in asked:  # naming a neighbourhood of the brain screen's map
+            return ModelResponse(
+                model=model,
+                text="Agent tools",
+                tokens_in=50,
+                tokens_out=3,
+                cost_usd=0.00001,
+                latency_ms=1,
+                provider="scripted",
+            )
+        fact = asked["fact"]
         self.calls.append(fact)
         text = "I can't read that." if "unreadable" in fact else json.dumps(READS.get(fact, {}))
         return ModelResponse(
@@ -166,12 +177,23 @@ def test_a_fact_that_arrives_later_joins_the_things_already_there(
     jev = judge({"Gradient Ventures invested in Lumen's $4M seed round.": ("Lumen", 0.95)})
     first = read_now(dsn, office, jev, Reader())
     assert (first["things_new"], first["links"]) == (2, 1)
+    # The brain screen's map (ADR 036): the first run draws it and names it.
+    assert (first["placed"], first["named"]) == (1, 1)
 
     # Days later, a new fact about Lumen: it attaches to the same Lumen.
     add_facts(dsn, office, "Gradient Ventures invested in Lumen's $4M seed round.")
     second = read_now(dsn, office, jev, Reader())
 
     assert (second["things_new"], second["things_joined"], second["links"]) == (1, 1, 1)
+    # Placed as it was stored; the bag-of-words stand-in finds it a new topic,
+    # so it starts a neighbourhood, named in this run.
+    assert (second["placed"], second["named"]) == (0, 1)
+    with connect(dsn) as connection, as_service_role(connection) as conn:
+        hoods = conn.execute(
+            "select label, label_source from public.brain_neighbourhoods where org_id = %s",
+            (str(office.org_id),),
+        ).fetchall()
+    assert {(h["label"], h["label_source"]) for h in hoods} == {("Agent tools", "model")}
     found = things(dsn, office)
     assert len(found["Lumen"]) == 1, "one Lumen, not two islands"
     assert links(dsn, office) == {

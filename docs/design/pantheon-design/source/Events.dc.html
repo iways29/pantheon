@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>How events look and move</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&amp;family=Hanken+Grotesk:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+.pan.dark{--bg:#070B18;--ink:#ECE6D6;--ink2:#AEB4C6;--ink3:#8189A0;--gold:#E8BC62;--goldS:rgba(232,188,98,.16);--ice:#94BBFF;--iceS:rgba(148,187,255,.16);--verm:#FF8466;--glass:rgba(24,32,60,.46);--edge:rgba(255,255,255,.11);--hi:rgba(255,255,255,.14);--line:rgba(236,230,214,.12)}
+.glass{position:relative;background:var(--glass);border:1px solid var(--edge);box-shadow:inset 0 1px 0 var(--hi)}
+.disp{font-family:'Marcellus',Georgia,serif;font-weight:400}
+.gl{display:inline-block;flex:none;width:11px;height:11px;box-sizing:border-box;position:relative}
+.gl.idle{border:1.5px solid var(--ink2);border-radius:50%}
+.gl.spark{border:1.5px solid var(--ink2);border-radius:50%}
+.gl.spark::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:1px solid var(--gold);animation:flash 2.4s ease-out infinite}
+.gl.pt{width:7px;height:7px;background:var(--gold);border-radius:50%;box-shadow:0 0 8px var(--gold)}
+.gl.work{background:var(--gold);border-radius:50%;box-shadow:0 0 8px var(--gold)}
+.gl.work::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:1.5px solid transparent;border-top-color:var(--gold);animation:spin 3.2s linear infinite}
+.gl.twait{background:var(--gold);border-radius:50%;opacity:.8}
+.gl.twait::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:1.5px dashed var(--gold);opacity:.7}
+.gl.wait{border:1.5px solid var(--ice);background:var(--iceS);transform:rotate(45deg);border-radius:2px;animation:breathe 3.6s ease-in-out infinite}
+.gl.held{width:9px;height:9px;border:1.3px solid var(--ice);transform:rotate(45deg);border-radius:1.5px}
+.gl.rej{width:9px;height:9px;border:1px solid var(--verm);border-radius:50%}
+.gl.rej::before,.gl.rej::after{content:"";position:absolute;left:50%;top:50%;width:11px;height:1px;margin:-.5px 0 0 -5.5px;background:var(--verm);transform:rotate(45deg)}
+.gl.rej::after{transform:rotate(-45deg)}
+.gl.fail{border:1.5px solid var(--ink2);border-top-color:var(--verm);border-right-color:var(--verm);border-radius:50%}
+.gl.done{background:var(--ink3);border-radius:50%;transform:scale(.75)}
+.gl.ok{width:12px;height:7px;border-left:1.8px solid var(--gold);border-bottom:1.8px solid var(--gold);transform:rotate(-45deg);margin-top:-4px}
+.gl.pause{width:10px;height:12px;background:linear-gradient(90deg,var(--ink2) 0 34%,transparent 34% 66%,var(--ink2) 66%)}
+.gl.stop{border:1.5px solid var(--ink3);border-radius:1px}
+.ln{position:relative;width:52px;height:0;border-top:1.2px solid var(--gold);opacity:.9}
+.ln.ice{border-top-color:var(--ice)}
+.ln.dash{border-top:1.2px dashed var(--ink3)}
+.ln.clash{border-top:1.4px dashed var(--verm)}
+.ln .b{position:absolute;top:-3.6px;left:0;width:6px;height:6px;border-radius:50%;background:var(--gold);box-shadow:0 0 8px 2px var(--gold);animation:slide 2.4s cubic-bezier(.45,0,.25,1) infinite}
+.ln.ice .b{background:var(--ice);box-shadow:0 0 8px 2px var(--ice)}
+.ln.back .b{animation-direction:reverse}
+.ln.dash .b,.ln.clash .b,.ln.none .b{display:none}
+@keyframes slide{0%{left:0;opacity:0}12%{opacity:1}85%{opacity:1}100%{left:46px;opacity:0}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes flash{0%,60%{opacity:0;transform:scale(.6)}70%{opacity:1}100%{opacity:0;transform:scale(1.4)}}
+@keyframes breathe{0%,100%{box-shadow:0 0 0 0 var(--iceS)}50%{box-shadow:0 0 0 6px var(--iceS)}}
+.tr{display:grid;grid-template-columns:190px 96px minmax(0,1.15fr) minmax(0,1fr) minmax(0,.85fr);column-gap:24px;align-items:center;padding:11px 0;border-top:1px solid var(--line);font-size:13px;line-height:1.45}
+.tr .ev{font-weight:600;color:var(--ink)}
+.tr .c{color:var(--ink2)}
+.tr .r{color:var(--ink3)}
+@media (prefers-reduced-motion:reduce){.ln .b,.gl::after,.gl.wait{animation:none}.ln .b{left:32px}}
+</style>
+</helmet>
+<div class="pan dark" style="width: 1440px; height: 1260px; box-sizing: border-box; padding: 56px 64px; background: var(--bg); color: var(--ink); font-family: 'Hanken Grotesk', system-ui, sans-serif; display: flex; flex-direction: column; gap: 28px">
+<div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 40px">
+<div style="display: flex; flex-direction: column; gap: 10px; max-width: 640px">
+<h1 class="disp" style="margin: 0; font-size: 44px; line-height: 1.1">How events look and move</h1>
+<p style="margin: 0; font-size: 16px; line-height: 1.55; color: var(--ink2)">Each row is one event type from the live stream. In these frames the beads loop so you can see them. In the product, each one runs once per real event.</p>
+</div>
+<div style="display: flex; gap: 20px; font-size: 13px; color: var(--ink2)">
+<span style="display: flex; align-items: center; gap: 8px"><span class="gl pt" aria-hidden="true"></span>Gold is knowledge</span>
+<span style="display: flex; align-items: center; gap: 8px"><span class="gl held" aria-hidden="true"></span>Ice blue is waiting for you</span>
+<span style="display: flex; align-items: center; gap: 8px"><span class="gl rej" aria-hidden="true"></span>Vermilion is conflict</span>
+</div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px">
+<div class="glass" style="border-radius: 20px; padding: 18px"><h2 class="disp" style="margin: 0 0 6px; font-size: 19px">Only events move things</h2><p style="margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink2)">Every glow, thread and bead is caused by one event. Nothing moves for decoration, so a still brain means nothing is happening.</p></div>
+<div class="glass" style="border-radius: 20px; padding: 18px"><h2 class="disp" style="margin: 0 0 6px; font-size: 19px">Light fades like memory</h2><p style="margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink2)">A touched neighbourhood glows, then dims over 90 seconds. That keeps the last few minutes of work readable at a glance.</p></div>
+<div class="glass" style="border-radius: 20px; padding: 18px"><h2 class="disp" style="margin: 0 0 6px; font-size: 19px">Shape first, colour second</h2><p style="margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink2)">Circle for a fact, diamond for waiting on you, dashed for doubt, square for stopped. Colour confirms each shape but never carries status alone.</p></div>
+<div class="glass" style="border-radius: 20px; padding: 18px"><h2 class="disp" style="margin: 0 0 6px; font-size: 19px">Readable at 10,000</h2><p style="margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink2)">Zoomed out, neighbourhoods draw as soft clouds with a count, and single points show only where an event touches them. Drag the dial’s hand to replay the day.</p></div>
+</div>
+<div role="table" aria-label="Event types" style="display: flex; flex-direction: column">
+<div class="tr" role="row" style="border-top: 0; font-size: 12px; color: var(--ink3); padding-top: 0">
+<span role="columnheader">Event</span><span role="columnheader">Sign</span><span role="columnheader">How it looks</span><span role="columnheader">How it moves</span><span role="columnheader">With reduced motion</span>
+</div>
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="15">
+<div class="tr" role="row">
+<span class="ev" role="cell">{{r.n}}</span>
+<span role="cell" aria-hidden="true" style="display: flex; align-items: center; gap: 10px; height: 24px"><sc-if value="{{r.ln}}" hint-placeholder-val="{{ true }}"><span class="{{r.ln}}"><span class="b"></span></span></sc-if><span class="{{r.gl}}"></span></span>
+<span class="c" role="cell">{{r.look}}</span>
+<span class="c" role="cell">{{r.move}}</span>
+<span class="r" role="cell">{{r.rm}}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1260}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var R = function (n, ln, gl, look, move, rm) { return { n: n, ln: ln, gl: 'gl ' + gl, look: look, move: move, rm: rm }; };
+    return {
+      rows: [
+        R('Tool used', '', 'spark', 'A thin ring flashes on the agent’s node.', 'One 300 ms flash. Nothing travels.', 'Node outline brightens for 2 s.'),
+        R('Fact admitted', 'ln', 'pt', 'A gold bead travels from the agent, past Jev, into the fact’s neighbourhood and becomes a point.', '1.2 s travel, then a 600 ms ripple where it lands. Glow fades over 90 s.', 'The point appears with a ring that stays for 2 s.'),
+        R('Fact rejected', 'ln', 'rej', 'The bead stops at the brain’s edge and shows as a crossed ring.', 'Holds 1.5 s, then breaks into five motes and fades over 900 ms.', 'Crossed ring, gone after 2 s.'),
+        R('Fact held', 'ln', 'held', 'The bead stops at the edge; an ice diamond takes its place inside the brain.', '400 ms settle. The Needs you count goes up once.', 'Diamond appears; count updates.'),
+        R('Task started', '', 'work', 'The node fills gold and an orbit arc appears around it.', '300 ms fill, then one turn every 3.2 s while it works.', 'Filled node with a still arc.'),
+        R('Task waiting', '', 'twait', 'The orbit arc turns dashed and stops.', 'Eases to rest over 400 ms.', 'Dashed arc.'),
+        R('Task done', 'ln ice back', 'done', 'A bead returns along the thread to whoever handed over the work, and the node settles.', '900 ms return; the thread retracts behind it.', 'Thread disappears; node settles.'),
+        R('Task failed', '', 'fail', 'The node gets a vermilion notch that stays until you open it.', 'One 200 ms blink, never repeated.', 'Notch only.'),
+        R('Order routed', 'ln ice', 'idle', 'An ice thread draws from Chief of Staff to the department head, then splits to workers.', '600 ms draw. It stays while the order is open.', 'Thread appears whole.'),
+        R('Question for you', '', 'wait', 'Ice diamond on Chief of Staff, the message in chat and a card in Needs you.', 'The diamond breathes every 3.6 s. The card slides in once.', 'No breathing; the card appears.'),
+        R('Approval requested', 'ln clash', 'wait', 'Ice diamond on the agent, with a dashed vermilion line to any decision it clashes with.', 'Same as a question.', 'Static diamond and line.'),
+        R('Approval decided', '', 'ok', 'The diamond resolves to a check or a cross; the thread goes on or retracts.', '500 ms change of shape.', 'Instant swap.'),
+        R('Run paused', 'ln dash', 'pause', 'That task’s thread turns grey and dashed; its node shows two bars.', 'Its beads ease to a stop over 400 ms.', 'Instant.'),
+        R('Paused, everything', 'ln dash', 'pause', 'All beads stop where they are, glow dims to 40%, the dial’s hand stops and the pill reads Paused.', 'One 400 ms ease for everything at once.', 'Instant.'),
+        R('Killed', 'ln none', 'stop', 'Threads pull back into their nodes and every node becomes a square outline. Facts stay.', '800 ms retract, one slow dim, no flash.', 'Instant.')
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

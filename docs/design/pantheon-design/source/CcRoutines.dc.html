@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Control Center, morning routine</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&amp;family=Hanken+Grotesk:wght@400;500;600&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="{{root}}" style="position: relative; width: 1440px; height: 900px; overflow: hidden; color: var(--ink); font-family: 'Hanken Grotesk', system-ui, sans-serif">
+<dc-import name="CcShell" screen="routines" theme="{{theme}}" hint-size="1440px,900px"></dc-import>
+<main style="position: absolute; left: 264px; top: 72px; width: 1160px; height: 772px; box-sizing: border-box; padding: 16px 8px 0 8px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px">
+<div><h1 class="disp" style="margin: 0; font-size: 30px">Morning routine</h1><p class="muted" style="margin: 4px 0 0; font-size: 14px">Work that starts on its own at set times. New routines start switched off.</p></div>
+<div style="display: flex; gap: 8px"><button class="btn"><svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"></circle><path d="M8 5v3l2 1.5"></path></svg>History</button><button class="btn pri">New routine</button></div>
+</div>
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 470px; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 14px"><section aria-label="Routines" class="tbl">
+<div class="th" style="grid-template-columns: 50px minmax(0, 1fr) 120px 80px 84px"><span>Time</span><span>Routine</span><span>Days</span><span>Run</span><span>On</span></div>
+<sc-for list="{{rts}}" as="r" hint-placeholder-count="6">
+<div class="{{r.rc}}" style="grid-template-columns: 50px minmax(0, 1fr) 120px 80px 84px; min-height: 50px">
+<span class="num" style="font-weight: 600">{{r.t}}</span>
+<span><span class="nm">{{r.n}}</span><span class="sub">{{r.a}}</span></span>
+<span class="muted" style="font-size: 12.5px">{{r.d}}</span>
+<button class="btn quiet" style="height: 28px; padding: 0; justify-content: flex-start">Run now</button>
+<button class="tog" role="switch" aria-checked="{{r.on}}" aria-label="{{r.n}}"><span class="tr"></span>{{r.onT}}</button>
+</div>
+</sc-for>
+</section>
+<section aria-label="What fired" class="surf" style="padding: 14px 18px; display: flex; flex-direction: column; gap: 8px">
+<div class="sech"><h2 style="font-size: 18px">What fired, last 7 days</h2><span style="display: flex; gap: 14px; font-size: 12px" class="muted"><span style="display: flex; gap: 6px; align-items: center"><span class="gl done"></span>Done</span><span style="display: flex; gap: 6px; align-items: center"><span class="gl fail"></span>Failed</span><span style="display: flex; gap: 6px; align-items: center"><span class="gl pause"></span>Paused</span><span style="display: flex; gap: 6px; align-items: center"><span class="gl stop"></span>Didn’t run</span></span></div>
+<div style="display: grid; grid-template-columns: 150px repeat(7, minmax(0, 1fr)); gap: 4px 6px; font-size: 12px; align-items: center">
+<span></span><span class="faint">Fri 19</span><span class="faint">Sat 20</span><span class="faint">Sun 21</span><span class="faint">Mon 22</span><span class="faint">Tue 23</span><span class="faint">Wed 24</span><span class="faint">Thu 25</span>
+<sc-for list="{{tl}}" as="row" hint-placeholder-count="4">
+<span class="muted">{{row.n}}</span>
+<sc-for list="{{row.c}}" as="c" hint-placeholder-count="7"><span style="display: flex; align-items: center; gap: 6px; height: 26px"><span class="{{c.g}}" aria-hidden="true"></span><span class="num">{{c.t}}</span></span></sc-for>
+</sc-for>
+</div>
+</section>
+</div>
+<section class="surf" aria-label="Funding news scan" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 11px">
+<div style="display: flex; align-items: center; gap: 10px"><h2 class="disp" style="margin: 0; font-size: 20px; flex-grow: 1">Funding news scan</h2><span class="faint" style="font-size: 12px">Market scanner</span></div>
+<div class="fld"><label class="lbl" for="r-ins">Instructions</label><textarea id="r-ins" class="inp" rows="2">Find new funding rounds in AI code security since yesterday. File each as a fact.</textarea></div>
+<div style="display: flex; align-items: flex-end; gap: 12px">
+<div class="fld"><label class="lbl" for="r-t">Time</label><input id="r-t" class="inp num" value="07:30" style="width: 76px"></div>
+<div class="fld" style="flex-grow: 1"><label class="lbl" for="r-tz">Time zone</label><select id="r-tz" class="inp"><option>America/New_York</option></select></div>
+</div>
+<div class="fld"><span class="lbl">Days</span><div style="display: flex; gap: 6px" role="group" aria-label="Days"><button class="day" aria-pressed="true" aria-label="Monday">M</button><button class="day" aria-pressed="true" aria-label="Tuesday">T</button><button class="day" aria-pressed="true" aria-label="Wednesday">W</button><button class="day" aria-pressed="true" aria-label="Thursday">T</button><button class="day" aria-pressed="true" aria-label="Friday">F</button><button class="day" aria-pressed="false" aria-label="Saturday">S</button><button class="day" aria-pressed="false" aria-label="Sunday">S</button></div></div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px">
+<div class="fld"><label class="lbl" for="r-g">Grace minutes</label><input id="r-g" class="inp num" value="15"></div>
+<div class="fld"><label class="lbl" for="r-s">Max steps</label><input id="r-s" class="inp num" value="40"></div>
+<div class="fld"><label class="lbl" for="r-k">Max tokens</label><input id="r-k" class="inp num" value="60,000"></div>
+</div>
+<div class="fld"><span class="lbl">Topics</span><div class="chipset"><span class="chip" aria-pressed="true">AI code security</span><span class="chip" aria-pressed="true">Developer tools funding</span><button class="chip" aria-pressed="false">Add topic</button></div></div>
+<div class="fld"><span class="lbl">Sources</span>
+<div style="display: flex; flex-direction: column; gap: 4px; font-size: 13px">
+<span style="display: flex; align-items: center; gap: 8px"><span class="tag ok">Readable</span>news.example-funding.com/security</span>
+<span style="display: flex; align-items: center; gap: 8px"><span class="tag ok">Readable</span>blog.example-vc.com/portfolio</span>
+<span style="display: flex; align-items: center; gap: 8px"><span class="tag err">Can’t read</span>data.example.com asks for a sign-in</span>
+</div></div>
+<div class="cost" style="padding-top: 8px; border-top: 1px solid var(--line)"><span>Average <b>$0.42</b> a run</span><span>7 days <b>$2.10</b></span><span>Research budget <b>$6.00</b> a day</span></div>
+</section>
+</div>
+
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var theme = this.props.theme || 'dark';
+    var R = function (t, n, a, d, on, sel) { return { t: t, n: n, a: a, d: d, on: on ? 'true' : 'false', onT: on ? 'On' : 'Off', rc: 'row' + (sel ? ' sel' : '') + (on ? '' : ' new') }; };
+    var C = function (s) {
+      return s.split(' ').map(function (x) {
+        if (x === '-') return { g: 'gl stop', t: '' };
+        if (x === 'f') return { g: 'gl fail', t: 'failed' };
+        if (x === 'p') return { g: 'gl pause', t: 'paused' };
+        return { g: 'gl done', t: '$' + x };
+      });
+    };
+    return {
+      root: 'pan ' + theme, theme: theme,
+      rts: [
+        R('07:30', 'Funding news scan', 'Market scanner, Research', 'Mon to Fri', true, true),
+        R('08:00', 'Competitor pages', 'Source reader, Research', 'Mon, Wed, Fri', true),
+        R('08:30', 'Morning brief', 'Briefing writer, to the Morning brief list', 'Every day', true),
+        R('09:00', 'Brand mentions', 'Social planner, Marketing', 'Mon to Fri', false),
+        R('18:00', 'Spend digest', 'Ledger keeper, Executive Office', 'Every day', true),
+        R('20:00', 'Weekly brief', 'Briefing writer', 'Sunday', true)
+      ],
+      tl: [
+        { n: '07:30 Funding news', c: C('0.44 - - 0.39 f 0.41 0.47') },
+        { n: '08:00 Competitor pages', c: C('0.31 - - 0.28 - 0.35 -') },
+        { n: '08:30 Morning brief', c: C('0.12 0.10 0.09 0.13 0.12 p 0.14') },
+        { n: '18:00 Spend digest', c: C('0.02 0.02 0.02 0.02 0.02 0.02 -') }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

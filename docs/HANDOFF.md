@@ -123,12 +123,16 @@ apply from scratch on plain Postgres (guard anything needing `pg_cron`,
    fix anything that breaks.
 2. Done 2026-09-27: approval links in the brief email (ADR 030) are live
    (migration applied, PR #35 merged, links on for `morning-brief`, 48 hours).
-3. Step 9, Jev in the loop (ADR 031, 032): built and tested in PR #36, **not
-   live**. The owner said switch on after Monday's mornings are checked.
-   See "Switching on Step 9" below.
+3. Step 9 is live (2026-09-27, owner's go after a clean rehearsal): migration
+   `20260927110000_result_check.sql` applied, PR #36 merged, gates
+   `result_check` and `recall_rank` seeded (v1). First live checks: both
+   web-researchers passed on cheap; the fact-curator was wrongly redone for
+   stating today's date (fixed in the next PR: the evidence now includes
+   today's date and the task). Still owed: `scripts.cascade compare` from the
+   owner's laptop, the Step 9 report.
 4. After five unattended mornings: the Step 8.1 Milestone report. Stop.
 
-## Switching on Step 9 (after Monday's mornings are checked)
+## Switching on Step 9 (done 2026-09-27; kept for reference)
 
 Everything is off until each gate is added, so this can go step by step.
 

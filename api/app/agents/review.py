@@ -21,6 +21,7 @@ never stops the work.
 """
 
 import json
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -75,11 +76,13 @@ def check(
         return None  # not seeded: nothing to check with
     policy = gate.policy
     result = found["result"] or output or {}
-    state = {
-        "task": " ".join(filter(None, [found["title"], found["instructions"]])),
-        "result": _text(result),
-        "evidence": _evidence(connection, run_id, int(policy.setting("evidence_chars", 24000))),
-    }
+    task = " ".join(filter(None, [found["title"], found["instructions"]]))
+    # What the agent was given counts as evidence too: today's date (every
+    # agent is told it) and its own task, whose names it may repeat. The
+    # first live check (2026-09-27) flagged a result for stating the date.
+    given = f"[given to the agent]\nToday (UTC): {datetime.now(UTC):%A %d %B %Y}\nTask: {task}"
+    tools = _evidence(connection, run_id, int(policy.setting("evidence_chars", 24000)))
+    state = {"task": task, "result": _text(result), "evidence": f"{given}\n\n{tools}"}
     # Escaping can grow the evidence: trim it until the state fits the gate.
     while (
         state["evidence"]

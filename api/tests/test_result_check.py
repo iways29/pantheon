@@ -103,7 +103,10 @@ def test_a_good_result_passes_and_the_task_finishes(dsn: str, checked: Team) -> 
     assert check["outcome"] == "pass" and check["escalated_to"] is None
     (call,) = jev.calls_for("unsupported")
     assert '"summary": "40 people."' in call["state"]["result"]
-    assert call["state"]["evidence"] == "(the agent read nothing)"
+    evidence = call["state"]["evidence"]
+    assert evidence.startswith("[given to the agent]\nToday (UTC): ")
+    assert "Task: Find the headcount Find the headcount for Acme Corp." in evidence
+    assert evidence.endswith("(the agent read nothing)")
     assert set(model.models) == {"vendor/small"}
 
 

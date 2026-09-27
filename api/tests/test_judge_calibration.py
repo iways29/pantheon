@@ -153,6 +153,7 @@ def test_every_case_file_imports_against_its_gate(
         "content_screen": 12,
         "draft_claim": 16,
         "draft_voice": 10,
+        "entity_match": 14,
         "memory_triage": 14,
         "recall_rank": 11,
         "result_check": 15,
@@ -261,3 +262,29 @@ def test_the_harness_measures_a_gate_and_records_the_run(
     printed = capsys.readouterr().out
     assert "precision" in printed and "recall" in printed
     assert f"=== {gate} v1" in printed
+
+
+def test_entity_match_cases_are_asked_with_their_candidates(
+    db: psycopg.Connection, tenants: Tenants, agent: UUID
+) -> None:
+    path = CASES_DIR / "entity_match.json"
+    import_cases(db, user_id=tenants.user_a, org_id=tenants.org_a, path=path)
+    expected = {c["state"]["context"]: c["expected"] for c in json.loads(path.read_text())["cases"]}
+    offered: list[list[str]] = []
+
+    def respond(state: Any, questions: dict[str, Any]) -> dict[str, Any]:
+        options = list(questions["match"].criteria)
+        offered.append(options)
+        assert "extra_options" not in state
+        picked = "c1" if expected[state["context"]] == "match" else "new"
+        return {"match": choice(picked, options)}
+
+    with acting_as(db, user_id=str(tenants.user_a)) as conn:
+        gateway = Gateway(conn, RecordingTransport(), TIERS, systemone=ScriptedJev(respond=respond))
+        report = run_eval(
+            conn, Judge(conn, gateway), org_id=tenants.org_a, agent_id=agent, gate="entity_match"
+        )
+
+    assert len(offered) == len(expected)
+    assert all("new" in o and "c1" in o for o in offered)
+    assert report.wrong == [] and report.classification["accuracy"] == 1.0

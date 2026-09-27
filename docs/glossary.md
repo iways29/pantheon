@@ -115,3 +115,14 @@ not facts, so you are never asked to review web news. What you say is sorted (AD
 | `clean` | Screened; safe for agents to read. |
 | `review` | Screening was unsure (for example the page contains an email address). |
 | `quarantined` | Looks like it tries to instruct an AI; no agent reads it. |
+
+## The graph (ADR 035)
+
+| Word | Means |
+| --- | --- |
+| Thing (`entities`) | A person, company, product, project, investor, fund or topic the facts are about. |
+| Link (`entity_links`) | "Priya Rao founded Lumen": a typed link, always traced to the fact it came from. |
+| Librarian | The cheap agent that reads new facts and proposes things and links. |
+| Possible match | Jev was unsure a mention was an existing thing, so it was kept apart and marked; the tidy-up asks again. |
+| Tidy-up | The end of each librarian run: probable twins are put to Jev and merged when it is sure. |
+| Merged | A thing folded into another; kept, pointing at the survivor, so it can be undone. |

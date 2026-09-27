@@ -1,0 +1,240 @@
+{
+  "gate": "entity_match",
+  "about": "Which existing thing a mention is, or a new one (ADR 035). Tricky names: Think, Metal, Oliver, Apple. Each case carries its candidates as extra_options. The outcome is match or new; which candidate is in the note. Written 2026-09-27 by the author.",
+  "cases": [
+    {
+      "id": "think-saudi-again",
+      "expected": "match",
+      "label_source": "author",
+      "state": {
+        "mention": "Think",
+        "kind": "company",
+        "context": "Think, the Riyadh AI startup, hired a new CTO.",
+        "candidates": "c1: Think (company): A Saudi AI startup founded by Ahmed AlSharif.",
+        "extra_options": {
+          "match": {
+            "c1": "Think (company): A Saudi AI startup founded by Ahmed AlSharif."
+          }
+        }
+      }
+    },
+    {
+      "id": "think-robotics-vs-saudi",
+      "expected": "new",
+      "label_source": "author",
+      "state": {
+        "mention": "Think",
+        "kind": "company",
+        "context": "Think, a US robotics firm, makes warehouse arms.",
+        "candidates": "c1: Think (company): A Saudi AI startup founded by Ahmed AlSharif.",
+        "extra_options": {
+          "match": {
+            "c1": "Think (company): A Saudi AI startup founded by Ahmed AlSharif."
+          }
+        }
+      },
+      "note": "Tricky: same name, different company."
+    },
+    {
+      "id": "think-two-candidates",
+      "expected": "match",
+      "label_source": "author",
+      "state": {
+        "mention": "Think",
+        "kind": "company",
+        "context": "Think shipped a new warehouse arm in Ohio.",
+        "candidates": "c1: Think (company): A Saudi AI startup founded by Ahmed AlSharif.\nc2: Think (company): A US robotics firm that makes warehouse arms.",
+        "extra_options": {
+          "match": {
+            "c1": "Think (company): A Saudi AI startup founded by Ahmed AlSharif.",
+            "c2": "Think (company): A US robotics firm that makes warehouse arms."
+          }
+        }
+      },
+      "note": "Tricky: same name, pick the right one. c2 is right: the robotics firm"
+    },
+    {
+      "id": "metal-vc-vs-band",
+      "expected": "new",
+      "label_source": "author",
+      "state": {
+        "mention": "Metal",
+        "kind": "company",
+        "context": "Metal played two sold-out shows in Austin.",
+        "candidates": "c1: Metal (company): A venture firm that backs developer-tool startups.",
+        "extra_options": {
+          "match": {
+            "c1": "Metal (company): A venture firm that backs developer-tool startups."
+          }
+        }
+      },
+      "note": "Tricky: a common word as a name."
+    },
+    {
+      "id": "metal-vc-again",
+      "expected": "match",
+      "label_source": "author",
+      "state": {
+        "mention": "Metal",
+        "kind": "investor",
+        "context": "Metal led the seed round of Tessel.",
+        "candidates": "c1: Metal (investor; also called Metal Ventures): A venture firm that backs developer-tool startups.",
+        "extra_options": {
+          "match": {
+            "c1": "Metal (investor; also called Metal Ventures): A venture firm that backs developer-tool startups."
+          }
+        }
+      }
+    },
+    {
+      "id": "oliver-two-people",
+      "expected": "new",
+      "label_source": "author",
+      "state": {
+        "mention": "Oliver",
+        "kind": "person",
+        "context": "Oliver Chen, a designer at Figma, spoke at the event.",
+        "candidates": "c1: Oliver Stone (person): Founder of Lumen.",
+        "extra_options": {
+          "match": {
+            "c1": "Oliver Stone (person): Founder of Lumen."
+          }
+        }
+      },
+      "note": "Tricky: first name only."
+    },
+    {
+      "id": "oliver-same-person",
+      "expected": "match",
+      "label_source": "author",
+      "state": {
+        "mention": "Oliver Stone",
+        "kind": "person",
+        "context": "Oliver Stone, who founded Lumen, raised again.",
+        "candidates": "c1: Oliver Stone (person): Founder of Lumen.",
+        "extra_options": {
+          "match": {
+            "c1": "Oliver Stone (person): Founder of Lumen."
+          }
+        }
+      }
+    },
+    {
+      "id": "apple-fruit-startup",
+      "expected": "new",
+      "label_source": "author",
+      "state": {
+        "mention": "Apple",
+        "kind": "company",
+        "context": "Apple Farm AI uses drones to count apples in orchards.",
+        "candidates": "c1: Apple (company): Maker of the iPhone.",
+        "extra_options": {
+          "match": {
+            "c1": "Apple (company): Maker of the iPhone."
+          }
+        }
+      },
+      "note": "Tricky: famous name inside another name."
+    },
+    {
+      "id": "apple-the-company",
+      "expected": "match",
+      "label_source": "author",
+      "state": {
+        "mention": "Apple",
+        "kind": "company",
+        "context": "Apple announced new on-device AI models.",
+        "candidates": "c1: Apple (company): Maker of the iPhone.",
+        "extra_options": {
+          "match": {
+            "c1": "Apple (company): Maker of the iPhone."
+          }
+        }
+      }
+    },
+    {
+      "id": "lumen-legal-suffix",
+      "expected": "match",
+      "label_source": "author",
+      "state": {
+        "mention": "Lumen Labs Inc.",
+        "kind": "company",
+        "context": "Lumen Labs Inc. opened an office in London; it audits AI agents.",
+        "candidates": "c1: Lumen (company): Audits AI agents.",
+        "extra_options": {
+          "match": {
+            "c1": "Lumen (company): Audits AI agents."
+          }
+        }
+      },
+      "note": "Tricky: legal suffix."
+    },
+    {
+      "id": "lumen-other-country",
+      "expected": "new",
+      "label_source": "author",
+      "state": {
+        "mention": "Lumen",
+        "kind": "company",
+        "context": "Lumen, a Brazilian fibre-internet provider, cut prices.",
+        "candidates": "c1: Lumen (company): Audits AI agents.",
+        "extra_options": {
+          "match": {
+            "c1": "Lumen (company): Audits AI agents."
+          }
+        }
+      },
+      "note": "Tricky: same name, different country and business."
+    },
+    {
+      "id": "mumba-owner-product",
+      "expected": "match",
+      "label_source": "author",
+      "state": {
+        "mention": "Mumba",
+        "kind": "product",
+        "context": "The owner asked for more Mumba sign-ups this week.",
+        "candidates": "c1: Mumba (product): The Unreal Lab's app.",
+        "extra_options": {
+          "match": {
+            "c1": "Mumba (product): The Unreal Lab's app."
+          }
+        }
+      }
+    },
+    {
+      "id": "gradient-short-name",
+      "expected": "match",
+      "label_source": "author",
+      "state": {
+        "mention": "Gradient",
+        "kind": "investor",
+        "context": "Gradient, Google's AI fund, invested in Lumen.",
+        "candidates": "c1: Gradient Ventures (investor): A VC firm that invested in Lumen.",
+        "extra_options": {
+          "match": {
+            "c1": "Gradient Ventures (investor): A VC firm that invested in Lumen."
+          }
+        }
+      },
+      "note": "Tricky: short form of the name."
+    },
+    {
+      "id": "no-candidates-fit",
+      "expected": "new",
+      "label_source": "author",
+      "state": {
+        "mention": "Tessel",
+        "kind": "company",
+        "context": "Tessel builds tools for AI agents.",
+        "candidates": "c1: Lumen (company): Audits AI agents.\nc2: Priya Rao (person): Founder of Lumen.",
+        "extra_options": {
+          "match": {
+            "c1": "Lumen (company): Audits AI agents.",
+            "c2": "Priya Rao (person): Founder of Lumen."
+          }
+        }
+      }
+    }
+  ]
+}

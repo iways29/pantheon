@@ -31,7 +31,7 @@ DEFAULT_NOULS = {
     "contradicts": 0.02,
     "updates": 0.02,
 }
-DEFAULT_CHOICES = {"support": "supports"}
+DEFAULT_CHOICES = {"support": "supports", "kind": "forget"}
 DEFAULT_SCORES = {"sameness": 0.1, "relevance": 2.0}
 
 

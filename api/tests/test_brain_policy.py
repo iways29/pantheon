@@ -15,7 +15,7 @@ from app.gateway import Gateway
 from app.judge import Judge
 from app.tools import ToolContext, ToolRuntime, seed_tools
 from tests.conftest_db import Tenants, allow_agent_facts
-from tests.scripted_jev import ScriptedJev
+from tests.scripted_jev import ScriptedJev, choice
 from tests.test_chief_of_staff import Office, Writer, office, run_next, runtime  # noqa: F401
 from tests.test_links import CLAIMS, ClaimsModel, agent, detector, facts, links, page  # noqa: F401
 from tests.test_runners import TIERS
@@ -138,7 +138,23 @@ def owner_facts(dsn: str, org_id: uuid.UUID) -> list[str]:
         ]
 
 
-def brief(dsn: str, where: Office) -> dict[str, Any]:
+def sorter() -> ScriptedJev:
+    """Sorts the owner's words as a person would (memory_triage)."""
+    kinds = {"boss": "preference", "legal": "interest", "Tessel": "interest", "thanks": "forget"}
+
+    def respond(state: Any, questions: dict[str, Any]) -> dict[str, Any]:
+        if "kind" not in questions:
+            return {}
+        said = state["said"]
+        kind = next((k for word, k in kinds.items() if word in said), "fact")
+        return {"kind": choice(kind, list(questions["kind"].criteria))}
+
+    return ScriptedJev(respond=respond)
+
+
+def brief(
+    dsn: str, where: Office, jev: ScriptedJev | None = None, writer: Any = None
+) -> dict[str, Any]:
     from app.tasks import order
 
     with connect(dsn) as connection, as_service_role(connection) as conn:
@@ -162,32 +178,39 @@ def brief(dsn: str, where: Office) -> dict[str, Any]:
                 "update public.tasks set created_by = %s where id = %s",
                 (f"trigger:{trigger['id'] if trigger else 'x'}", str(task.id)),
             )
-    report = run_next(dsn, runtime(dsn, ScriptedJev(), Writer()))
+    report = run_next(dsn, runtime(dsn, jev or ScriptedJev(), writer or Writer()))
     assert report.status == "succeeded", report.error
     return report.output or {}
 
 
-def test_each_morning_the_brain_learns_what_the_owner_did(
+def test_each_morning_the_brain_learns_what_the_owner_said_and_did(
     dsn: str,
     office: Office,  # noqa: F811
 ) -> None:
+    from app.brain.memory import preferences
     from app.tasks import order
 
     with connect(dsn) as connection:
-        ordered = order(
-            connection,
-            user_id=office.user_id,
-            org_id=office.org_id,
-            agent="research-lead",
-            title="Who is building AI for legal?",
-            instructions="Who is building AI for legal teams in India?",
-        )
-        with as_service_role(connection) as conn:
-            # Done already: only the brief is left for the scheduler.
-            conn.execute(
-                "update public.tasks set status = 'done', finished_at = now() where id = %s",
-                (str(ordered.id),),
+        for title, text in (
+            ("Legal AI", "Who is building AI for legal teams in India?"),
+            ("How to address me", "From now on, call me boss."),
+            ("Thanks", "thanks, run it again"),
+        ):
+            ordered = order(
+                connection,
+                user_id=office.user_id,
+                org_id=office.org_id,
+                agent="research-lead",
+                title=title,
+                instructions=text,
             )
+            with as_service_role(connection) as conn:
+                # Done already: only the brief is left for the scheduler.
+                conn.execute(
+                    "update public.tasks set status = 'done', finished_at = now() where id = %s",
+                    (str(ordered.id),),
+                )
+        with as_service_role(connection) as conn:
             conn.execute(
                 "insert into public.routine_requests (org_id, routine_key, request) "
                 "values (%s, 'research:morning-brief', 'Which funds backed Tessel?')",
@@ -207,20 +230,52 @@ def test_each_morning_the_brain_learns_what_the_owner_did(
                 ),
             )
 
-    output = brief(dsn, office)
+    output = brief(dsn, office, sorter())
 
+    assert output["remembered"] == {
+        "accepted:interest": 2,
+        "accepted:preference": 1,
+        "accepted": 1,
+        "forgotten": 1,
+    }
     learned = owner_facts(dsn, office.org_id)
-    assert len(learned) == 3, learned
-    assert any(
-        "the owner ordered: Who is building AI for legal teams in India?" in f for f in learned
-    )
-    assert any("asked research to find out: Which funds backed Tessel?" in f for f in learned)
+    assert len(learned) == 4, learned
+    assert any("the owner asked about: Who is building AI for legal teams" in f for f in learned)
+    assert any("asked about: Which funds backed Tessel?" in f for f in learned)
     assert any("approved a x draft titled: The first fort" in f for f in learned)
-    assert output["remembered"] == {"accepted": 3}
+    assert not any("run it again" in f for f in learned), "thanks is forgotten, never asked"
+    with connect(dsn) as connection, as_service_role(connection) as conn:
+        (boss,) = preferences(conn, office.org_id)
+        kinds = {
+            r["kind"]
+            for r in conn.execute(
+                "select kind from public.facts where org_id = %s", (str(office.org_id),)
+            )
+        }
+    assert "call me boss" in boss and boss.startswith("The owner's preference (from ")
+    assert kinds == {"interest", "preference", "fact"}
 
-    # The next morning, nothing new: nothing is remembered twice.
-    assert brief(dsn, office)["remembered"] == {}
-    assert len(owner_facts(dsn, office.org_id)) == 3
+    # The next morning: the brief follows the preference; nothing is kept twice.
+    writer = Writer()
+    assert brief(dsn, office, sorter(), writer)["remembered"] == {}
+    system = writer.calls[0][0]["content"]
+    assert "standing preferences" in system and "call me boss" in system
+    assert len(owner_facts(dsn, office.org_id)) == 4
+
+
+def test_an_order_to_the_chief_of_staff_is_learned_within_a_minute(
+    dsn: str,
+    office: Office,  # noqa: F811
+) -> None:
+    from app.brain.memory import preferences
+    from app.owner_api import give_order
+
+    with connect(dsn) as connection:
+        give_order(connection, str(office.user_id), str(office.org_id), "Call me boss from now on.")
+    run_next(dsn, runtime(dsn, sorter(), Writer()))
+
+    with connect(dsn) as connection, as_service_role(connection) as conn:
+        assert any("Call me boss" in p for p in preferences(conn, office.org_id))
 
 
 def test_what_is_remembered_is_the_owners_choice() -> None:

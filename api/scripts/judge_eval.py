@@ -37,6 +37,7 @@ EVAL_GATES = (
     "draft_voice",
     "result_check",
     "recall_rank",
+    "memory_triage",
 )
 
 

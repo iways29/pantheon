@@ -94,7 +94,9 @@ Spending (R4) and anything that sends or publishes always waits for you.
 **What the brain keeps** (ADR 033): what the company does and says. Your
 orders, research questions and approved drafts are remembered each morning.
 Pages the agents read are **findings** for the day (the brief lists them),
-not facts, so you are never asked to review web news.
+not facts, so you are never asked to review web news. What you say is sorted (ADR 034): a
+**preference** ("call me boss") every agent follows, a **rule**, an
+**interest**, a **fact**, or a way you work; small talk is forgotten.
 
 ## Drafts: Marketing's content
 

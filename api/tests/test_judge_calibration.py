@@ -153,6 +153,7 @@ def test_every_case_file_imports_against_its_gate(
         "content_screen": 12,
         "draft_claim": 16,
         "draft_voice": 10,
+        "memory_triage": 14,
         "recall_rank": 11,
         "result_check": 15,
     }

@@ -50,6 +50,8 @@ def run(session: "Session", run: "_Run") -> dict[str, Any]:
 
     asked = _questions(cursor, run.task_id)
     last = asked[0] if asked else None
+    if last is None:
+        _remember_order(session, run, task)
     order = _order_text(task)
     if last is not None:
         if last["status"] == "pending":
@@ -256,9 +258,32 @@ def _finish(cursor: psycopg.Cursor, run: "_Run", subtasks: list[dict[str, Any]])
 # --- reading ---------------------------------------------------------------------------
 
 
+def _remember_order(session: "Session", run: "_Run", task: dict[str, Any]) -> None:
+    """What the owner said in the order is sorted and kept now (ADR 034), so a
+    preference in it applies within a minute, not the next morning."""
+    from app.brain import memory
+    from app.brain import policy as brain_policy
+
+    if session.writer is None or task.get("created_by") != "owner":
+        return
+    if not brain_policy.load(session.connection, run.org_id).remember_orders:
+        return
+    memory.remember(
+        session.writer,
+        [memory.order_moment(task)],
+        org_id=run.org_id,
+        agent_id=run.agent_id,
+        judge=session.judge,
+        connection=session.connection,
+        run_id=run.id,
+    )
+
+
 def _task(cursor: psycopg.Cursor, task_id: UUID) -> dict[str, Any]:
     cursor.execute(
-        "select title, instructions, input from public.tasks where id = %s", (str(task_id),)
+        "select id, title, instructions, input, created_by, created_at from public.tasks "
+        "where id = %s",
+        (str(task_id),),
     )
     return dict(cursor.fetchone())
 

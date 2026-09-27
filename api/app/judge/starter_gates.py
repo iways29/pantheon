@@ -222,6 +222,25 @@ BRAIN_CLAIM = StarterGate(
                 "reason": "Support from the evidence is not clear",
             },
         ],
+        # The owner's own words (ADR 034): a preference is an opinion and may
+        # be an instruction to the agents, so those questions do not apply;
+        # nothing is held for the owner to review. Secrets are still refused.
+        "profiles": {
+            "owner": [
+                {
+                    "question": "personal_or_secret",
+                    "noul_at_least": 0.5,
+                    "outcome": "reject",
+                    "reason": "Contains a secret or personal data",
+                },
+                {
+                    "question": "support",
+                    "choice_in": ["contradicts", "says_nothing"],
+                    "outcome": "reject",
+                    "reason": "The evidence does not support the claim",
+                },
+            ],
+        },
         "settings": {
             # Code checks, before any model call.
             "max_claim_chars": 500,
@@ -1312,6 +1331,71 @@ RECALL_RANK = StarterGate(
     fail_mode="open",
 )
 
+# --- Memory that decides for itself (ADR 034) -------------------------------------
+#
+# State: {"said": ..., "where": ...}. One request per thing the owner said to
+# the agents (an order, a research question, a note on a decision). The kind
+# decides what is kept; `forget` is dropped and the owner is never asked.
+
+MEMORY_TRIAGE = StarterGate(
+    gate="memory_triage",
+    questions=(
+        StarterQuestion(
+            key="kind",
+            type="choice",
+            instructions=(
+                "What is `said` (words the owner said to their AI assistants, in the place "
+                "named by `where`) most useful to remember as?"
+            ),
+            criteria={
+                "preference": (
+                    "How the owner wants to be treated or wants things done, lasting beyond "
+                    "this one request, e.g. 'call me boss', 'keep emails under five lines'."
+                ),
+                "rule": (
+                    "A decision or standing rule, e.g. 'no paid tools this quarter', 'never "
+                    "name my employer'."
+                ),
+                "interest": (
+                    "A subject the owner wants to know about or is working on, e.g. 'who is "
+                    "building AI for legal teams?'."
+                ),
+                "fact": (
+                    "A fact about the owner's company, products, projects or people, e.g. "
+                    "'Mumba's paid plan launches in November'."
+                ),
+                "style": (
+                    "How the owner works or writes, e.g. 'I review drafts at night', 'I "
+                    "prefer short sentences'."
+                ),
+                "forget": (
+                    "Nothing worth remembering beyond this moment: thanks, 'run it again', "
+                    "'ok', a one-off command with no lasting meaning."
+                ),
+            },
+        ),
+    ),
+    policy={
+        "outcomes": ["keep", "forget"],
+        "rules": [
+            {
+                "question": "kind",
+                "choice_in": ["forget"],
+                "outcome": "forget",
+                "reason": "Not worth keeping",
+            },
+        ],
+        "settings": {
+            # Below this probability for its best kind, it is kept as `interest`:
+            # the owner's words are never lost to an unsure sort.
+            "min_probability": 0.5,
+            # How many active preferences every agent reads.
+            "max_preferences": 20,
+        },
+    },
+    fail_mode="open",
+)
+
 STARTER_GATES: tuple[StarterGate, ...] = (
     TOOL_SELECT,
     BRAIN_CLAIM,
@@ -1328,4 +1412,5 @@ STARTER_GATES: tuple[StarterGate, ...] = (
     DRAFT_VOICE,
     RESULT_CHECK,
     RECALL_RANK,
+    MEMORY_TRIAGE,
 )

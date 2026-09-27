@@ -265,6 +265,16 @@ def _checked(runtime: Runtime, connection: psycopg.Connection, run: _Run, stop: 
     return _Stop(stop.status, reason, stop.output, stop.error) if reason else stop
 
 
+def _with_preferences(connection: psycopg.Connection, run: _Run, body: str) -> str:
+    """An agent's instructions, with the owner's standing preferences after
+    them (ADR 034): every agent follows "call me boss" once it is said."""
+    from app.brain import memory
+
+    with as_service_role(connection) as conn:
+        extra = memory.preamble(conn, run.org_id)
+    return f"{body}\n\n{extra}" if extra else body
+
+
 def report(connection: psycopg.Connection, run_id: UUID | str) -> RunReport:
     with as_service_role(connection) as conn, conn.cursor() as cursor:
         cursor.execute(
@@ -322,7 +332,7 @@ def _execute(runtime: Runtime, connection: psycopg.Connection, run: _Run, deadli
             agent_id=run.agent_id,
             agent_name=run.agent_name,
             task_id=run.task_id,
-            system_prompt=prompts["system"].body,
+            system_prompt=_with_preferences(connection, run, prompts["system"].body),
             session=session,
             services=runtime.services,
         )

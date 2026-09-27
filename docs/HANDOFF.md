@@ -84,7 +84,7 @@ an AI).
 | --- | --- |
 | GitHub | `iways29/pantheon` |
 | Supabase project | `epelwbiehczkkgqtgkqt` (us-west-2), reachable through the Supabase MCP |
-| Migrations applied live | all of `supabase/migrations/` through `20260928120000_chat.sql` (applied 2026-09-27, each before its PR merged) |
+| Migrations applied live | all of `supabase/migrations/` through `20260928150000_globe.sql` (applied 2026-09-27, each before its PR merged) |
 | Vercel team | `team_6UC1DSN83JcGLrVJC3P8aXE6` |
 | API project | `pantheon-api` (`prj_XHno72KOypj7fapEIXze9XtZZJMR`), `https://api-xi-opal-67.vercel.app`, deploys from `main` |
 | Web project | `pantheon-web` (`prj_XdV67seWTQSsmSDvBUH2NIg9AZNX`) |
@@ -162,6 +162,9 @@ apply from scratch on plain Postgres (guard anything needing `pg_cron`,
    Staff or any head answers in seconds, work starts at once. Owner's choice
    for the brain: a **true 3D globe** (three.js), not the flat lens; each fact
    needs a third position (a migration and a redraw).
+   PR #47 (the globe, streamed chat, decision cards, phone screens): migration
+   applied 2026-09-27. After it merges: `scripts.brain layout --reset` (the
+   owner's go) redraws the map as a globe.
 4. After five unattended mornings: the Step 8.1 Milestone report. Stop.
 
 ## Switching on Step 9 (done 2026-09-27; kept for reference)

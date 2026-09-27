@@ -1,26 +1,701 @@
 /*
- * Deliberately minimal. The UI framework and the brain visualization are
- * chosen at Step 7 of docs/BUILD_PLAN.md, not before.
+ * Pantheon's look (Step 10, ADR 036). Tokens and shared classes copied from
+ * the design source (docs/design/pantheon-design/source/Main.dc.html and
+ * CcShell.dc.html): change them there first, then here.
+ *
+ * Glass goes only on the controls layer (nav, drawers, dialogs, action bars,
+ * the brain's lens); lists, forms and tables stay flat. Never glass on glass.
+ * Status is never shown by colour alone: every mark has its own shape.
  */
-:root {
-  color-scheme: light dark;
+
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #070b18;
+  --ink: #ece6d6;
+  --ink2: #aeb4c6;
+  --ink3: #8189a0;
+  --gold: #e8bc62;
+  --goldS: rgba(232, 188, 98, 0.16);
+  --ice: #94bbff;
+  --iceS: rgba(148, 187, 255, 0.16);
+  --verm: #ff8466;
+  --vermS: rgba(255, 132, 102, 0.14);
+  --glass: rgba(24, 32, 60, 0.46);
+  --glass2: rgba(40, 52, 92, 0.5);
+  --surf: rgba(236, 230, 214, 0.035);
+  --surf2: rgba(236, 230, 214, 0.06);
+  --edge: rgba(255, 255, 255, 0.11);
+  --hi: rgba(255, 255, 255, 0.14);
+  --shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+  --glow: rgba(232, 188, 98, 0.15);
+  --veil: rgba(7, 11, 24, 0.55);
+  --line: rgba(236, 230, 214, 0.12);
+  --rimA: rgba(255, 255, 255, 0.34);
+  --rimB: rgba(255, 255, 255, 0.04);
+  --kill-ink: #1a0a05;
+  --sheen: rgba(255, 255, 255, 0.09);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #e9ecf3;
+  --ink: #141a2e;
+  --ink2: #3c4560;
+  --ink3: #566079;
+  --gold: #96650f;
+  --goldS: rgba(150, 101, 15, 0.12);
+  --ice: #2c5bc8;
+  --iceS: rgba(44, 91, 200, 0.12);
+  --verm: #b93d14;
+  --vermS: rgba(185, 61, 20, 0.1);
+  --glass: rgba(255, 255, 255, 0.52);
+  --glass2: rgba(255, 255, 255, 0.72);
+  --surf: rgba(255, 255, 255, 0.55);
+  --surf2: rgba(255, 255, 255, 0.8);
+  --edge: rgba(20, 26, 46, 0.1);
+  --hi: rgba(255, 255, 255, 0.9);
+  --shadow: 0 18px 50px rgba(40, 50, 90, 0.16);
+  --glow: rgba(150, 101, 15, 0.1);
+  --veil: rgba(233, 236, 243, 0.6);
+  --line: rgba(20, 26, 46, 0.12);
+  --rimA: rgba(255, 255, 255, 0.95);
+  --rimB: rgba(255, 255, 255, 0.2);
+  --kill-ink: #fff;
+  --sheen: rgba(255, 255, 255, 0.7);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
 }
 
 body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body), 'Hanken Grotesk', system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+p {
   margin: 0;
-  padding: 2rem;
-  font-family: ui-sans-serif, system-ui, sans-serif;
-  line-height: 1.5;
 }
 
-main {
-  max-width: 40rem;
-  margin: 0 auto;
+a {
+  color: var(--ice);
 }
 
-pre {
-  overflow-x: auto;
-  padding: 0.75rem;
-  border: 1px solid currentColor;
-  border-radius: 0.25rem;
+.disp {
+  font-family: var(--font-display), 'Marcellus', Georgia, serif;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+
+.muted {
+  color: var(--ink2);
+}
+
+.faint {
+  color: var(--ink3);
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.vh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.ic {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: none;
+}
+
+/* --- Glass ------------------------------------------------------------------ */
+
+.glass {
+  position: relative;
+  isolation: isolate;
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(26px) saturate(170%);
+  backdrop-filter: blur(26px) saturate(170%);
+  border: 1px solid var(--edge);
+  box-shadow:
+    inset 0 1px 0 var(--hi),
+    var(--shadow);
+}
+
+.glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(165deg, var(--sheen), rgba(255, 255, 255, 0) 38%);
+}
+
+/* The lit edge: a gradient ring masked to the border. */
+.glass::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  background: linear-gradient(
+    150deg,
+    var(--rimA),
+    var(--rimB) 34%,
+    rgba(255, 255, 255, 0) 62%,
+    var(--rimB)
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+/* Never glass on glass: a nested one gets a flat fill. */
+.glass .glass {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: var(--glass2);
+  box-shadow: inset 0 1px 0 var(--hi);
+}
+
+.glass .glass::before,
+.glass .glass::after {
+  display: none;
+}
+
+.g2 {
+  background: var(--glass2);
+  border: 1px solid var(--edge);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .glass {
+    -webkit-backdrop-filter: blur(40px);
+    backdrop-filter: blur(40px);
+    background: var(--bg);
+  }
+}
+
+:root.solid .glass {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: var(--bg);
+}
+
+@media (prefers-contrast: more) {
+  .glass {
+    border: 1.5px solid var(--ink2);
+  }
+  .glass::after {
+    display: none;
+  }
+}
+
+/* --- Controls --------------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  font:
+    500 14px/1 var(--font-body),
+    'Hanken Grotesk',
+    system-ui,
+    sans-serif;
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.btn.sm {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.btn.pri {
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
+}
+
+.btn.kill {
+  border-color: var(--verm);
+  color: var(--verm);
+}
+
+.btn.killfill {
+  background: var(--verm);
+  border-color: var(--verm);
+  color: var(--kill-ink);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ibtn {
+  width: 40px;
+  padding: 0;
+}
+
+.ibtn.sm {
+  width: 32px;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--ice);
+  outline-offset: 2px;
+}
+
+.seg {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+}
+
+.seg button {
+  height: 32px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink2);
+  font:
+    500 13px/1 var(--font-body),
+    sans-serif;
+  cursor: pointer;
+}
+
+.seg button[aria-pressed='true'] {
+  background: var(--glass2);
+  color: var(--ink);
+  box-shadow: inset 0 1px 0 var(--hi);
+}
+
+.sw {
+  position: relative;
+  width: 30px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--line);
+  flex: none;
+}
+
+.sw::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--ink2);
+  transition: transform 0.15s;
+}
+
+[aria-checked='true'] > .sw {
+  background: var(--iceS);
+}
+
+[aria-checked='true'] > .sw::after {
+  transform: translateX(12px);
+  background: var(--ice);
+}
+
+.inp {
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid var(--edge);
+  background: var(--glass2);
+  color: var(--ink);
+  font:
+    500 15px/1 var(--font-body),
+    sans-serif;
+  padding: 0 14px;
+  width: 100%;
+}
+
+.inp::placeholder {
+  color: var(--ink3);
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 16px;
+  border-radius: 999px;
+  color: var(--ink2);
+  font:
+    500 13.5px/1 var(--font-body),
+    sans-serif;
+  text-decoration: none;
+}
+
+.tab[aria-current='page'] {
+  background: var(--glass2);
+  color: var(--ink);
+  box-shadow: inset 0 1px 0 var(--hi);
+}
+
+.navi {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 12px;
+  color: var(--ink2);
+  font-size: 13.5px;
+  text-decoration: none;
+}
+
+.navi:hover {
+  color: var(--ink);
+  background: var(--surf);
+}
+
+.navi[aria-current='page'] {
+  color: var(--ink);
+  background: var(--glass2);
+  font-weight: 600;
+  box-shadow:
+    inset 0 1px 0 var(--hi),
+    0 0 0 1px var(--edge);
+}
+
+.navg {
+  font-size: 11.5px;
+  color: var(--ink3);
+  padding: 10px 12px 4px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  border-radius: 16px;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.card:hover {
+  border-color: var(--ice);
+}
+
+.kicker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--ink2);
+}
+
+.rec {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--edge);
+  font-size: 12px;
+  color: var(--ink);
+}
+
+.clash {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--verm);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--edge);
+  background: transparent;
+  color: var(--ice);
+  font:
+    500 12px/1 var(--font-body),
+    sans-serif;
+  cursor: pointer;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 20px;
+  border: 1px dashed var(--edge);
+  border-radius: 16px;
+}
+
+.lock {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--ink2);
+  border: 1px solid var(--line);
+  background: repeating-linear-gradient(135deg, var(--surf) 0 6px, transparent 6px 12px);
+}
+
+/* --- Status marks: a shape each, colour only confirms it --------------------- */
+
+.gl {
+  display: inline-block;
+  flex: none;
+  width: 10px;
+  height: 10px;
+  position: relative;
+}
+
+.gl.idle {
+  border: 1.5px solid var(--ink2);
+  border-radius: 50%;
+}
+
+.gl.work {
+  background: var(--gold);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--gold);
+}
+
+.gl.work.spin::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  border: 1.5px solid transparent;
+  border-top-color: var(--gold);
+  animation: spin 3.2s linear infinite;
+}
+
+.gl.wait {
+  border: 1.5px solid var(--ice);
+  background: var(--iceS);
+  transform: rotate(45deg);
+  border-radius: 2px;
+}
+
+.gl.pause {
+  background: linear-gradient(90deg, var(--ink2) 0 34%, transparent 34% 66%, var(--ink2) 66%);
+}
+
+.gl.stop {
+  border: 1.5px solid var(--ink3);
+  border-radius: 1px;
+}
+
+.gl.done {
+  background: var(--ink3);
+  border-radius: 50%;
+  transform: scale(0.7);
+}
+
+.gl.todo {
+  border: 1.5px dotted var(--ink3);
+  border-radius: 50%;
+}
+
+.gl.f-act {
+  width: 8px;
+  height: 8px;
+  background: var(--gold);
+  border-radius: 50%;
+  box-shadow: 0 0 6px var(--gold);
+}
+
+.gl.f-dis {
+  width: 6px;
+  height: 6px;
+  margin: 0 1px;
+  background: var(--verm);
+  border-radius: 50%;
+}
+
+.gl.f-dis::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 1px dashed var(--verm);
+}
+
+.gl.f-sup {
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--ink3);
+  border-radius: 50%;
+}
+
+.gl.f-held {
+  width: 8px;
+  height: 8px;
+  border: 1.3px solid var(--ice);
+  transform: rotate(45deg);
+  border-radius: 1.5px;
+}
+
+.run-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 0 0 0 var(--goldS);
+  animation: breatheG 3.6s ease-in-out infinite;
+  flex: none;
+}
+
+.run-dot.quiet {
+  background: var(--ink2);
+  animation: none;
+}
+
+@keyframes breatheG {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 var(--goldS);
+  }
+  50% {
+    box-shadow: 0 0 0 6px var(--goldS);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Reduced motion: the owner's setting or the system's. */
+:root.rm *,
+:root.rm *::before,
+:root.rm *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* --- Layers ------------------------------------------------------------------- */
+
+.veil {
+  position: absolute;
+  inset: 0;
+  background: var(--veil);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: var(--veil);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.aura {
+  position: fixed;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* --- Sign-in -------------------------------------------------------------------- */
+
+.login {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background:
+    radial-gradient(circle at 85% 0%, var(--iceS), transparent 45%),
+    radial-gradient(circle at 10% 100%, var(--goldS), transparent 45%);
+}
+
+.login-card {
+  width: min(380px, 100%);
+  padding: 28px;
+  border-radius: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.login-field {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
 }

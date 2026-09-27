@@ -202,6 +202,12 @@ def test_the_snapshot_shows_the_company(api: Any, world: World) -> None:
     assert [h["claim"] for h in body["held"]] == ["Vireo raised a seed round"]
 
 
+def test_agents_and_departments_alone(api: Any, world: World) -> None:
+    body = api().get("/screen/agents").json()
+    assert {a["name"] for a in body["agents"]} >= {"research-lead", "web-researcher"}
+    assert {d["name"] for d in body["departments"]} == {"executive", "research"}
+
+
 def test_the_pulse_counts_today(api: Any, world: World) -> None:
     pulse = api().get("/screen/pulse").json()
 
@@ -209,6 +215,7 @@ def test_the_pulse_counts_today(api: Any, world: World) -> None:
     assert pulse["budget_usd"] == pytest.approx(0.6)
     assert (pulse["facts_added"], pulse["facts_rejected"]) == (1, 1)
     assert pulse["tasks_done"] == 1
+    assert pulse["tasks_open"] == 2, "the order and the worker's task"
     assert pulse["needs_you"] == {
         "questions": 0,
         "held_facts": 1,

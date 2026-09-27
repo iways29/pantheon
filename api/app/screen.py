@@ -89,6 +89,12 @@ def pulse(cursor: psycopg.Cursor) -> dict[str, Any]:
         (day,),
     )
     tasks = cursor.fetchone()
+    # Unfinished, whatever the day: what a kill would cancel.
+    cursor.execute(
+        "select count(*) as n from public.tasks "
+        "where status in ('queued', 'running', 'blocked', 'awaiting_approval')"
+    )
+    tasks_open = cursor.fetchone()["n"]
     cursor.execute(
         """
         select count(*) filter (where action_type = 'route_order') as questions,
@@ -113,6 +119,7 @@ def pulse(cursor: psycopg.Cursor) -> dict[str, Any]:
         "facts_rejected": facts["rejected"],
         "tasks_done": tasks["done"],
         "tasks_failed": tasks["failed"],
+        "tasks_open": tasks_open,
         "needs_you": needs,
         "needs_you_total": sum(needs.values()),
     }
@@ -450,6 +457,16 @@ def get_snapshot(principal: OwnerPrincipal, connection: Connection) -> dict[str,
             "facts": view.facts_on_the_map(cursor),
             "held": view.held_claims(cursor),
         }
+
+
+@router.get("/screen/agents")
+def get_agents_and_departments(principal: OwnerPrincipal, connection: Connection) -> dict:
+    """Agents with their states and departments with their spend: the part of
+    the snapshot that changes with every event, without the facts."""
+    owner_org(connection, principal.user_id)
+    with acting_as(connection, user_id=principal.user_id) as conn, conn.cursor() as cursor:
+        paused = pause_state(cursor)["state"] == "paused"
+        return {"agents": agents(cursor, paused), "departments": departments(cursor)}
 
 
 @router.get("/screen/events")

@@ -238,11 +238,31 @@ def advance_run(runtime: Runtime, run_id: UUID | str, *, deadline_seconds: float
     try:
         run = _claim(connection, run_id, runtime.lease_seconds)
         stop = _execute(runtime, connection, run, deadline)
+        stop = _checked(runtime, connection, run, stop)
         _finish(connection, run, stop)
         return report(connection, run.id)
     finally:
         connection.close()
         runtime.tracer.flush()
+
+
+def _checked(runtime: Runtime, connection: psycopg.Connection, run: _Run, stop: _Stop) -> _Stop:
+    """A worker's finished task is checked by Jev first (Step 9, ADR 031); a
+    failed check may send the task back for a redo on a stronger tier."""
+    if stop.status != "succeeded" or run.task_id is None or run.runner != "deep":
+        return stop
+    from app.agents import review
+
+    reason = review.check(
+        lambda: _session(runtime, connection, run),
+        connection,
+        run_id=run.id,
+        org_id=run.org_id,
+        agent_id=run.agent_id,
+        task_id=run.task_id,
+        output=stop.output,
+    )
+    return _Stop(stop.status, reason, stop.output, stop.error) if reason else stop
 
 
 def report(connection: psycopg.Connection, run_id: UUID | str) -> RunReport:

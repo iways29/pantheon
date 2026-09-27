@@ -32,7 +32,7 @@ DEFAULT_NOULS = {
     "updates": 0.02,
 }
 DEFAULT_CHOICES = {"support": "supports"}
-DEFAULT_SCORES = {"sameness": 0.1}
+DEFAULT_SCORES = {"sameness": 0.1, "relevance": 2.0}
 
 
 @dataclass

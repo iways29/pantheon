@@ -36,6 +36,8 @@ class StarterGate:
     policy: dict[str, Any]
     fail_mode: str = "closed"
     note: str = "Starting gate"
+    #: The largest state the gate accepts (its evidence can be long).
+    max_state_chars: int = 20000
 
 
 # --- Brain write gate: one request per proposed fact -------------------------
@@ -1136,6 +1138,159 @@ DRAFT_VOICE = StarterGate(
     },
 )
 
+# --- Step 9: checking the workers' results -------------------------------------
+#
+# State: {"task": ..., "result": ..., "evidence": ...}. One request per result
+# a worker reports. A `redo` sends the task back once, on a stronger tier.
+# Fail open: a check that cannot run never stops the work.
+
+RESULT_CHECK = StarterGate(
+    gate="result_check",
+    questions=(
+        StarterQuestion(
+            key="empty",
+            type="noul",
+            instructions=(
+                "Does `result` fail to give any answer, because it is empty, only says the "
+                "work could not be done, or is an error message?"
+            ),
+            criteria={
+                "true": (
+                    "For example '', 'I could not access the pages', 'Error: timeout', or "
+                    "only a plan of what would be done."
+                ),
+                "false": "It gives an answer, even a short one or one that says little was found.",
+            },
+        ),
+        StarterQuestion(
+            key="off_task",
+            type="noul",
+            instructions="Does `result` leave out the main thing that `task` asks for?",
+            criteria={
+                "true": "It is about something else, or skips what `task` asks for.",
+                "false": "It addresses what `task` asks for, even briefly or in part.",
+            },
+        ),
+        StarterQuestion(
+            key="unsupported",
+            type="noul",
+            instructions=(
+                "Does `result` name a company, a person, an amount of money or a date that "
+                "appears nowhere in `evidence`?"
+            ),
+            criteria={
+                "true": "At least one such name or number in `result` is not in `evidence`.",
+                "false": (
+                    "Every company, person, amount and date in `result` also appears in "
+                    "`evidence`, or `result` names none."
+                ),
+            },
+        ),
+        StarterQuestion(
+            key="contradicts",
+            type="noul",
+            instructions="Does `evidence` contradict something that `result` states?",
+            criteria={
+                "true": "For example `result` gives a different amount, date or founder.",
+                "false": "Nothing in `evidence` disagrees with `result`.",
+            },
+        ),
+    ),
+    policy={
+        "outcomes": ["pass", "redo"],
+        "rules": [
+            {"question": "empty", "noul_at_least": 0.6, "outcome": "redo", "reason": "No answer"},
+            {
+                "question": "off_task",
+                "noul_at_least": 0.6,
+                "outcome": "redo",
+                "reason": "Does not do what the task asked",
+            },
+            {
+                "question": "unsupported",
+                "noul_at_least": 0.6,
+                "outcome": "redo",
+                "reason": "Names something not in what the agent read",
+            },
+            {
+                "question": "contradicts",
+                "noul_at_least": 0.6,
+                "outcome": "redo",
+                "reason": "Contradicts what the agent read",
+            },
+        ],
+        "settings": {
+            # Which tiers' results are sent back (comma-separated), how far
+            # up, how often.
+            "from_tiers": "cheap",
+            "max_tier": "standard",
+            "max_escalations": 1,
+            # How much of what the agent read goes to Jev.
+            "evidence_chars": 24000,
+        },
+    },
+    fail_mode="open",
+    # 24,000 characters of evidence, escaped as JSON, plus the result.
+    max_state_chars=48000,
+)
+
+# --- Step 9: re-ranking what an agent recalls -----------------------------------
+#
+# State: {"query": ..., "claim": ...}. One request per recalled fact, before
+# the agent reads it. Staleness (a fact past its review date) is decided in
+# code, not asked: Jev does no date comparison.
+
+RECALL_RANK = StarterGate(
+    gate="recall_rank",
+    questions=(
+        StarterQuestion(
+            key="relevance",
+            type="score",
+            instructions="How much does `claim` help answer `query`?",
+            criteria=[
+                "Unrelated: `claim` is about something other than what `query` asks.",
+                "Related: `claim` is about the same subject but does not answer `query`.",
+                "Answers: `claim` directly helps answer `query`.",
+            ],
+        ),
+        StarterQuestion(
+            key="contradicts_premise",
+            type="noul",
+            instructions="Does `claim` contradict something that `query` takes for granted?",
+            criteria={
+                "true": (
+                    "For example `query` asks 'Why did Acme raise a Series B?' and `claim` "
+                    "says Acme has only raised a seed round."
+                ),
+                "false": "`claim` agrees with what `query` assumes, or says nothing about it.",
+            },
+        ),
+    ),
+    policy={
+        "outcomes": ["keep", "drop"],
+        "rules": [
+            {
+                "question": "relevance",
+                "score_below": 0.5,
+                "outcome": "drop",
+                "reason": "Not relevant to the question",
+            },
+        ],
+        "settings": {
+            # Candidates judged per result the agent asked for, and at most.
+            "candidates_factor": 2,
+            "max_candidates": 20,
+            # Order: relevance (0 to 2), less `stale_penalty` for a fact past
+            # its review date.
+            "stale_penalty": 0.5,
+            # A fact contradicting the question's premise is flagged when at
+            # least this likely.
+            "premise_flag_at": 0.5,
+        },
+    },
+    fail_mode="open",
+)
+
 STARTER_GATES: tuple[StarterGate, ...] = (
     TOOL_SELECT,
     BRAIN_CLAIM,
@@ -1150,4 +1305,6 @@ STARTER_GATES: tuple[StarterGate, ...] = (
     BRIEF_RANK,
     DRAFT_CLAIM,
     DRAFT_VOICE,
+    RESULT_CHECK,
+    RECALL_RANK,
 )

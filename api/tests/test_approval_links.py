@@ -291,3 +291,27 @@ def test_a_list_refuses_a_non_https_address(
             (str(office.org_id),),
         ).fetchone()
     assert row["approval_links_url"] is None
+
+
+def test_actions_are_linked_before_held_facts(
+    dsn: str,
+    office: Office,  # noqa: F811
+) -> None:
+    from app.approvals import links
+
+    facts = [
+        held(dsn, office, "fact_write", claim=f"Fact {i}", source="web:x")
+        for i in range(links.MAX_LINKS)
+    ]
+    tool = held(dsn, office, tool="save_draft", arguments={})
+
+    resend, tokens = linked_brief(dsn, office)
+
+    (sent,) = resend.sent
+    assert len(tokens) == links.MAX_LINKS and "And 1 more" in sent.text
+    with connect(dsn) as connection, as_service_role(connection) as conn:
+        linked = {
+            str(r["approval_id"])
+            for r in conn.execute("select approval_id from public.approval_links").fetchall()
+        }
+    assert tool in linked and facts[-1] not in linked

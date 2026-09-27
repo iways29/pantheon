@@ -83,7 +83,9 @@ def mint(
             select ap.id, ap.action_type, ap.action_key, ap.payload, a.name as agent
               from public.approvals ap left join public.agents a on a.id = ap.agent_id
              where ap.org_id = %s and ap.status = 'pending' and ap.id is distinct from %s
-             order by ap.created_at
+             -- Actions (drafts, emails, tool calls) before held facts, which
+             -- can be many: the links that matter most are never cut off.
+             order by ap.action_type = 'fact_write', ap.created_at
             """,
             (str(email["org_id"]), email.get("approval_id")),
         )

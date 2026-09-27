@@ -39,7 +39,7 @@ from app.gateway.systemone import (
     SystemOneResponse,
     SystemOneTransport,
 )
-from app.gateway.tiers import EMBEDDING_DIMENSIONS, EMBEDDING_TIER, TierMap
+from app.gateway.tiers import EMBEDDING_DIMENSIONS, EMBEDDING_TIER, TIERS, TierMap
 from app.gateway.transport import (
     SENSITIVE_PROVIDER_PREFERENCES,
     EmbeddingResponse,
@@ -70,6 +70,9 @@ class AgentRecord:
     #: OpenRouter's `reasoning` setting for this agent's tier (the
     #: `reasoning` system flag), or None for the model's default.
     reasoning: dict[str, Any] | None = None
+    #: The agent's own tier when this call runs on a stronger one: a task
+    #: redone after a failed result check (Step 9). None otherwise.
+    escalated_from: str | None = None
 
 
 class Gateway:
@@ -125,7 +128,9 @@ class Gateway:
         so the kill switch and budgets are checked before each one. Routing
         then requires providers that support tools (`require_parameters`).
         """
-        agent = self._load_agent(agent_id)
+        # A run redoing a task after a failed result check carries a stronger
+        # tier (Step 9); budgets and every other gate apply as usual.
+        agent = self._load_agent(agent_id, run_id=run_id)
         run = str(run_id) if run_id else None
         trace_context = _trace_context(agent, run)
         trace_tags = [f"department:{agent.department_name}", f"tier:{agent.model_tier}"]
@@ -192,6 +197,7 @@ class Gateway:
             "model_call",
             {
                 "tier": agent.model_tier,
+                **({"escalated_from": agent.escalated_from} if agent.escalated_from else {}),
                 "requested_model": model,
                 "model": response.model,
                 "provider": response.provider,
@@ -492,21 +498,32 @@ class Gateway:
             row = cursor.fetchone()
         return Decimal(row["spent"]) if row else Decimal(0)
 
-    def _load_agent(self, agent_id: UUID | str) -> AgentRecord:
+    def _load_agent(self, agent_id: UUID | str, *, run_id: UUID | str | None = None) -> AgentRecord:
         with self._connection.cursor() as cursor:
             cursor.execute(
                 """
-                select a.id, a.org_id, a.name, a.model_tier, a.enabled,
+                select a.id, a.org_id, a.name, eff.tier as model_tier, a.enabled,
+                       nullif(a.model_tier, eff.tier) as escalated_from,
                        a.daily_budget_usd,
                        d.id as department_id,
                        d.name as department_name,
                        d.daily_budget_usd as department_budget_usd,
                        d.enabled as department_enabled,
                        assigned.model as assigned_model,
-                       (select f.value -> a.model_tier from public.system_flags f
+                       (select f.value -> eff.tier from public.system_flags f
                          where f.org_id = a.org_id and f.key = 'reasoning') as reasoning
                 from public.agents a
                 join public.departments d on d.id = a.department_id
+                -- A run's own tier (a redo after a failed result check)
+                -- wins, upward only: never a cheaper model than the agent's.
+                left join public.runs r on r.id = %s and r.agent_id = a.id
+                cross join lateral (
+                    select case
+                             when array_position(%s::text[], r.model_tier)
+                                  > array_position(%s::text[], a.model_tier)
+                             then r.model_tier else a.model_tier
+                           end as tier
+                ) eff
                 -- ADR 003: the tier's model is data. A department override
                 -- wins over the org-wide row; with neither, the gateway falls
                 -- back to MODEL_TIERS. Read on every call, in this same
@@ -515,14 +532,14 @@ class Gateway:
                     select m.model
                     from public.model_tier_assignments m
                     where m.org_id = a.org_id
-                      and m.tier = a.model_tier
+                      and m.tier = eff.tier
                       and (m.department_id = a.department_id or m.department_id is null)
                     order by m.department_id nulls last
                     limit 1
                 ) assigned on true
                 where a.id = %s
                 """,
-                (str(agent_id),),
+                (str(run_id) if run_id else None, list(TIERS), list(TIERS), str(agent_id)),
             )
             row = cursor.fetchone()
 
@@ -545,6 +562,7 @@ class Gateway:
             daily_budget_usd=None if sub_cap is None else Decimal(sub_cap),
             assigned_model=row["assigned_model"],
             reasoning=row["reasoning"] if isinstance(row["reasoning"], dict) else None,
+            escalated_from=row["escalated_from"],
         )
 
     def _admit(

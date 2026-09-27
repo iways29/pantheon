@@ -24,18 +24,37 @@ class SearchArgs(_Args):
 
 
 def _brain_search(ctx: ToolContext, args: SearchArgs) -> dict[str, Any]:
+    from app.brain.rerank import Ranked, candidates, policy_for, rerank
+
     if ctx.brain is None:
         raise RuntimeError("The brain is not available in this session")
-    matches = ctx.brain.search(args.query, limit=args.limit)
+    # Step 9 (ADR 032): with the recall_rank gate, Jev re-ranks a wider set.
+    policy = policy_for(ctx.connection, ctx.org_id) if ctx.judge is not None else None
+    if policy is None:
+        ranked = [Ranked(m) for m in ctx.brain.search(args.query, limit=args.limit)]
+    else:
+        matches = ctx.brain.search(args.query, limit=candidates(policy, args.limit))
+        ranked = rerank(
+            ctx.judge,
+            policy,
+            matches,
+            query=args.query,
+            limit=args.limit,
+            agent_id=ctx.agent_id,
+            run_id=ctx.run_id,
+        )
     return {
         "facts": [
             {
-                "id": str(m.fact.id),
-                "claim": m.fact.claim,
-                "source": m.fact.source,
-                "distance": round(m.distance, 3),
+                "id": str(r.match.fact.id),
+                "claim": r.match.fact.claim,
+                "source": r.match.fact.source,
+                "distance": round(r.match.distance, 3),
+                **({"relevance": r.relevance} if r.relevance is not None else {}),
+                **({"stale": True} if r.stale else {}),
+                **({"contradicts_premise": True} if r.contradicts_premise else {}),
             }
-            for m in matches
+            for r in ranked
         ]
     }
 

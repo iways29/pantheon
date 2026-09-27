@@ -97,7 +97,7 @@ The Vercel MCP cannot list environment variables (403).
 
 ## Tests
 
-516 pass on the `pantheon_ci` database:
+532 pass on the `pantheon_ci` database:
 `cd api && DATABASE_URL=postgresql://pantheon:pantheon@127.0.0.1:55432/pantheon_ci uv run pytest -q`,
 then `uv run ruff check .` and `uv run ruff format --check .`. Rebuild with
 `scripts/local_db.sh reset` (`DB_NAME=pantheon_ci`). New migrations must also
@@ -115,16 +115,32 @@ apply from scratch on plain Postgres (guard anything needing `pg_cron`,
 - `api/scripts/` the owner's CLIs (`department`, `draft`, `brain`,
   `approvals`, `order`, `judge`, `mailing`, `knowledge`, `mcp`, `agent`).
 - `supabase/migrations/` versioned SQL, RLS on every table. `docs/adr/` 0001
-  to 0030.
+  to 0032.
 
 ## What to do next
 
 1. Watch Monday's mornings (research 06:30, marketing 06:45, brief 07:15) and
    fix anything that breaks.
-2. Approval links in the brief email (ADR 030) are built and tested, not live.
-   To switch on, with the owner's go: apply
-   `20260927100000_approval_links.sql` through the Supabase MCP, merge so
-   Vercel deploys, then
-   `scripts.mailing set morning-brief --links https://api-xi-opal-67.vercel.app`.
-3. Step 9, Jev in the loop.
+2. Done 2026-09-27: approval links in the brief email (ADR 030) are live
+   (migration applied, PR #35 merged, links on for `morning-brief`, 48 hours).
+3. Step 9, Jev in the loop (ADR 031, 032): built and tested in PR #36, **not
+   live**. The owner said switch on after Monday's mornings are checked.
+   See "Switching on Step 9" below.
 4. After five unattended mornings: the Step 8.1 Milestone report. Stop.
+
+## Switching on Step 9 (after Monday's mornings are checked)
+
+Everything is off until each gate is added, so this can go step by step.
+
+| # | Step | Who | Undo |
+| --- | --- | --- | --- |
+| 1 | Apply `20260927110000_result_check.sql` through the Supabase MCP. Additive: new columns, a guard trigger, and the dispatch and task-follows-run functions redefined with the new behaviour | Claude | Leave it; it is inert without the code |
+| 2 | Merge PR #36; Vercel deploys | Owner | Revert the PR |
+| 3 | `scripts.judge seed result_check`: worker results are checked from the next task | Owner (from `api/`, pooler prefix) | `scripts.judge gate off result_check` |
+| 4 | `scripts.judge seed recall_rank`: `brain_search` is re-ranked | Owner | `scripts.judge gate off recall_rank` |
+| 5 | `scripts.cascade compare --save ../docs/reports/step9-comparison.md`: the Step 9 report, about 3 cents; creates the `benchmark` agent and `benchmarks` department ($0.50/day) | Owner, or Claude with the owner's go | Nothing to undo |
+| 6 | After the next mornings: `scripts.cascade report` | Owner or Claude (SQL) | - |
+
+Step 1 must come before step 2: the new gateway reads `runs.model_tier`.
+Run commands from `api/` with the live database, for example:
+`DATABASE_URL="$(grep -E '^SUPABASE_POOLER_URL=' ../.env | cut -d= -f2-)" uv run python -m scripts.judge seed result_check`

@@ -153,6 +153,8 @@ def test_every_case_file_imports_against_its_gate(
         "content_screen": 12,
         "draft_claim": 16,
         "draft_voice": 10,
+        "recall_rank": 11,
+        "result_check": 14,
     }
     cases = load_cases(db, org_id=tenants.org_a, gate="brain_claim")
     assert {c.weak_spot for c in cases} >= {"arithmetic", "dates", "double_negative", "adversarial"}

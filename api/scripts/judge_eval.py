@@ -36,6 +36,7 @@ EVAL_GATES = (
     "draft_claim",
     "draft_voice",
     "result_check",
+    "recall_rank",
 )
 
 

@@ -12,9 +12,11 @@ no deploy, and is written to `events`.
     uv run python -m scripts.judge gate set <gate> --policy policy.json [--fail-mode closed]
         [--model jev-1.13.0] [--allow-sensitive] [--disabled] [--max-state-chars N] [--note "why"]
     uv run python -m scripts.judge gate activate <gate> <version>
+    uv run python -m scripts.judge gate off <gate> [--note "why"]   # everything else kept
+    uv run python -m scripts.judge gate on <gate> [--note "why"]
     uv run python -m scripts.judge try <gate> --state "text" | --state-file state.json
     uv run python -m scripts.judge recent [--gate <gate>] [--limit 10]
-    uv run python -m scripts.judge seed      # starter gates the org has never had
+    uv run python -m scripts.judge seed [gate ...]   # starter gates the org has never had
 
 A question file is the API's own shape:
 
@@ -66,6 +68,10 @@ def main(argv: list[str]) -> int:
     gate_set.add_argument("--disabled", action="store_true")
     gate_set.add_argument("--max-state-chars", type=int, default=20000)
     gate_set.add_argument("--note")
+    for name in ("on", "off"):
+        switch = gate_commands.add_parser(name, help=f"switch a gate {name}, keeping the rest")
+        switch.add_argument("gate")
+        switch.add_argument("--note")
     gate_activate = gate_commands.add_parser("activate")
     gate_activate.add_argument("gate")
     gate_activate.add_argument("version", type=int)
@@ -92,7 +98,8 @@ def main(argv: list[str]) -> int:
     recent.add_argument("--gate")
     recent.add_argument("--limit", type=int, default=10)
 
-    commands.add_parser("seed", help="add starter gates the org has never had")
+    seed = commands.add_parser("seed", help="add starter gates the org has never had")
+    seed.add_argument("gates", nargs="*", help="only these (default: every starter gate)")
 
     args = parser.parse_args(argv)
     dsn = _Env().database_url  # type: ignore[call-arg]
@@ -106,19 +113,25 @@ def main(argv: list[str]) -> int:
             if args.command == "try":
                 return _try(connection, args)
             if args.command == "seed":
-                return _seed(connection)
+                return _seed(connection, args.gates)
             return _recent(connection, args)
         except JudgeError as error:
             print(f"refused: {error}", file=sys.stderr)
             return 1
 
 
-def _seed(connection: psycopg.Connection) -> int:
+def _seed(connection: psycopg.Connection, names: list[str]) -> int:
     """Only gates the org has never had; an edited or disabled gate stays."""
     from app.judge.starter_gates import STARTER_GATES
 
+    known = {g.gate: g for g in STARTER_GATES}
+    unknown = sorted(set(names) - set(known))
+    if unknown:
+        print(f"no starter gate named {', '.join(unknown)}", file=sys.stderr)
+        return 1
+    gates = [known[n] for n in names] if names else list(STARTER_GATES)
     org_id, user_id, _ = _setup(connection)
-    seeded = store.seed_gates(connection, user_id=user_id, org_id=org_id, gates=STARTER_GATES)
+    seeded = store.seed_gates(connection, user_id=user_id, org_id=org_id, gates=gates)
     print(f"judge gates seeded: {', '.join(seeded) or 'none (already present)'}")
     return 0
 
@@ -151,6 +164,24 @@ def _gate(connection: psycopg.Connection, args: argparse.Namespace) -> int:
                 print(f"    instructions: {json.dumps(q.instructions)}")
                 if q.criteria is not None:
                     print(f"    criteria: {json.dumps(q.criteria)}")
+        return 0
+    if command in ("on", "off"):
+        with acting_as(connection, user_id=user_id) as conn:
+            live = store.load_gate(conn, org_id=org_id, gate=args.gate).config
+        v = store.publish_gate(
+            connection,
+            user_id=user_id,
+            org_id=org_id,
+            gate=args.gate,
+            model=live.model,
+            policy=live.policy,
+            fail_mode=live.fail_mode,
+            allow_sensitive=live.allow_sensitive,
+            enabled=command == "on",
+            max_state_chars=live.max_state_chars,
+            note=args.note or f"switched {command}",
+        )
+        print(f"{args.gate}: version {v.version} is live, {'on' if v.enabled else 'off'}")
         return 0
     if command == "set":
         policy = json.loads(args.policy.read_text())

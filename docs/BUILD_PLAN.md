@@ -573,11 +573,13 @@ Step 8.1 is running.
 Done when: on the labelled set the cascade costs less per task than always-standard
 with no drop in quality, and the numbers are in a report.
 
-**Status (2026-09-27):** part 1 built and tested (ADR 031): every worker's
-finished task is checked by the `result_check` gate; a failed check redoes the
-task once on the standard tier; `scripts.cascade report` shows checks, redos
-and costs. Not yet: re-ranking recalled facts, and the side-by-side comparison
-on labelled tasks.
+**Status (2026-09-27):** built and tested, not live (ADR 031, 032): every
+worker's finished task is checked by the `result_check` gate and a failed
+check redoes it once on standard; `brain_search` results are re-ranked by the
+`recall_rank` gate; `scripts.cascade report` shows checks, redos and costs;
+`scripts.cascade compare` runs cheap, cascade and standard on 8 labelled
+scouting cases and prints the verdict. Switched on after Monday's mornings
+(owner, 2026-09-27); the comparison's numbers are the Step 9 report.
 
 ## Step 10: Realtime and UI (L)
 

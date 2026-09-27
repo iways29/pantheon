@@ -1234,6 +1234,63 @@ RESULT_CHECK = StarterGate(
     max_state_chars=48000,
 )
 
+# --- Step 9: re-ranking what an agent recalls -----------------------------------
+#
+# State: {"query": ..., "claim": ...}. One request per recalled fact, before
+# the agent reads it. Staleness (a fact past its review date) is decided in
+# code, not asked: Jev does no date comparison.
+
+RECALL_RANK = StarterGate(
+    gate="recall_rank",
+    questions=(
+        StarterQuestion(
+            key="relevance",
+            type="score",
+            instructions="How much does `claim` help answer `query`?",
+            criteria=[
+                "Unrelated: `claim` is about something other than what `query` asks.",
+                "Related: `claim` is about the same subject but does not answer `query`.",
+                "Answers: `claim` directly helps answer `query`.",
+            ],
+        ),
+        StarterQuestion(
+            key="contradicts_premise",
+            type="noul",
+            instructions="Does `claim` contradict something that `query` takes for granted?",
+            criteria={
+                "true": (
+                    "For example `query` asks 'Why did Acme raise a Series B?' and `claim` "
+                    "says Acme has only raised a seed round."
+                ),
+                "false": "`claim` agrees with what `query` assumes, or says nothing about it.",
+            },
+        ),
+    ),
+    policy={
+        "outcomes": ["keep", "drop"],
+        "rules": [
+            {
+                "question": "relevance",
+                "score_below": 0.5,
+                "outcome": "drop",
+                "reason": "Not relevant to the question",
+            },
+        ],
+        "settings": {
+            # Candidates judged per result the agent asked for, and at most.
+            "candidates_factor": 2,
+            "max_candidates": 20,
+            # Order: relevance (0 to 2), less `stale_penalty` for a fact past
+            # its review date.
+            "stale_penalty": 0.5,
+            # A fact contradicting the question's premise is flagged when at
+            # least this likely.
+            "premise_flag_at": 0.5,
+        },
+    },
+    fail_mode="open",
+)
+
 STARTER_GATES: tuple[StarterGate, ...] = (
     TOOL_SELECT,
     BRAIN_CLAIM,
@@ -1249,4 +1306,5 @@ STARTER_GATES: tuple[StarterGate, ...] = (
     DRAFT_CLAIM,
     DRAFT_VOICE,
     RESULT_CHECK,
+    RECALL_RANK,
 )

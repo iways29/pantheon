@@ -255,3 +255,24 @@ def test_long_evidence_fits_the_gate(dsn: str, checked: Team) -> None:
     evidence = gate.policy.setting("evidence_chars", 0)
     # Evidence full of quotes doubles when escaped; the result adds 4,000.
     assert gate.config.max_state_chars >= evidence * 1.5 + 4000
+
+
+def test_a_gate_switches_off_and_on_keeping_its_settings(
+    dsn: str, checked: Team, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import argparse
+
+    import scripts.judge as cli
+    from app.judge.store import load_gate
+
+    monkeypatch.setattr(
+        cli, "_setup", lambda _conn: (str(checked.org_id), str(checked.user_id), None)
+    )
+    with connect(dsn) as connection:
+        for command in ("off", "on"):
+            args = argparse.Namespace(gate_command=command, gate="result_check", note=None)
+            assert cli._gate(connection, args) == 0
+            with as_service_role(connection) as conn:
+                live = load_gate(conn, org_id=checked.org_id, gate="result_check").config
+            assert live.enabled is (command == "on")
+            assert (live.fail_mode, live.max_state_chars) == ("open", 48000)

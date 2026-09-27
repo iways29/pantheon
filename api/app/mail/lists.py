@@ -26,6 +26,10 @@ class MailingListChange(BaseModel):
     timezone: str | None = None
     send_without_approval: bool | None = None
     enabled: bool | None = None
+    #: The API's public https address: emails that ask for it end with
+    #: one-tap approval links. "" switches the links off.
+    approval_links_url: str | None = None
+    approval_link_hours: int | None = Field(default=None, ge=1, le=168)
 
 
 def get_lists(connection: psycopg.Connection, *, user_id: UUID | str) -> list[dict[str, Any]]:
@@ -46,6 +50,8 @@ def set_list(
     fields = change.model_dump(exclude_none=True)
     if "recipients" in fields:
         fields["recipients"] = [r.strip().lower() for r in fields["recipients"] if r.strip()]
+    if "approval_links_url" in fields:
+        fields["approval_links_url"] = fields["approval_links_url"].strip().rstrip("/") or None
     with acting_as(connection, user_id=str(user_id)) as conn, conn.cursor() as cursor:
         cursor.execute(
             "select id from public.mailing_lists where org_id = %s and key = %s",

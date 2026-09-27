@@ -62,6 +62,11 @@ A task may take several runs: an agent works, stops to wait, and is woken.
 | `approved` / `rejected` | You decided. A decision with a note is remembered in the brain. |
 | `expired` | Cancelled by the kill. |
 
+**Approval links** (ADR 030): the brief email can end with one link per
+waiting approval. Opening a link only shows the card; a button on the page
+decides. Each link works once, for 48 hours, and only while the request still
+waits. An old or used link shows "This link has expired".
+
 Why something is held: every agent action has a **risk class**, R0 (reads
 the company's own data) to R4 (spends money). Each agent has an **autonomy
 level**, L0 (asks for almost everything) to L3 (reads the outside world on

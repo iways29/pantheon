@@ -7,6 +7,8 @@
     uv run python -m scripts.mailing set morning-brief --to a@example.com,b@example.com
     uv run python -m scripts.mailing set morning-brief --auto      # goes out on its own
     uv run python -m scripts.mailing set morning-brief --no-auto   # each email waits for you
+    uv run python -m scripts.mailing set morning-brief --links https://api.example.com
+    uv run python -m scripts.mailing set morning-brief --no-links  # no approval links
     uv run python -m scripts.mailing emails                        # the last emails
     uv run python -m scripts.mailing send <email id>               # retry a failed one
 
@@ -38,6 +40,9 @@ def main(argv: list[str]) -> int:
     change.add_argument("--no-auto", dest="auto", action="store_false")
     change.add_argument("--on", dest="enabled", action="store_true", default=None)
     change.add_argument("--off", dest="enabled", action="store_false")
+    change.add_argument("--links", dest="links", help="the API's https address: approval links")
+    change.add_argument("--no-links", dest="links", action="store_const", const="")
+    change.add_argument("--link-hours", type=int, help="how long a link works (1-168)")
     commands.add_parser("emails")
     retry = commands.add_parser("send")
     retry.add_argument("email_id")
@@ -54,6 +59,9 @@ def main(argv: list[str]) -> int:
                 print(f"  from: {row['from_address']}")
                 print(f"  to:   {', '.join(row['recipients']) or '(nobody yet)'}")
                 print(f"  subject: {row['subject']}  [{row['timezone']}]")
+                links = row["approval_links_url"]
+                hours = row["approval_link_hours"]
+                print(f"  approval links: {f'{links} ({hours}h)' if links else 'off'}")
             return 0
         if args.command == "set":
             row = set_list(
@@ -69,6 +77,8 @@ def main(argv: list[str]) -> int:
                     timezone=args.timezone,
                     send_without_approval=args.auto,
                     enabled=args.enabled,
+                    approval_links_url=args.links,
+                    approval_link_hours=args.link_hours,
                 ),
             )
             print(f"{row['key']}: from {row['from_address']} to {', '.join(row['recipients'])}")

@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from app.auth import OwnerPrincipal
 from app.config import Settings, get_settings
 from app.internal import router as internal_router
+from app.link_pages import router as link_router
 from app.owner_api import router as owner_router
 
 settings = get_settings()
@@ -36,6 +37,7 @@ if settings.cors_origins:
 
 app.include_router(internal_router)
 app.include_router(owner_router)
+app.include_router(link_router)
 
 
 class Health(BaseModel):

@@ -32,6 +32,11 @@ A task may take several runs: an agent works, stops to wait, and is woken.
 | `failed` | Its part could not be done (reason below). |
 | `cancelled` | Its task was cancelled. |
 
+A run can also finish `succeeded` with the reason **`escalated`**: Jev's
+check of a worker's result failed (for example it named a startup the agent
+never read about), so the task was sent back once to be redone on the
+stronger model (ADR 031). The task shows `queued` again, then `done`.
+
 ### Why a run paused
 
 | Reason | Means | What happens next |

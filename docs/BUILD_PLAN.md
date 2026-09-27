@@ -573,6 +573,12 @@ Step 8.1 is running.
 Done when: on the labelled set the cascade costs less per task than always-standard
 with no drop in quality, and the numbers are in a report.
 
+**Status (2026-09-27):** part 1 built and tested (ADR 031): every worker's
+finished task is checked by the `result_check` gate; a failed check redoes the
+task once on the standard tier; `scripts.cascade report` shows checks, redos
+and costs. Not yet: re-ranking recalled facts, and the side-by-side comparison
+on labelled tasks.
+
 ## Step 10: Realtime and UI (L)
 
 Formerly Step 7. Choose the UI framework now (not before): present 2-3 options with

@@ -36,6 +36,8 @@ class StarterGate:
     policy: dict[str, Any]
     fail_mode: str = "closed"
     note: str = "Starting gate"
+    #: The largest state the gate accepts (its evidence can be long).
+    max_state_chars: int = 20000
 
 
 # --- Brain write gate: one request per proposed fact -------------------------
@@ -1136,6 +1138,102 @@ DRAFT_VOICE = StarterGate(
     },
 )
 
+# --- Step 9: checking the workers' results -------------------------------------
+#
+# State: {"task": ..., "result": ..., "evidence": ...}. One request per result
+# a worker reports. A `redo` sends the task back once, on a stronger tier.
+# Fail open: a check that cannot run never stops the work.
+
+RESULT_CHECK = StarterGate(
+    gate="result_check",
+    questions=(
+        StarterQuestion(
+            key="empty",
+            type="noul",
+            instructions=(
+                "Does `result` fail to give any answer, because it is empty, only says the "
+                "work could not be done, or is an error message?"
+            ),
+            criteria={
+                "true": (
+                    "For example '', 'I could not access the pages', 'Error: timeout', or "
+                    "only a plan of what would be done."
+                ),
+                "false": "It gives an answer, even a short one or one that says little was found.",
+            },
+        ),
+        StarterQuestion(
+            key="off_task",
+            type="noul",
+            instructions="Does `result` leave out the main thing that `task` asks for?",
+            criteria={
+                "true": "It is about something else, or skips what `task` asks for.",
+                "false": "It addresses what `task` asks for, even briefly or in part.",
+            },
+        ),
+        StarterQuestion(
+            key="unsupported",
+            type="noul",
+            instructions=(
+                "Does `result` name a company, a person, an amount of money or a date that "
+                "appears nowhere in `evidence`?"
+            ),
+            criteria={
+                "true": "At least one such name or number in `result` is not in `evidence`.",
+                "false": (
+                    "Every company, person, amount and date in `result` also appears in "
+                    "`evidence`, or `result` names none."
+                ),
+            },
+        ),
+        StarterQuestion(
+            key="contradicts",
+            type="noul",
+            instructions="Does `evidence` contradict something that `result` states?",
+            criteria={
+                "true": "For example `result` gives a different amount, date or founder.",
+                "false": "Nothing in `evidence` disagrees with `result`.",
+            },
+        ),
+    ),
+    policy={
+        "outcomes": ["pass", "redo"],
+        "rules": [
+            {"question": "empty", "noul_at_least": 0.6, "outcome": "redo", "reason": "No answer"},
+            {
+                "question": "off_task",
+                "noul_at_least": 0.6,
+                "outcome": "redo",
+                "reason": "Does not do what the task asked",
+            },
+            {
+                "question": "unsupported",
+                "noul_at_least": 0.6,
+                "outcome": "redo",
+                "reason": "Names something not in what the agent read",
+            },
+            {
+                "question": "contradicts",
+                "noul_at_least": 0.6,
+                "outcome": "redo",
+                "reason": "Contradicts what the agent read",
+            },
+        ],
+        "settings": {
+            # Which tiers' results are sent back (comma-separated), how far
+            # up, how often.
+            "from_tiers": "cheap",
+            "max_tier": "standard",
+            "max_escalations": 1,
+            # How much of what the agent read goes to Jev.
+            "evidence_chars": 24000,
+        },
+    },
+    fail_mode="open",
+    # 24,000 characters of evidence, escaped as JSON, plus the result.
+    max_state_chars=48000,
+)
+
 STARTER_GATES: tuple[StarterGate, ...] = (
     TOOL_SELECT,
     BRAIN_CLAIM,
@@ -1150,4 +1248,5 @@ STARTER_GATES: tuple[StarterGate, ...] = (
     BRIEF_RANK,
     DRAFT_CLAIM,
     DRAFT_VOICE,
+    RESULT_CHECK,
 )

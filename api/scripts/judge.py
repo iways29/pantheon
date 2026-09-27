@@ -14,6 +14,7 @@ no deploy, and is written to `events`.
     uv run python -m scripts.judge gate activate <gate> <version>
     uv run python -m scripts.judge try <gate> --state "text" | --state-file state.json
     uv run python -m scripts.judge recent [--gate <gate>] [--limit 10]
+    uv run python -m scripts.judge seed      # starter gates the org has never had
 
 A question file is the API's own shape:
 
@@ -91,6 +92,8 @@ def main(argv: list[str]) -> int:
     recent.add_argument("--gate")
     recent.add_argument("--limit", type=int, default=10)
 
+    commands.add_parser("seed", help="add starter gates the org has never had")
+
     args = parser.parse_args(argv)
     dsn = _Env().database_url  # type: ignore[call-arg]
 
@@ -102,10 +105,22 @@ def main(argv: list[str]) -> int:
                 return _question(connection, args)
             if args.command == "try":
                 return _try(connection, args)
+            if args.command == "seed":
+                return _seed(connection)
             return _recent(connection, args)
         except JudgeError as error:
             print(f"refused: {error}", file=sys.stderr)
             return 1
+
+
+def _seed(connection: psycopg.Connection) -> int:
+    """Only gates the org has never had; an edited or disabled gate stays."""
+    from app.judge.starter_gates import STARTER_GATES
+
+    org_id, user_id, _ = _setup(connection)
+    seeded = store.seed_gates(connection, user_id=user_id, org_id=org_id, gates=STARTER_GATES)
+    print(f"judge gates seeded: {', '.join(seeded) or 'none (already present)'}")
+    return 0
 
 
 def _gate(connection: psycopg.Connection, args: argparse.Namespace) -> int:

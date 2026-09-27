@@ -332,6 +332,7 @@ def seed_gates(
             model=STARTER_MODEL,
             policy=starter.policy,
             fail_mode=starter.fail_mode,  # type: ignore[arg-type]
+            max_state_chars=starter.max_state_chars,
             note=starter.note,
         )
         seeded.append(starter.gate)

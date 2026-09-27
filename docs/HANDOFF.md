@@ -97,7 +97,7 @@ The Vercel MCP cannot list environment variables (403).
 
 ## Tests
 
-516 pass on the `pantheon_ci` database:
+523 pass on the `pantheon_ci` database:
 `cd api && DATABASE_URL=postgresql://pantheon:pantheon@127.0.0.1:55432/pantheon_ci uv run pytest -q`,
 then `uv run ruff check .` and `uv run ruff format --check .`. Rebuild with
 `scripts/local_db.sh reset` (`DB_NAME=pantheon_ci`). New migrations must also
@@ -115,16 +115,19 @@ apply from scratch on plain Postgres (guard anything needing `pg_cron`,
 - `api/scripts/` the owner's CLIs (`department`, `draft`, `brain`,
   `approvals`, `order`, `judge`, `mailing`, `knowledge`, `mcp`, `agent`).
 - `supabase/migrations/` versioned SQL, RLS on every table. `docs/adr/` 0001
-  to 0030.
+  to 0031.
 
 ## What to do next
 
 1. Watch Monday's mornings (research 06:30, marketing 06:45, brief 07:15) and
    fix anything that breaks.
-2. Approval links in the brief email (ADR 030) are built and tested, not live.
-   To switch on, with the owner's go: apply
-   `20260927100000_approval_links.sql` through the Supabase MCP, merge so
-   Vercel deploys, then
-   `scripts.mailing set morning-brief --links https://api-xi-opal-67.vercel.app`.
-3. Step 9, Jev in the loop.
+2. Done 2026-09-27: approval links in the brief email (ADR 030) are live
+   (migration applied, PR #35 merged, links on for `morning-brief`, 48 hours).
+3. Step 9, Jev in the loop. Part 1 (ADR 031): Jev checks every worker's
+   result, a failed check redoes the task once on standard. To go live, with
+   the owner's go: apply `20260927110000_result_check.sql`, merge, then seed
+   the gate with `scripts.judge seed` (adds only missing gates). Do not use
+   `scripts.agent seed` for this: it resets the research budget.
+   Then `scripts.cascade report`. Next parts: re-rank recalled facts, and the
+   side-by-side comparison for the Step 9 report.
 4. After five unattended mornings: the Step 8.1 Milestone report. Stop.

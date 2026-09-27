@@ -84,7 +84,7 @@ an AI).
 | --- | --- |
 | GitHub | `iways29/pantheon` |
 | Supabase project | `epelwbiehczkkgqtgkqt` (us-west-2), reachable through the Supabase MCP |
-| Migrations applied live | all of `supabase/migrations/` through `20260927130000_owner_memory.sql` |
+| Migrations applied live | all of `supabase/migrations/` through `20260927140000_graph.sql` |
 | Vercel team | `team_6UC1DSN83JcGLrVJC3P8aXE6` |
 | API project | `pantheon-api` (`prj_XHno72KOypj7fapEIXze9XtZZJMR`), `https://api-xi-opal-67.vercel.app`, deploys from `main` |
 | Web project | `pantheon-web` (`prj_XdV67seWTQSsmSDvBUH2NIg9AZNX`) |
@@ -143,9 +143,11 @@ apply from scratch on plain Postgres (guard anything needing `pg_cron`,
    applied, PR #39 merged, `memory_triage` v1 seeded, `brain_claim` v3 (the
    owner's v2 plus the `owner` profile). Piece 2a, ADR 035: the graph (things and links in Postgres;
    the librarian proposes, Jev decides which existing thing a mention is and
-   whether a fact states a link; a tidy-up merges twins). Going live: apply
-   `20260927140000_graph.sql`, merge, `scripts.judge seed entity_match` and
-   `link_support`, `scripts.graph setup`, then the owner runs `scripts.graph on`.
+   whether a fact states a link; a tidy-up merges twins). Live 2026-09-27:
+   migration applied, PR #40 merged, `entity_match` and `link_support` v1
+   seeded, the librarian set up (department `brain`, $0.25/day; done by SQL,
+   the pooler was unreachable from the cloud session). The "Brain librarian"
+   routine (07:40 daily) is **off** until the owner runs `scripts.graph on`.
    Piece 2b (search along the links) only after an eval shows it helps.
 4. After five unattended mornings: the Step 8.1 Milestone report. Stop.
 

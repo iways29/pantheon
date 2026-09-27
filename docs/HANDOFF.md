@@ -84,7 +84,7 @@ an AI).
 | --- | --- |
 | GitHub | `iways29/pantheon` |
 | Supabase project | `epelwbiehczkkgqtgkqt` (us-west-2), reachable through the Supabase MCP |
-| Migrations applied live | all of `supabase/migrations/` through `20260926210000_resume_provider_errors.sql` |
+| Migrations applied live | all of `supabase/migrations/` through `20260927130000_owner_memory.sql` |
 | Vercel team | `team_6UC1DSN83JcGLrVJC3P8aXE6` |
 | API project | `pantheon-api` (`prj_XHno72KOypj7fapEIXze9XtZZJMR`), `https://api-xi-opal-67.vercel.app`, deploys from `main` |
 | Web project | `pantheon-web` (`prj_XdV67seWTQSsmSDvBUH2NIg9AZNX`) |
@@ -97,7 +97,7 @@ The Vercel MCP cannot list environment variables (403).
 
 ## Tests
 
-539 pass on the `pantheon_ci` database:
+547 pass on the `pantheon_ci` database:
 `cd api && DATABASE_URL=postgresql://pantheon:pantheon@127.0.0.1:55432/pantheon_ci uv run pytest -q`,
 then `uv run ruff check .` and `uv run ruff format --check .`. Rebuild with
 `scripts/local_db.sh reset` (`DB_NAME=pantheon_ci`). New migrations must also
@@ -115,7 +115,7 @@ apply from scratch on plain Postgres (guard anything needing `pg_cron`,
 - `api/scripts/` the owner's CLIs (`department`, `draft`, `brain`,
   `approvals`, `order`, `judge`, `mailing`, `knowledge`, `mcp`, `agent`).
 - `supabase/migrations/` versioned SQL, RLS on every table. `docs/adr/` 0001
-  to 0034.
+  to 0035.
 
 ## What to do next
 
@@ -139,8 +139,14 @@ apply from scratch on plain Postgres (guard anything needing `pg_cron`,
 3c. Brain plan (owner, 2026-09-27). Done: the clean-up (82 web facts deleted,
    33 held rejected; 32 company facts kept). Piece 1, ADR 034: Jev sorts what
    the owner says (memory_triage) and every agent reads the owner's
-   preferences. Piece 2, next: the graph (things and links in Postgres, with
-   Jev deciding which existing thing a mention is, and a tidy-up job).
+   preferences. Live 2026-09-27: migration `20260927130000_owner_memory.sql`
+   applied, PR #39 merged, `memory_triage` v1 seeded, `brain_claim` v3 (the
+   owner's v2 plus the `owner` profile). Piece 2a, ADR 035: the graph (things and links in Postgres;
+   the librarian proposes, Jev decides which existing thing a mention is and
+   whether a fact states a link; a tidy-up merges twins). Going live: apply
+   `20260927140000_graph.sql`, merge, `scripts.judge seed entity_match` and
+   `link_support`, `scripts.graph setup`, then the owner runs `scripts.graph on`.
+   Piece 2b (search along the links) only after an eval shows it helps.
 4. After five unattended mornings: the Step 8.1 Milestone report. Stop.
 
 ## Switching on Step 9 (done 2026-09-27; kept for reference)

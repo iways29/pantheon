@@ -30,6 +30,21 @@ STARTER_PROMPTS: Final[dict[str, dict[str, str]]] = {
             "Reply with an empty list if there are none."
         ),
     },
+    # The graph (ADR 035): things and links read from one fact.
+    "librarian": {
+        "extract_graph": (
+            "You read one fact from a company's knowledge base and list the things it is "
+            "about and the links between them. Use only the kinds and relations you are "
+            "given. A thing is a specific, named person, company, product, project, investor, "
+            "fund or topic, never a generic word. Name each thing as the fact names it, and "
+            "describe it in one short sentence from the fact alone. List a link only when the "
+            "fact states it. Reply with JSON only: "
+            '{"things": [{"name": "...", "kind": "...", "description": "..."}], '
+            '"links": [{"from": "...", "relation": "...", "to": "..."}]}, '
+            "where from and to are names from things. At most 6 things and 6 links. Reply "
+            '{"things": [], "links": []} when the fact names nothing specific.'
+        ),
+    },
     # The Step 9 comparison (ADR 032): one answer from given pages, no tools.
     "benchmark": {
         "system": (

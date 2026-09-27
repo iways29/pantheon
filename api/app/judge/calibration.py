@@ -121,13 +121,17 @@ def run_eval(
     cases = load_cases(connection, org_id=org_id, gate=gate)[:limit]
     results = []
     for case in cases:
+        # A case may carry per-call options (entity_match's candidates).
+        state = dict(case.state)
+        extra = state.pop("extra_options", None)
         runs = tuple(
             judge.run(
                 gate,
-                case.state,
+                state,
                 agent_id=agent_id,
                 input_ref=f"eval:{gate}:{case.case_key}:{attempt}",
                 profile=profile,
+                extra_options=extra,
             )
             for attempt in range(repeats)
         )

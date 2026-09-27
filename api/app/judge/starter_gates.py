@@ -1396,6 +1396,94 @@ MEMORY_TRIAGE = StarterGate(
     fail_mode="open",
 )
 
+# --- The graph (ADR 035) --------------------------------------------------------
+#
+# ENTITY_MATCH. State: {"mention": ..., "kind": ..., "context": ..., "candidates": ...}.
+# Which existing thing a mention is. The candidates are added as options for
+# each call (c1, c2, ...), each with its name, kind, other names and what is
+# known about it; `new` means none of them.
+
+ENTITY_MATCH = StarterGate(
+    gate="entity_match",
+    questions=(
+        StarterQuestion(
+            key="match",
+            type="choice",
+            instructions=(
+                "In `context`, which thing does `mention` (a `kind`) refer to: one of the "
+                "things listed in `candidates`, or a different thing?"
+            ),
+            criteria={
+                "new": (
+                    "None of the listed things: a different thing that only shares a name or "
+                    "a word, e.g. a startup called Think and the verb think, or two companies "
+                    "with the same name in different countries."
+                ),
+            },
+        ),
+    ),
+    policy={
+        "outcomes": ["match", "new"],
+        "rules": [
+            {
+                "question": "match",
+                "choice_in": ["new"],
+                "outcome": "new",
+                "reason": "A different thing",
+            },
+        ],
+        "settings": {
+            # Join an existing thing at or above this probability; between
+            # `unsure_at_least` and it, keep a new thing marked "possible match"
+            # for the tidy-up to look at again.
+            "join_at_least": 0.7,
+            "unsure_at_least": 0.4,
+            # How many existing things are offered, and how near by meaning
+            # (cosine distance) they must be to be offered.
+            "candidates": 4,
+            "candidate_max_distance": 0.5,
+        },
+    },
+    fail_mode="open",
+)
+
+# LINK_SUPPORT. State: {"text": ..., "link": ...}. One request per proposed link.
+
+LINK_SUPPORT = StarterGate(
+    gate="link_support",
+    questions=(
+        StarterQuestion(
+            key="states",
+            type="noul",
+            instructions="Does `text` state or directly show that `link` is true?",
+            criteria={
+                "true": (
+                    "`text` says it, e.g. `text` 'Priya Rao founded Lumen' and `link` "
+                    "'Priya Rao founded Lumen'."
+                ),
+                "false": (
+                    "`text` does not say it, only suggests it, or says something else, e.g. "
+                    "`text` 'Lumen and Tessel both build for agents' and `link` 'Lumen competes "
+                    "with Tessel'."
+                ),
+            },
+        ),
+    ),
+    policy={
+        "outcomes": ["keep", "drop"],
+        "rules": [
+            {
+                "question": "states",
+                "noul_below": 0.7,
+                "outcome": "drop",
+                "reason": "The fact does not state the link",
+            },
+        ],
+        "settings": {},
+    },
+    fail_mode="closed",
+)
+
 STARTER_GATES: tuple[StarterGate, ...] = (
     TOOL_SELECT,
     BRAIN_CLAIM,
@@ -1413,4 +1501,6 @@ STARTER_GATES: tuple[StarterGate, ...] = (
     RESULT_CHECK,
     RECALL_RANK,
     MEMORY_TRIAGE,
+    ENTITY_MATCH,
+    LINK_SUPPORT,
 )

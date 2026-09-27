@@ -39,6 +39,7 @@ names per run), audited like every flag.
 | `GET /screen/snapshot` | Everything drawn at load: status, pulse, departments, agents with their state, neighbourhoods, facts with places, held claims |
 | `GET /screen/pulse` | Today's strip: spend against budget, facts added and rejected, tasks done, what needs the owner |
 | `GET /screen/status` | Running or paused, and since when |
+| `GET /screen/agents` | Agents and departments alone: what an event changes, without the facts |
 | `GET /screen/events?since=` | Replay; model calls, judgments and run steps are left out unless `quiet=false` |
 | `GET /facts/{id}` | The fact panel: source, who found it, Jev's check, what it replaced or contradicts, its things and nearest facts |
 | `GET /agents/{name}/detail` | The agent panel: now, last results, tools, level, spend |

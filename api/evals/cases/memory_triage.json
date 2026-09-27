@@ -1,0 +1,132 @@
+{
+  "gate": "memory_triage",
+  "about": "What the owner says to the agents: keep (a preference, rule, interest, fact or way of working) or forget (ADR 034). Written 2026-09-27 by the author.",
+  "cases": [
+    {
+      "id": "call-me-boss",
+      "expected": "keep",
+      "label_source": "author",
+      "state": {
+        "said": "From now on, call me boss.",
+        "where": "an order to the agents"
+      }
+    },
+    {
+      "id": "short-emails",
+      "expected": "keep",
+      "label_source": "author",
+      "state": {
+        "said": "Keep every email you draft under five lines.",
+        "where": "an order to the agents"
+      }
+    },
+    {
+      "id": "no-paid-tools",
+      "expected": "keep",
+      "label_source": "author",
+      "state": {
+        "said": "No paid tools this quarter unless I say so.",
+        "where": "an order to the agents"
+      }
+    },
+    {
+      "id": "legal-interest",
+      "expected": "keep",
+      "label_source": "author",
+      "state": {
+        "said": "Who is building AI for legal teams in India?",
+        "where": "a question for tomorrow's research research"
+      }
+    },
+    {
+      "id": "mumba-fact",
+      "expected": "keep",
+      "label_source": "author",
+      "state": {
+        "said": "Mumba's paid plan launches in November.",
+        "where": "an order to the agents"
+      }
+    },
+    {
+      "id": "review-at-night",
+      "expected": "keep",
+      "label_source": "author",
+      "state": {
+        "said": "I review drafts at night, so send them after 8pm.",
+        "where": "an order to the agents"
+      }
+    },
+    {
+      "id": "never-employer",
+      "expected": "keep",
+      "label_source": "author",
+      "state": {
+        "said": "Never mention where I work in any post.",
+        "where": "an order to the agents"
+      }
+    },
+    {
+      "id": "thanks",
+      "expected": "forget",
+      "label_source": "author",
+      "state": {
+        "said": "thanks",
+        "where": "an order to the agents"
+      }
+    },
+    {
+      "id": "run-again",
+      "expected": "forget",
+      "label_source": "author",
+      "state": {
+        "said": "run it again",
+        "where": "an order to the agents"
+      }
+    },
+    {
+      "id": "ok",
+      "expected": "forget",
+      "label_source": "author",
+      "state": {
+        "said": "ok",
+        "where": "an order to the agents"
+      }
+    },
+    {
+      "id": "one-off-summary",
+      "expected": "forget",
+      "label_source": "author",
+      "state": {
+        "said": "Summarise yesterday's brief in two lines.",
+        "where": "an order to the agents"
+      }
+    },
+    {
+      "id": "sounds-good",
+      "expected": "forget",
+      "label_source": "author",
+      "state": {
+        "said": "sounds good, go ahead",
+        "where": "an order to the agents"
+      }
+    },
+    {
+      "id": "fund-interest",
+      "expected": "keep",
+      "label_source": "author",
+      "state": {
+        "said": "Which funds led seed rounds in agent security this month?",
+        "where": "a question for tomorrow's research research"
+      }
+    },
+    {
+      "id": "tone",
+      "expected": "keep",
+      "label_source": "author",
+      "state": {
+        "said": "Write like me: short, calm, no hype, no exclamation marks.",
+        "where": "an order to the agents"
+      }
+    }
+  ]
+}

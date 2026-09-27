@@ -18,7 +18,7 @@ from app.brain.embeddings import Embedder
 _FACT_COLUMNS = """
     id, org_id, claim, source, source_ref, confidence, status,
     superseded_by, created_by_run_id, created_at, updated_at,
-    admitted_by, review_after, visibility, quote, embedding_model, document_id
+    admitted_by, review_after, visibility, quote, embedding_model, document_id, kind
 """
 
 
@@ -37,6 +37,9 @@ class Admission:
     quote: str | None = None
     #: The document the claim was taken from, when it was (ADR 015).
     document_id: UUID | str | None = None
+    #: fact, or a memory of the owner's: preference, rule, interest, style
+    #: (ADR 034).
+    kind: str = "fact"
 
 
 @dataclass(frozen=True)
@@ -58,6 +61,7 @@ class Fact:
     quote: str | None = None
     embedding_model: str | None = None
     document_id: UUID | None = None
+    kind: str = "fact"
 
     @classmethod
     def from_row(cls, row: dict[str, Any]) -> "Fact":
@@ -79,6 +83,7 @@ class Fact:
             quote=row["quote"],
             embedding_model=row["embedding_model"],
             document_id=row["document_id"],
+            kind=row.get("kind", "fact"),
         )
 
 
@@ -144,8 +149,8 @@ class Brain:
                 insert into public.facts
                     (org_id, claim, source, source_ref, confidence,
                      created_by_run_id, embedding, admitted_by, status,
-                     review_after, visibility, quote, embedding_model, document_id)
-                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                     review_after, visibility, quote, embedding_model, document_id, kind)
+                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 returning {_FACT_COLUMNS}
                 """,
                 (
@@ -163,6 +168,7 @@ class Brain:
                     admission.quote,
                     self._embedder.name,
                     str(admission.document_id) if admission.document_id else None,
+                    admission.kind,
                 ),
             )
             row = cursor.fetchone()

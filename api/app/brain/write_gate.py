@@ -62,6 +62,8 @@ class FactCandidate:
     visibility: Literal["internal", "public"] = "internal"
     #: The document the claim was taken from (ADR 015); the fact links back.
     document_id: UUID | str | None = None
+    #: fact, or an owner memory: preference, rule, interest, style (ADR 034).
+    kind: str = "fact"
 
 
 @dataclass(frozen=True)
@@ -114,6 +116,11 @@ class BrainWriter:
         reference = f"claim:{_digest(claim)}"
         key = idempotency_key or f"fact:{run_id or 'direct'}:{_digest(claim)}"
 
+        # The owner's own words (ADR 034) are judged by the gate's `owner`
+        # rules when it has them: a preference is an opinion and may be an
+        # instruction to the agents, and the owner is never asked to review
+        # what the owner said.
+        profile = "owner" if candidate.source == "owner" and "owner" in settings.profiles else None
         try:
             verdict = self._judge.run(
                 CLAIM_GATE,
@@ -122,6 +129,7 @@ class BrainWriter:
                 run_id=run_id,
                 input_ref=reference,
                 sensitive=candidate.sensitive,
+                profile=profile,
             )
         except SensitiveStateRefused:
             reasons = ("Marked sensitive: a person must check it",)
@@ -263,6 +271,7 @@ class BrainWriter:
             visibility=candidate.visibility,
             quote=candidate.quote,
             document_id=candidate.document_id,
+            kind=candidate.kind,
         )
         fact = self._brain.insert_fact(
             org_id=org_id,

@@ -89,7 +89,7 @@ def run(session: "Session", run: "_Run") -> dict[str, Any]:
             run_id=run.id,
             max_tokens=700,
             messages=[
-                {"role": "system", "content": prompt["body"]},
+                {"role": "system", "content": _with_preferences(session, run, prompt["body"])},
                 {
                     "role": "user",
                     "content": json.dumps(
@@ -150,6 +150,14 @@ def run(session: "Session", run: "_Run") -> dict[str, Any]:
     return {"status": "succeeded", "reason": "completed", "output": output, "error": None}
 
 
+def _with_preferences(session: "Session", run: "_Run", body: str) -> str:
+    """The prompt, with the owner's standing preferences after it (ADR 034)."""
+    from app.brain import memory
+
+    extra = memory.preamble(session.connection, run.org_id)
+    return f"{body}\n\n{extra}" if extra else body
+
+
 def _remember(
     session: "Session", cursor: psycopg.Cursor, run: "_Run", since: datetime
 ) -> dict[str, int]:
@@ -162,7 +170,15 @@ def _remember(
     found = memory.moments(
         cursor, org_id=run.org_id, since=since, policy=brain_policy.load(cursor, run.org_id)
     )
-    return memory.remember(session.writer, found, org_id=run.org_id, agent_id=run.agent_id)
+    return memory.remember(
+        session.writer,
+        found,
+        org_id=run.org_id,
+        agent_id=run.agent_id,
+        judge=session.judge,
+        connection=session.connection,
+        run_id=run.id,
+    )
 
 
 def _input(cursor: psycopg.Cursor, run: "_Run") -> dict[str, Any]:

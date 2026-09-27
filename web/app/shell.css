@@ -290,6 +290,10 @@
   margin-top: auto;
 }
 
+.msg-group > .msg.you {
+  align-self: flex-end;
+}
+
 .msg {
   max-width: 88%;
   padding: 10px 14px;
@@ -334,6 +338,82 @@
   color: var(--ink3);
   text-align: center;
   padding: 0 12px;
+}
+
+.chat-who {
+  display: flex;
+  gap: 6px;
+  padding: 10px 16px 0;
+  overflow-x: auto;
+  flex: none;
+}
+
+.chip.who {
+  color: var(--ink2);
+  white-space: nowrap;
+}
+
+.chip.who[aria-selected='true'] {
+  background: var(--glass2);
+  color: var(--ink);
+  border-color: var(--ink3);
+}
+
+.msg-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.order-card {
+  align-self: flex-start;
+  width: 88%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-size: 13px;
+}
+
+.order-q {
+  display: grid;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+
+.typing {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  height: 38px;
+}
+
+.typing span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ink3);
+  animation: blink 1.2s ease-in-out infinite;
+}
+
+.typing span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 .chat-form {

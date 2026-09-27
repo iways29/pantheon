@@ -276,71 +276,81 @@ def _tree_cost(cursor: psycopg.Cursor, root_id: UUID | str) -> float:
     return _money(cursor.fetchone()["cost"])
 
 
+_ORDER_COLUMNS = (
+    "t.id, t.title, t.instructions, t.status, t.result, t.error, t.created_at, t.finished_at"
+)
+
+
 def orders(cursor: psycopg.Cursor, limit: int) -> list[dict[str, Any]]:
     """The owner's orders to the Chief of Staff, newest first, each with where
     it went, the questions that came back, its result and what it cost."""
     cursor.execute(
-        """
-        select t.id, t.title, t.instructions, t.status, t.result, t.error, t.created_at,
-               t.finished_at
+        f"""
+        select {_ORDER_COLUMNS}
           from public.tasks t join public.agents a on a.id = t.assigned_agent_id
          where t.parent_task_id is null and a.role_type = 'chief_of_staff'
          order by t.created_at desc limit %s
         """,
         (limit,),
     )
-    out = []
-    for t in cursor.fetchall():
-        cursor.execute(
-            "select payload, created_at from public.events where type = 'order_routed' "
-            "and payload ->> 'task_id' = %s order by created_at",
-            (str(t["id"]),),
-        )
-        routed = [
-            {
-                "department": r["payload"].get("department"),
-                "head": r["payload"].get("head"),
-                "suggested_tier": r["payload"].get("suggested_tier"),
-                "why": r["payload"].get("why"),
-                "at": r["created_at"].isoformat(),
-            }
-            for r in cursor.fetchall()
-        ]
-        cursor.execute(
-            "select id, status, explanation, payload, verdict, created_at, decided_at "
-            "from public.approvals where task_id = %s and action_type = 'route_order' "
-            "order by created_at",
-            (str(t["id"]),),
-        )
-        questions = [
-            {
-                "approval_id": str(r["id"]),
-                "status": r["status"],
-                "text": r["explanation"],
-                "recommended": (r["payload"] or {}).get("recommended"),
-                "options": (r["payload"] or {}).get("options", []),
-                "verdict": r["verdict"],
-                "at": r["created_at"].isoformat(),
-                "decided_at": r["decided_at"].isoformat() if r["decided_at"] else None,
-            }
-            for r in cursor.fetchall()
-        ]
-        out.append(
-            {
-                "id": str(t["id"]),
-                "title": t["title"],
-                "text": t["instructions"] or t["title"],
-                "status": t["status"],
-                "result": ((t["result"] or {}).get("summary") or "")[:4000] or None,
-                "error": t["error"],
-                "at": t["created_at"].isoformat(),
-                "finished_at": t["finished_at"].isoformat() if t["finished_at"] else None,
-                "routed": routed,
-                "questions": questions,
-                "cost_usd": _tree_cost(cursor, t["id"]),
-            }
-        )
-    return out
+    return [_card(cursor, t) for t in cursor.fetchall()]
+
+
+def order_card(cursor: psycopg.Cursor, task_id: UUID | str) -> dict[str, Any] | None:
+    """One order as the chat shows it: its route, questions, result and cost."""
+    cursor.execute(f"select {_ORDER_COLUMNS} from public.tasks t where t.id = %s", (str(task_id),))
+    row = cursor.fetchone()
+    return None if row is None else _card(cursor, row)
+
+
+def _card(cursor: psycopg.Cursor, t: dict[str, Any]) -> dict[str, Any]:
+    cursor.execute(
+        "select payload, created_at from public.events where type = 'order_routed' "
+        "and payload ->> 'task_id' = %s order by created_at",
+        (str(t["id"]),),
+    )
+    routed = [
+        {
+            "department": r["payload"].get("department"),
+            "head": r["payload"].get("head"),
+            "suggested_tier": r["payload"].get("suggested_tier"),
+            "why": r["payload"].get("why"),
+            "at": r["created_at"].isoformat(),
+        }
+        for r in cursor.fetchall()
+    ]
+    cursor.execute(
+        "select id, status, explanation, payload, verdict, created_at, decided_at "
+        "from public.approvals where task_id = %s and action_type = 'route_order' "
+        "order by created_at",
+        (str(t["id"]),),
+    )
+    questions = [
+        {
+            "approval_id": str(r["id"]),
+            "status": r["status"],
+            "text": r["explanation"],
+            "recommended": (r["payload"] or {}).get("recommended"),
+            "options": (r["payload"] or {}).get("options", []),
+            "verdict": r["verdict"],
+            "at": r["created_at"].isoformat(),
+            "decided_at": r["decided_at"].isoformat() if r["decided_at"] else None,
+        }
+        for r in cursor.fetchall()
+    ]
+    return {
+        "id": str(t["id"]),
+        "title": t["title"],
+        "text": t["instructions"] or t["title"],
+        "status": t["status"],
+        "result": ((t["result"] or {}).get("summary") or "")[:4000] or None,
+        "error": t["error"],
+        "at": t["created_at"].isoformat(),
+        "finished_at": t["finished_at"].isoformat() if t["finished_at"] else None,
+        "routed": routed,
+        "questions": questions,
+        "cost_usd": _tree_cost(cursor, t["id"]),
+    }
 
 
 def order_path(cursor: psycopg.Cursor, task_id: UUID) -> dict[str, Any] | None:

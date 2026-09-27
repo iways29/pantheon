@@ -140,3 +140,46 @@ export interface PantheonEvent {
   run_id: string | null;
   payload: Record<string, unknown>;
 }
+
+/** Someone the owner can talk with (GET /chat, ADR 037). */
+export interface Talker {
+  name: string;
+  role: 'chief_of_staff' | 'head';
+  enabled: boolean;
+  department: string | null;
+  last: { text: string; role: 'owner' | 'agent'; at: string } | null;
+}
+
+export interface OrderQuestion {
+  approval_id: string;
+  status: string;
+  text: string | null;
+  recommended: string | null;
+  options: { department: string; probability: number }[];
+  verdict: string | null;
+  at: string;
+  decided_at: string | null;
+}
+
+/** Work started from the chat, as it stands now. */
+export interface OrderCard {
+  id: string;
+  title: string;
+  text: string;
+  status: string;
+  result: string | null;
+  error: string | null;
+  at: string;
+  finished_at: string | null;
+  routed: { department: string | null; head: string | null; at: string }[];
+  questions: OrderQuestion[];
+  cost_usd: number;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: 'owner' | 'agent';
+  text: string;
+  at: string;
+  order: OrderCard | null;
+}

@@ -51,7 +51,6 @@ MATCH_GATE = "entity_match"
 LINK_GATE = "link_support"
 PROMPT_SLOT = "extract_graph"
 NAME_SLOT = "name_neighbourhood"
-NAME_MAX_TOKENS = 20
 SCHEMA_FLAG = "graph_schema"
 #: Facts read per run, things and links per fact, merges per tidy-up.
 BATCH = 10
@@ -569,7 +568,8 @@ def _name_neighbourhoods(session: "Session", run: "_Run", cursor: psycopg.Cursor
     prompt = cursor.fetchone()
     if prompt is None:
         return 0
-    limit = int(layout.settings(cursor, run.org_id)["names_per_run"])
+    conf = layout.settings(cursor, run.org_id)
+    limit, max_tokens = int(conf["names_per_run"]), int(conf["name_max_tokens"])
     named = 0
     for group in layout.unnamed(cursor, run.org_id, limit):
         if not group["claims"]:
@@ -578,7 +578,7 @@ def _name_neighbourhoods(session: "Session", run: "_Run", cursor: psycopg.Cursor
             response = session.gateway.complete(
                 agent_id=run.agent_id,
                 run_id=run.id,
-                max_tokens=NAME_MAX_TOKENS,
+                max_tokens=max_tokens,
                 messages=[
                     {"role": "system", "content": prompt["body"]},
                     {

@@ -37,8 +37,10 @@ DEFAULTS: dict[str, Any] = {
     "jitter": 0.03,
     "max_neighbourhoods": 24,
     "edge_radius": 0.92,
-    # Neighbourhoods the librarian names per run.
+    # Neighbourhoods the librarian names per run, and the tokens each name
+    # may use: the cheap tier reasons first, so a small cap returns nothing.
     "names_per_run": 3,
+    "name_max_tokens": 200,
 }
 #: The fitted facts fill this much of the unit disc (95th percentile).
 FILL = 0.85

@@ -70,6 +70,8 @@ class Reader:
     def complete(self, *, model: str, messages: list[dict[str, Any]], **kw: Any) -> ModelResponse:
         asked = json.loads(messages[-1]["content"])
         if "facts" in asked:  # naming a neighbourhood of the brain screen's map
+            # Room to reason first: the live cheap tier returned nothing at 20.
+            assert kw.get("max_tokens") == 200
             return ModelResponse(
                 model=model,
                 text="Agent tools",

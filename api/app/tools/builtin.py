@@ -79,8 +79,12 @@ class ProposeArgs(_Args):
 
 
 def _brain_propose_fact(ctx: ToolContext, args: ProposeArgs) -> dict[str, Any]:
+    from app.brain import policy
+
     if ctx.writer is None:
         raise RuntimeError("The brain write gate is not available in this session")
+    if not policy.load(ctx.connection, ctx.org_id).agent_facts:
+        return {"outcome": "not_kept", "fact_id": None, "reasons": [policy.NOT_KEPT]}
     result = ctx.writer.propose(
         FactCandidate(
             claim=args.claim,
@@ -265,10 +269,15 @@ class PushArgs(_Args):
 
 
 def _web_push_preview(ctx: ToolContext, args: PushArgs) -> dict[str, Any]:
+    from app.brain import policy
+
     if ctx.links is None:
         raise RuntimeError("Web access is not available in this session")
-    preview = ctx.links.push(args.preview_id, org_id=ctx.org_id)
-    return {
+    # Under the brain policy (ADR 033) a page an agent read is the day's
+    # findings, listed in the brief, not facts kept in the brain.
+    keep = policy.load(ctx.connection, ctx.org_id).agent_web_facts
+    preview = ctx.links.push(args.preview_id, org_id=ctx.org_id, keep=keep)
+    out: dict[str, Any] = {
         "preview_id": str(preview.id),
         "status": preview.status,
         "results": [
@@ -276,15 +285,21 @@ def _web_push_preview(ctx: ToolContext, args: PushArgs) -> dict[str, Any]:
             for r in (preview.results or [])
         ],
     }
+    if not keep:
+        out["note"] = (
+            "Recorded as today's findings (the brief lists them); the brain keeps only what "
+            "the company does and says. Report what matters with report_result."
+        )
+    return out
 
 
 register(
     ToolSpec(
         name="web_push_preview",
         description=(
-            "Send the facts of a page you previewed, and that was screened clean, through "
-            "the brain's write gate. Each fact is checked against the page and the brain; "
-            "some may be rejected or held for the owner."
+            "Record the facts of a page you previewed, and that was screened clean, as "
+            "today's findings. Whether they are also kept in the brain is the owner's "
+            "brain policy."
         ),
         args=PushArgs,
         risk_class="R1",

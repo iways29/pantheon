@@ -578,8 +578,9 @@ worker's finished task is checked by the `result_check` gate and a failed
 check redoes it once on standard; `brain_search` results are re-ranked by the
 `recall_rank` gate; `scripts.cascade report` shows checks, redos and costs;
 `scripts.cascade compare` runs cheap, cascade and standard on 8 labelled
-scouting cases and prints the verdict. Switched on after Monday's mornings
-(owner, 2026-09-27); the comparison's numbers are the Step 9 report.
+scouting cases and prints the verdict. **Done 2026-09-28**: live since
+2026-09-27; the report is `docs/reports/step9-comparison.md` (cascade 0.938
+quality at $0.0002 a task against standard's 0.938 at $0.0009).
 
 ## Step 10: Realtime and UI (L)
 

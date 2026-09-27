@@ -373,20 +373,34 @@ def test_the_evening_question_lists_tomorrows_topics_without_a_model_call(
     assert 'scripts.department ask research "your question"' in output["summary"]
 
 
-def test_the_brief_lists_what_was_learned_from_the_web(dsn: str, office: Office) -> None:
-    import dataclasses
+def found_on_the_web(dsn: str, where: Office, *claims: str) -> None:
+    """A page an agent read today, its claims noted as findings (ADR 033)."""
+    import hashlib
 
-    from app.brain import Brain, HashingEmbedder
-    from tests.conftest_db import admit
+    with connect(dsn) as connection, as_service_role(connection) as conn:
+        agent = conn.execute(
+            "select id from public.agents where org_id = %s and name = 'brief-writer'",
+            (str(where.org_id),),
+        ).fetchone()["id"]
+        conn.execute(
+            "insert into public.link_previews (org_id, agent_id, url, final_url, "
+            "content_sha256, text, label, claims, status, pushed_at) values "
+            "(%s, %s, %s, %s, %s, 'page', 'clean', %s, 'pushed', now())",
+            (
+                str(where.org_id),
+                str(agent),
+                "https://techcrunch.com/a",
+                "https://techcrunch.com/a",
+                hashlib.sha256(" ".join(claims).encode()).hexdigest(),
+                json.dumps(list(claims)),
+            ),
+        )
 
+
+def test_the_brief_lists_what_was_found_on_the_web(dsn: str, office: Office) -> None:
+    lightspeed = "Lightspeed is targeting $250 million for an early-stage AI fund in India."
+    found_on_the_web(dsn, office, lightspeed, lightspeed.upper(), "Acme raised $2M.")
     with connect(dsn) as connection:
-        with acting_as(connection, user_id=str(office.user_id)) as conn:
-            Brain(conn, HashingEmbedder()).insert_fact(
-                org_id=office.org_id,
-                claim="Lightspeed is targeting $250 million for an early-stage AI fund in India.",
-                source="web:techcrunch.com",
-                admission=dataclasses.replace(admit(conn, office.org_id)),
-            )
         from app.tasks import order
 
         order(
@@ -401,26 +415,26 @@ def test_the_brief_lists_what_was_learned_from_the_web(dsn: str, office: Office)
 
     sent = json.loads(writer.calls[0][1]["content"])
     (findings,) = [i for i in sent["lead"] + sent["rest"] if i["kind"] == "findings"]
-    assert findings["title"] == "New from your sources (1)"
+    # Duplicates across pages are listed once.
+    assert findings["title"] == "New from your sources (2)"
     assert "Lightspeed is targeting $250 million" in findings["detail"]
     assert "(techcrunch.com)" in findings["detail"]
+    # Findings are for the day, not for the brain.
+    with connect(dsn) as connection, as_service_role(connection) as conn:
+        kept = conn.execute(
+            "select count(*) as n from public.facts where org_id = %s and source like 'web:%%'",
+            (str(office.org_id),),
+        ).fetchone()["n"]
+    assert kept == 0
 
 
 def test_a_bad_day_still_leads_with_what_was_found(dsn: str, office: Office) -> None:
-    import dataclasses
-
-    from app.brain import Brain, HashingEmbedder
     from app.tasks import order
-    from tests.conftest_db import admit
 
+    found_on_the_web(
+        dsn, office, "Lightspeed is targeting $250 million for an early-stage AI fund in India."
+    )
     with connect(dsn) as connection:
-        with acting_as(connection, user_id=str(office.user_id)) as conn:
-            Brain(conn, HashingEmbedder()).insert_fact(
-                org_id=office.org_id,
-                claim="Lightspeed is targeting $250 million for an early-stage AI fund in India.",
-                source="web:techcrunch.com",
-                admission=dataclasses.replace(admit(conn, office.org_id)),
-            )
         for n in range(12):
             failed = order(
                 connection,

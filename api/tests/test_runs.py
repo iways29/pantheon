@@ -40,6 +40,7 @@ from app.judge import Judge
 from app.judge.starter_gates import STARTER_GATES
 from app.judge.store import seed_gates
 from app.tracing import LangfuseTracer, NullTracer
+from tests.conftest_db import allow_agent_facts
 from tests.scripted_jev import ScriptedJev, choice
 
 TIERS = TierMap(
@@ -136,6 +137,7 @@ def live(dsn: str) -> Iterator[LiveOrg]:
         )
     seed_gates(connection, user_id=ids.user_id, org_id=ids.org_id, gates=STARTER_GATES)
     try:
+        allow_agent_facts(connection, ids.org_id)
         yield ids
     finally:
         with as_service_role(connection) as conn, conn.cursor() as cursor:
@@ -348,7 +350,9 @@ def test_a_repeated_store_step_does_not_duplicate_facts(dsn: str, live: LiveOrg)
             with acting_as(connection, user_id=str(live.user_id)) as conn:
                 gateway = Gateway(conn, ScriptedModel(), TIERS, systemone=ScriptedJev())
                 brain = Brain(conn, HashingEmbedder())
-                yield Session(gateway, brain, BrainWriter(conn, brain, Judge(conn, gateway)))
+                yield Session(
+                    gateway, brain, BrainWriter(conn, brain, Judge(conn, gateway)), connection=conn
+                )
 
         scope = RunScope(run_id, live.org_id, live.agent_id, STARTER_PROMPTS["research"], session)
         build_graph(scope).invoke({"question": QUESTION})

@@ -48,7 +48,7 @@ QUIET_REASONS = (
 )
 
 
-#: How many new facts from the web the brief may list.
+#: How many findings from the web the brief may list.
 NEW_FACTS = 25
 #: A digest task with this `kind` is the evening question, not a brief.
 EVENING = "evening_question"
@@ -71,6 +71,7 @@ def run(session: "Session", run: "_Run") -> dict[str, Any]:
             "output": None,
         }
     since = _since(cursor, run)
+    remembered = _remember(session, cursor, run, since)
     items = _items(cursor, run, since)
     policy = load_gate(session.connection, org_id=run.org_id, gate=GATE).policy
     # What the departments found is the point of the brief: it is never cut
@@ -109,6 +110,7 @@ def run(session: "Session", run: "_Run") -> dict[str, Any]:
         "since": since.isoformat(),
         "lead": lead,
         "items": len(ranked),
+        "remembered": remembered,
     }
     list_key = _mailing_list(cursor, run)
     if list_key:
@@ -146,6 +148,21 @@ def run(session: "Session", run: "_Run") -> dict[str, Any]:
         ),
     )
     return {"status": "succeeded", "reason": "completed", "output": output, "error": None}
+
+
+def _remember(
+    session: "Session", cursor: psycopg.Cursor, run: "_Run", since: datetime
+) -> dict[str, int]:
+    """Teach the brain what the owner did since the last brief (ADR 033)."""
+    from app.brain import memory
+    from app.brain import policy as brain_policy
+
+    if session.writer is None:
+        return {}
+    found = memory.moments(
+        cursor, org_id=run.org_id, since=since, policy=brain_policy.load(cursor, run.org_id)
+    )
+    return memory.remember(session.writer, found, org_id=run.org_id, agent_id=run.agent_id)
 
 
 def _input(cursor: psycopg.Cursor, run: "_Run") -> dict[str, Any]:
@@ -375,20 +392,28 @@ def _items(cursor: psycopg.Cursor, run: "_Run", since: datetime) -> list[dict[st
                 "detail": ", ".join(f"{n} {o}" for o, n in sorted(facts.items())),
             }
         )
-    # What was learned, not only how much: the new facts read from the web,
-    # so the brief can name the startups, founders and rounds themselves.
+    # What was learned, not only how much: what the agents read on the web
+    # today, so the brief can name the startups, founders and rounds. These
+    # are the day's findings (the pages' claims), not brain facts (ADR 033).
     cursor.execute(
         """
-        select f.claim, split_part(f.source, ':', 2) as site
-          from public.facts f
-         where f.org_id = %s and f.created_at >= %s and f.status = 'active'
-           and f.source like 'web:%%'
-         order by f.created_at
-         limit %s
+        select c.claim, split_part(split_part(p.final_url, '://', 2), '/', 1) as site
+          from public.link_previews p
+          cross join lateral jsonb_array_elements_text(p.claims) as c(claim)
+         where p.org_id = %s and p.status = 'pushed' and p.label = 'clean'
+           and p.pushed_at >= %s
+         order by p.pushed_at
         """,
-        (str(run.org_id), since, NEW_FACTS),
+        (str(run.org_id), since),
     )
-    found = cursor.fetchall()
+    found: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for r in cursor.fetchall():
+        key = " ".join(r["claim"].lower().split())
+        if key not in seen:
+            seen.add(key)
+            found.append(r)
+    found = found[:NEW_FACTS]
     if found:
         items.append(
             {

@@ -97,7 +97,7 @@ The Vercel MCP cannot list environment variables (403).
 
 ## Tests
 
-532 pass on the `pantheon_ci` database:
+538 pass on the `pantheon_ci` database:
 `cd api && DATABASE_URL=postgresql://pantheon:pantheon@127.0.0.1:55432/pantheon_ci uv run pytest -q`,
 then `uv run ruff check .` and `uv run ruff format --check .`. Rebuild with
 `scripts/local_db.sh reset` (`DB_NAME=pantheon_ci`). New migrations must also
@@ -115,7 +115,7 @@ apply from scratch on plain Postgres (guard anything needing `pg_cron`,
 - `api/scripts/` the owner's CLIs (`department`, `draft`, `brain`,
   `approvals`, `order`, `judge`, `mailing`, `knowledge`, `mcp`, `agent`).
 - `supabase/migrations/` versioned SQL, RLS on every table. `docs/adr/` 0001
-  to 0032.
+  to 0033.
 
 ## What to do next
 
@@ -130,6 +130,12 @@ apply from scratch on plain Postgres (guard anything needing `pg_cron`,
    stating today's date (fixed in the next PR: the evidence now includes
    today's date and the task). Still owed: `scripts.cascade compare` from the
    owner's laptop, the Step 9 report.
+3b. **Step 9 is done** (report: `docs/reports/step9-comparison.md`). Next,
+   before Steps 10 and 11 (a new conversation; the owner has designs):
+   ADR 033, the brain grows with use. Web reads are the day's findings, not
+   facts; the owner's orders, questions and approved drafts are remembered
+   each morning; a one-time clean-up of the 79 web facts and 33 held ones,
+   with the owner's go.
 4. After five unattended mornings: the Step 8.1 Milestone report. Stop.
 
 ## Switching on Step 9 (done 2026-09-27; kept for reference)

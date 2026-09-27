@@ -33,6 +33,7 @@ from app.knowledge.wiring import agent_services
 from app.tasks import order
 from app.tools import seed_tools
 from app.tracing import NullTracer
+from tests.conftest_db import allow_agent_facts
 from tests.scripted_jev import ScriptedJev
 from tests.test_judge import MODEL
 from tests.test_links import CLAIMS, page
@@ -167,6 +168,9 @@ def lab(dsn: str) -> Iterator[Lab]:
     seed_gates(connection, user_id=user_id, org_id=org_id, gates=STARTER_GATES)
     seed_tools(connection, user_id=user_id, org_id=org_id)
     seed_charters(connection, user_id=user_id, org_id=org_id, charters=STARTER_CHARTERS)
+    # This morning's test is of the write machinery; the default keeps web
+    # facts out of the brain (ADR 033, tests/test_brain_policy.py).
+    allow_agent_facts(connection, org_id)
     routine = RESEARCH.routine[0].model_copy(
         update={"input": {"topics": ["Acme Corp"], "sources": [SOURCE]}}
     )

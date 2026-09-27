@@ -140,8 +140,12 @@ class Links:
             "previewed",
         )
 
-    def push(self, preview_id: UUID | str, *, org_id: UUID | str) -> Preview:
-        """Send a clean preview's claims through the brain write gate."""
+    def push(self, preview_id: UUID | str, *, org_id: UUID | str, keep: bool = True) -> Preview:
+        """Send a clean preview's claims through the brain write gate.
+
+        `keep=False` (an agent's read, under the brain policy, ADR 033): the
+        claims are noted on the preview as the day's findings, and nothing
+        is judged or stored."""
         with self._connection.cursor() as cursor:
             cursor.execute(
                 "select * from public.link_previews where id = %s and org_id = %s for update",
@@ -157,7 +161,9 @@ class Links:
 
         host = urlsplit(row["final_url"]).hostname or "web"
         results = []
-        for claim in row["claims"]:
+        for claim in row["claims"] if not keep else ():
+            results.append({"claim": claim, "outcome": "noted", "fact_id": None, "reasons": []})
+        for claim in row["claims"] if keep else ():
             result = self._writer.propose(
                 FactCandidate(
                     claim=claim,

@@ -35,6 +35,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from app.brain import Brain
+from app.brain import policy as brain_policy
 from app.brain.write_gate import BrainWriter, FactCandidate
 from app.gateway import Gateway
 from app.judge import JudgeError
@@ -147,8 +148,13 @@ def build_graph(
             # unique index on run and claim backs that up, and held claims
             # are keyed by run and claim in the approval queue).
             already = {c.strip().lower() for c in s.brain.claims_from_run(scope.run_id)}
+            # The brain policy (ADR 033): an agent's own claims are not kept.
+            keep = brain_policy.load(s.connection, scope.org_id).agent_facts
             for claim in _unique(state.get("claims", [])):
                 if claim.strip().lower() in already:
+                    continue
+                if not keep:
+                    writes.append({"claim": claim, "outcome": "not_kept"})
                     continue
                 if s.writer is None:
                     writes.append({"claim": claim, "outcome": "not_judged"})

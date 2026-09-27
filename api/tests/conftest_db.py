@@ -107,3 +107,15 @@ def admit(connection: psycopg.Connection, org_id: uuid.UUID | str) -> Admission:
             (str(org_id), str(request_id)),
         )
     return Admission(request_id=request_id)
+
+
+def allow_agent_facts(connection: psycopg.Connection, org_id: uuid.UUID | str) -> None:
+    """The brain policy before ADR 033: agents may store what they read and
+    claim. For tests of the write machinery itself; the default is off."""
+    with as_service_role(connection) as conn:
+        conn.execute(
+            "insert into public.system_flags (org_id, key, value) values (%s, 'brain_policy', "
+            '\'{"agent_web_facts": true, "agent_facts": true}\') on conflict (org_id, key) '
+            "do update set value = excluded.value",
+            (str(org_id),),
+        )

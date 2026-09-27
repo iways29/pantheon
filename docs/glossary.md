@@ -91,6 +91,11 @@ Spending (R4) and anything that sends or publishes always waits for you.
 | `superseded` | Replaced by a newer fact; kept for the record. |
 | `internal` / `public` | Only public facts may appear in content. Only a person makes a fact public. |
 
+**What the brain keeps** (ADR 033): what the company does and says. Your
+orders, research questions and approved drafts are remembered each morning.
+Pages the agents read are **findings** for the day (the brief lists them),
+not facts, so you are never asked to review web news.
+
 ## Drafts: Marketing's content
 
 | Status | Means |

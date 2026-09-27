@@ -25,7 +25,7 @@ from app.knowledge.links import Links
 from app.tools import REGISTRY, ToolContext, ToolRuntime, ToolSpec, register, seed_tools
 from app.tools.langchain import langchain_tools
 from app.tools.selection import offered_tools
-from tests.conftest_db import Tenants, admit
+from tests.conftest_db import Tenants, admit, allow_agent_facts
 from tests.scripted_jev import ScriptedJev, choice, noul
 from tests.test_gateway import TIERS, make_agent
 from tests.test_judge import set_price
@@ -181,6 +181,7 @@ def test_a_side_effecting_tool_called_twice_with_one_key_acts_once(
 ) -> None:
     args = {"claim": "Acme Corp was founded in 2019 in Leeds.", "evidence": EVIDENCE}
     jev = ScriptedJev()
+    allow_agent_facts(db, tenants.org_a)
 
     with acting_as(db, user_id=str(tenants.user_a), agent_id=str(agent)) as conn:
         rt = runtime(conn, tenants, agent, jev)

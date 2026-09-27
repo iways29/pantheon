@@ -47,6 +47,8 @@ history, facts, recent orders), audited.
 
 - About $0.0005 a message on the cheap tier, plus one embedding for recall
   and, after the reply, one Jev call to sort what was said.
-- Replies are not streamed yet: a reply arrives whole, in a second or a few.
-  Streaming is a later change to the gateway.
+- Replies stream (owner, 2026-09-27): `POST /chat/{agent}/stream` sends
+  server-sent events as the model writes, through the gateway's `on_text`
+  (OpenRouter `stream: true`, usage and cost from the last chunk), so every
+  gate and the cost log still apply. The web relay passes the stream through.
 - `POST /orders` stays for scripts; the web app uses the chat.

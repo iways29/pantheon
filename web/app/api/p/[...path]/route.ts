@@ -39,6 +39,18 @@ async function relay(request: NextRequest, path: string[]): Promise<NextResponse
 
   try {
     const upstream = await fetch(target, init);
+    const type = upstream.headers.get('content-type') ?? '';
+    if (type.startsWith('text/event-stream') && upstream.body) {
+      // A streamed reply (the chat, ADR 037): passed through as it arrives.
+      return new NextResponse(upstream.body, {
+        status: upstream.status,
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache, no-transform',
+          'X-Accel-Buffering': 'no',
+        },
+      });
+    }
     return new NextResponse(await upstream.text(), {
       status: upstream.status,
       headers: { 'Content-Type': upstream.headers.get('content-type') ?? 'application/json' },

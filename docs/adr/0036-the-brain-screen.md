@@ -20,10 +20,10 @@ Next.js has been in place since Step 0.
 | Question | Decision |
 | --- | --- |
 | Framework | Keep **Next.js** (already deployed as `pantheon-web`) |
-| What draws the brain | **PixiJS** (free, GPU, holds 10,000+ points); the lens chrome stays SVG/DOM |
+| What draws the brain | **three.js**, a true 3D globe (owner, 2026-09-27, after seeing the flat map): facts inside a glass ball you can turn, zoom and fly into; the dial and agent ring stay SVG around it. Replaces the first choice, PixiJS |
 | Live stream | **Supabase Realtime** on `events` (added to the `supabase_realtime` publication). RLS applies per subscriber |
 | Snapshot reads | **API endpoints** (`app/screen.py`, facts through `app/brain/view.py`), so `brain/` stays the only path to facts |
-| Where a fact sits | **Projection of the stored embeddings** (numpy; two principal components, k-means neighbourhoods). A new fact goes beside its nearest placed facts; a new topic goes to the rim. A placed fact never moves |
+| Where a fact sits | **Projection of the stored embeddings** (numpy; three principal components since migration `20260928150000_globe.sql`, k-means neighbourhoods). A new fact goes beside its nearest placed facts; a new topic goes to the rim. A placed fact never moves |
 | Neighbourhood names | The librarian names up to 3 per run (one cheap call each, prompt `name_neighbourhood`, data). Until then: the graph's commonest thing, else the start of a claim |
 
 **New tables** (migration `20260928090000_brain_screen.sql`, `org_id` and RLS):

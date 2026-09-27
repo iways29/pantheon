@@ -9,6 +9,7 @@ could reach it; the notes below record what was confirmed and what was not.
 
 import json
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -104,6 +105,7 @@ class Transport(Protocol):
         tool_choice: str | dict[str, Any] | None = None,
         plugins: list[dict[str, Any]] | None = None,
         reasoning: dict[str, Any] | None = None,
+        on_text: Callable[[str], None] | None = None,
     ) -> ModelResponse: ...
 
 
@@ -143,8 +145,13 @@ class OpenRouterTransport:
         tool_choice: str | dict[str, Any] | None = None,
         plugins: list[dict[str, Any]] | None = None,
         reasoning: dict[str, Any] | None = None,
+        on_text: Callable[[str], None] | None = None,
     ) -> ModelResponse:
         """One chat completion. With `tools`, the reply may carry tool calls.
+
+        With `on_text`, the reply is streamed and each piece of its text is
+        handed over as it arrives; the whole reply is still returned, with
+        OpenRouter's usage and cost from the stream's last chunk.
 
         Tool calling as OpenRouter documents it (read 2026-09-26): `tools` in
         OpenAI function format, resent on every turn; `tool_choice` `auto`,
@@ -175,6 +182,8 @@ class OpenRouterTransport:
             payload["reasoning"] = reasoning
 
         started = time.monotonic()
+        if on_text is not None:
+            return self._stream(payload, model=model, started=started, on_text=on_text)
         try:
             response = self._client.post(
                 f"{self._base_url}/chat/completions",
@@ -193,6 +202,88 @@ class OpenRouterTransport:
 
         body = response.json()
         return _parse(body, model=model, latency_ms=latency_ms)
+
+    def _stream(
+        self,
+        payload: dict[str, Any],
+        *,
+        model: str,
+        started: float,
+        on_text: Callable[[str], None],
+    ) -> ModelResponse:
+        """Streaming as OpenRouter documents it (read 2026-09-27): `stream:
+        true`; `data: {json}` lines, `:` comment lines to skip, `data: [DONE]`
+        at the end; the last chunk before it carries `usage` (with `cost`); a
+        mid-stream failure is a chunk with a top-level `error`. Tool calls
+        arrive as OpenAI-style deltas, joined here by index."""
+        text: list[str] = []
+        calls: dict[int, dict[str, Any]] = {}
+        usage: dict[str, Any] = {}
+        served, provider = model, None
+        try:
+            with self._client.stream(
+                "POST",
+                f"{self._base_url}/chat/completions",
+                headers={"Authorization": f"Bearer {self._api_key}"},
+                json={**payload, "stream": True},
+            ) as response:
+                if response.status_code >= 400:
+                    response.read()
+                    raise UpstreamError(
+                        f"OpenRouter returned {response.status_code}: {response.text[:500]}",
+                        status=response.status_code,
+                    )
+                for line in response.iter_lines():
+                    if not line.startswith("data:"):
+                        continue  # blank lines and ": OPENROUTER PROCESSING"
+                    data = line[5:].strip()
+                    if data == "[DONE]":
+                        break
+                    chunk = json.loads(data)
+                    if chunk.get("error"):
+                        raise UpstreamError(
+                            f"OpenRouter stream failed: {str(chunk['error'])[:500]}"
+                        )
+                    served = chunk.get("model") or served
+                    provider = chunk.get("provider") or provider
+                    usage = chunk.get("usage") or usage
+                    for choice in chunk.get("choices") or []:
+                        delta = choice.get("delta") or {}
+                        piece = delta.get("content")
+                        if piece:
+                            text.append(piece)
+                            on_text(piece)
+                        for raw in delta.get("tool_calls") or []:
+                            call = calls.setdefault(
+                                int(raw.get("index", 0)), {"id": "", "name": "", "arguments": ""}
+                            )
+                            call["id"] = raw.get("id") or call["id"]
+                            function = raw.get("function") or {}
+                            call["name"] = function.get("name") or call["name"]
+                            call["arguments"] += function.get("arguments") or ""
+        except httpx.HTTPError as error:
+            raise UpstreamError(f"OpenRouter request failed: {error}") from error
+        body = {
+            "model": served,
+            "provider": provider,
+            "usage": usage,
+            "choices": [
+                {
+                    "message": {
+                        "content": "".join(text),
+                        "tool_calls": [
+                            {
+                                "id": c["id"],
+                                "function": {"name": c["name"], "arguments": c["arguments"]},
+                            }
+                            for _, c in sorted(calls.items())
+                            if c["name"]
+                        ],
+                    }
+                }
+            ],
+        }
+        return _parse(body, model=model, latency_ms=int((time.monotonic() - started) * 1000))
 
     def embed(
         self,

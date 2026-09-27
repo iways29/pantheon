@@ -37,6 +37,9 @@ class Talker:
             field_ = "order" if name == "give_order" else "task"
             tool_calls = (ToolCall("c1", name, json.dumps({field_: said, "title": "The job"})),)
             text = ""
+        if kw.get("on_text") and text:
+            for word in text.split(" "):
+                kw["on_text"](word + " ")
         return ModelResponse(
             model=model,
             text=text,
@@ -84,9 +87,11 @@ def office(db: psycopg.Connection, tenants: Tenants) -> Office:
 
 @pytest.fixture
 def chat(db: psycopg.Connection, settings: Any, office: Office) -> Iterator[Any]:
+    from contextlib import nullcontext
+
     from fastapi.testclient import TestClient
 
-    from app.chat import Talk, get_remember, get_talk_factory
+    from app.chat import Talk, get_connection_opener, get_remember, get_talk_factory
     from app.config import get_settings
     from app.main import app
     from app.owner_api import get_connection
@@ -104,6 +109,7 @@ def chat(db: psycopg.Connection, settings: Any, office: Office) -> Iterator[Any]
         lambda conn, _agent: Talk(Gateway(conn, model, TIERS), Brain(conn, HashingEmbedder()))
     )
     app.dependency_overrides[get_remember] = lambda: lambda *args: remembered.append(args[-1])
+    app.dependency_overrides[get_connection_opener] = lambda: lambda: nullcontext(db)
     client = TestClient(app, headers=auth(make_token()))
     client.model = model  # type: ignore[attr-defined]
     client.remembered = remembered  # type: ignore[attr-defined]
@@ -220,3 +226,28 @@ def test_the_chat_prompt_is_data(db: psycopg.Connection, chat: Any, office: Offi
     prompts.publish(db, user_id=USER_A, agent_id=office.head, slot="chat", body="You are terse.")
     chat.post("/chat/research-lead", json={"text": "again"})
     assert chat.model.calls[-1]["messages"][0]["content"].startswith("You are terse.")
+
+
+def _events(raw: str) -> list[tuple[str, dict[str, Any]]]:
+    out = []
+    for block in raw.strip().split("\n\n"):
+        kind = block.split("\n")[0].removeprefix("event: ")
+        out.append((kind, json.loads(block.split("\n")[1].removeprefix("data: "))))
+    return out
+
+
+def test_a_streamed_reply_arrives_in_pieces_then_whole(chat: Any) -> None:
+    response = chat.post("/chat/chief-of-staff/stream", json={"text": "hi there"})
+
+    assert response.headers["content-type"].startswith("text/event-stream")
+    events = _events(response.text)
+    pieces = [data["text"] for kind, data in events if kind == "delta"]
+    assert "".join(pieces).strip() == "You said: hi there"
+    kind, done = events[-1]
+    assert kind == "done" and done["reply"]["text"] == "You said: hi there"
+    assert chat.remembered == [done["said"]["id"]]
+    assert chat.get("/chat/chief-of-staff").json()[-1]["text"] == "You said: hi there"
+
+
+def test_streaming_refuses_a_worker_before_it_starts(chat: Any) -> None:
+    assert chat.post("/chat/web-researcher/stream", json={"text": "hi"}).status_code == 409

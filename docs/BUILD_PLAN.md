@@ -676,7 +676,7 @@ configured.
 3. **Per-agent spend control:** ~~OpenRouter per-key limits vs application-level checks.~~ Decided: departments hold the budget, enforced in the application. See ADR 002.
 4. **Checkpointer connection mode** through the Supabase pooler. ~~Open.~~ Decided: transaction pooler, checkpoints in a private `langgraph` schema. See ADR 005; verified against the live pooler.
 5. **How the hierarchy is built.** Options: (A) deepagents subagents only, which is one level, in-process and blocking, so it cannot express Chief of Staff, heads and workers; (B) a LangGraph supervisor, also in-process, which holds a run open while children work and fits serverless badly; (C) **durable database tasks for the tree, deepagents only for a worker's temporary helpers** (recommended: survives serverless limits, every step auditable, budgets and limits enforceable in SQL, resumable). Cost of C: a tasks table and scheduler extension to build (Step 7.3). Record in an ADR at 7.4.
-6. **UI framework:** decided at Step 10.
+6. **UI framework:** ~~decided at Step 10.~~ **Decided (owner, 2026-09-27): keep Next.js; PixiJS draws the brain; the live stream is Supabase Realtime on `events`.** See ADR 036.
 7. **Document scopes:** ~~company, department and agent vs company and agent only.~~ **Decided (owner, 2026-09-26): company, department and agent.** See ADR 015.
 8. **When to do prompts-in-database:** ~~now vs with the rest.~~ Decided and done ahead of Step 4. See ADR 007.
 9. **Scraping:** ~~plain HTTP fetch vs a paid scraping service.~~ **Decided (owner, 2026-09-26): plain HTTP fetch, free.** A paid service needs owner approval later. See ADR 016.

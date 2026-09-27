@@ -5,6 +5,7 @@
     uv run python -m scripts.brain held                       # facts waiting for you
     uv run python -m scripts.brain admit <approval_id> [--public] [--note "..."]
     uv run python -m scripts.brain reject <approval_id> [--note "why"]
+    uv run python -m scripts.brain layout [--reset]           # place facts on the screen's map
 
 `reembed` brings every fact embedded by an older model (for example the free
 `hashing-v1` stand-in used before Step 6) onto the org's current embedding
@@ -17,15 +18,21 @@ clears it for public content, ADR 029). It embeds through the
 gateway as the `researcher` agent, so it respects the kill switch and the
 department budget. Cost with text-embedding-3-small: about $0.02 per million
 tokens, so a thousand facts cost well under a cent.
+
+`layout` places every fact not yet on the brain screen's map (ADR 036): the
+first time it draws the whole map from the stored embeddings; afterwards new
+facts are placed as they are stored, so it only catches stragglers. No model
+is called. `--reset` forgets the map and draws it again (every fact moves).
+The librarian names the neighbourhoods on its next run.
 """
 
 import argparse
 import sys
 
 from app.approvals import decide
-from app.brain import Brain, GatewayEmbedder
+from app.brain import Brain, GatewayEmbedder, layout
 from app.config import Settings
-from app.db import acting_as, connect
+from app.db import acting_as, as_service_role, connect
 from app.gateway import EMBEDDING_TIER, gateway_from
 from app.knowledge.wiring import writer_from
 from scripts.agent import ROOT_ENV, _Env, _setup
@@ -45,6 +52,8 @@ def main(argv: list[str]) -> int:
     reject = commands.add_parser("reject", help="reject a held claim")
     reject.add_argument("approval_id")
     reject.add_argument("--note")
+    draw = commands.add_parser("layout", help="place facts on the brain screen's map")
+    draw.add_argument("--reset", action="store_true")
     args = parser.parse_args(argv)
 
     settings = Settings(_env_file=ROOT_ENV)  # type: ignore[call-arg]
@@ -60,6 +69,14 @@ def main(argv: list[str]) -> int:
                     p = r["payload"]
                     print(f"{r['id']}  {p['claim']}")
                     print(f"    {p.get('source')}  {'; '.join(p.get('reasons') or [])}")
+            return 0
+        if args.command == "layout":
+            if args.reset:
+                # Only a person redraws the map: nobody else may delete positions.
+                with as_service_role(connection) as conn:
+                    layout.reset(conn, org_id)
+            with acting_as(connection, user_id=user_id) as conn:
+                print(layout.fit(conn, org_id))
             return 0
         if args.command in ("admit", "reject"):
             decided = decide(

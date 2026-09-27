@@ -126,3 +126,13 @@ not facts, so you are never asked to review web news. What you say is sorted (AD
 | Possible match | Jev was unsure a mention was an existing thing, so it was kept apart and marked; the tidy-up asks again. |
 | Tidy-up | The end of each librarian run: probable twins are put to Jev and merged when it is sure. |
 | Merged | A thing folded into another; kept, pointing at the survivor, so it can be undone. |
+
+## The brain screen (ADR 036)
+
+| Word | Means |
+| --- | --- |
+| Map | Where each fact sits on the screen. Facts near in meaning sit near each other; a placed fact never moves. |
+| Neighbourhood | A group of facts that sit together, with a short name (from the librarian, else from the graph or a claim). |
+| New topic | A fact with nothing near it in meaning; it starts at the rim. |
+| Idle / working / waiting / paused / stopped | An agent's state on the screen: nothing to do; working now; waiting for you; held by the pause, its budget or a switch; switched off. |
+| Today | The budget day, from midnight UTC (8 pm New York), so spend and budget agree. |

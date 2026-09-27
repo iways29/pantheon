@@ -16,6 +16,10 @@ at a time, and for each one:
 3. **Checks links.** Jev answers whether the fact states each link
    (`link_support`); only those it does are kept, each traced to the fact.
 
+Before reading, facts not yet on the brain screen's map are placed (no model
+call, ADR 036); after tidying, up to a few neighbourhoods of the map get a
+name (one cheap call each, the `name_neighbourhood` prompt, when it exists).
+
 Then **tidies**: things that are probably one (same or overlapping names,
 very near by meaning, or marked "possible match") are put to Jev again and
 merged when it is sure. A merge keeps the old thing, pointing at the
@@ -34,6 +38,7 @@ from uuid import UUID
 
 import psycopg
 
+from app.brain import layout
 from app.gateway import GatewayError
 from app.judge import JudgeError
 from app.judge.store import load_gate
@@ -45,6 +50,8 @@ if TYPE_CHECKING:
 MATCH_GATE = "entity_match"
 LINK_GATE = "link_support"
 PROMPT_SLOT = "extract_graph"
+NAME_SLOT = "name_neighbourhood"
+NAME_MAX_TOKENS = 20
 SCHEMA_FLAG = "graph_schema"
 #: Facts read per run, things and links per fact, merges per tidy-up.
 BATCH = 10
@@ -97,6 +104,7 @@ def run(session: "Session", run: "_Run") -> dict[str, Any]:
     except JudgeError as error:
         return _result("failed", "gate_missing", error=str(error))
     librarian = Librarian(session, run, prompt["body"], schema, match)
+    placed = layout.fit(session.connection, run.org_id)["placed"]
 
     cursor.execute(
         "select id, claim from public.facts where org_id = %s and graph_state = 'pending' "
@@ -109,6 +117,8 @@ def run(session: "Session", run: "_Run") -> dict[str, Any]:
         for key, value in read.items():
             counts[key] = counts.get(key, 0) + value
     counts["merged"] = librarian.tidy()
+    counts["placed"] = placed
+    counts["named"] = _name_neighbourhoods(session, run, cursor)
     cursor.execute(
         """
         select count(*) as n from public.entities e
@@ -549,6 +559,41 @@ def _describe(entity: dict[str, Any]) -> str:
     return f"{entity['name']} ({entity['kind']}{also}){what}"[:500]
 
 
+def _name_neighbourhoods(session: "Session", run: "_Run", cursor: psycopg.Cursor) -> int:
+    """Name a few of the map's neighbourhoods from their claims. A model error
+    stops the naming, never the run: the names wait for the next run."""
+    cursor.execute(
+        "select body from public.agent_prompts where agent_id = %s and slot = %s and active",
+        (str(run.agent_id), NAME_SLOT),
+    )
+    prompt = cursor.fetchone()
+    if prompt is None:
+        return 0
+    limit = int(layout.settings(cursor, run.org_id)["names_per_run"])
+    named = 0
+    for group in layout.unnamed(cursor, run.org_id, limit):
+        if not group["claims"]:
+            continue
+        try:
+            response = session.gateway.complete(
+                agent_id=run.agent_id,
+                run_id=run.id,
+                max_tokens=NAME_MAX_TOKENS,
+                messages=[
+                    {"role": "system", "content": prompt["body"]},
+                    {
+                        "role": "user",
+                        "content": json.dumps({"facts": group["claims"]}, ensure_ascii=False),
+                    },
+                ],
+            )
+        except GatewayError:
+            break
+        if layout.name(cursor, group["id"], response.text):
+            named += 1
+    return named
+
+
 def _result(
     status: str, reason: str, *, output: dict[str, Any] | None = None, error: str | None = None
 ) -> dict[str, Any]:
@@ -603,19 +648,13 @@ def ensure_librarian(
             )
             row = cursor.fetchone()
         agent_id = row["id"]
-        cursor.execute(
-            "insert into public.agent_prompts (org_id, agent_id, slot, version, body, note, "
-            "active) select %s, %s, %s, 1, %s, 'Starting prompt', true where not exists "
-            "(select 1 from public.agent_prompts where agent_id = %s and slot = %s)",
-            (
-                str(org_id),
-                agent_id,
-                PROMPT_SLOT,
-                STARTER_PROMPTS["librarian"][PROMPT_SLOT],
-                agent_id,
-                PROMPT_SLOT,
-            ),
-        )
+        for slot in (PROMPT_SLOT, NAME_SLOT):
+            cursor.execute(
+                "insert into public.agent_prompts (org_id, agent_id, slot, version, body, "
+                "note, active) select %s, %s, %s, 1, %s, 'Starting prompt', true where not "
+                "exists (select 1 from public.agent_prompts where agent_id = %s and slot = %s)",
+                (str(org_id), agent_id, slot, STARTER_PROMPTS["librarian"][slot], agent_id, slot),
+            )
         cursor.execute(
             """
             insert into public.triggers

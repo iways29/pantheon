@@ -121,6 +121,7 @@ def run(session: "Session", run: "_Run") -> dict[str, Any]:
             task_id=run.task_id,
             run_id=run.id,
             agent_id=run.agent_id,
+            approval_links=True,
         )
         output["email"] = {
             "list": list_key,

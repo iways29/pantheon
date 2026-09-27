@@ -49,10 +49,13 @@ def compose(
     agent_id: UUID | None = None,
     now: datetime | None = None,
     subject: str | None = None,
+    approval_links: bool = False,
 ) -> Composed:
     """Write an email for `list_key`. Writing it twice changes nothing.
 
-    `subject` replaces the list's own subject (both may use `{date}`)."""
+    `subject` replaces the list's own subject (both may use `{date}`).
+    `approval_links`: when sent, the email ends with one-tap links to the
+    approvals then pending, if its list has them switched on."""
     cursor.execute(
         "select * from public.mailing_lists where org_id = %s and key = %s",
         (str(org_id), list_key),
@@ -112,8 +115,9 @@ def compose(
         """
         insert into public.emails
             (org_id, list_key, task_id, run_id, agent_id, approval_id, status,
-             from_address, recipients, subject, body_text, body_html, idempotency_key)
-        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+             from_address, recipients, subject, body_text, body_html, idempotency_key,
+             approval_links)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         returning id
         """,
         (
@@ -130,6 +134,7 @@ def compose(
             plain_text(body),
             render_html(subject, body),
             idempotency_key,
+            approval_links,
         ),
     )
     return Composed(cursor.fetchone()["id"], status, approval_id=approval_id)
@@ -152,21 +157,24 @@ def send(connection: psycopg.Connection, mailer: Mailer | None, email_id: UUID |
         return _status(connection, email_id)
     if mailer is None:
         return _record(connection, email_id, "failed", error="RESEND_API_KEY is not configured")
-    reply_to = None
     with as_service_role(connection) as conn:
         row = conn.execute(
-            "select reply_to from public.mailing_lists where org_id = %s and key = %s",
+            "select reply_to, approval_links_url, approval_link_hours from public.mailing_lists "
+            "where org_id = %s and key = %s",
             (str(email["org_id"]), email["list_key"]),
         ).fetchone()
-        reply_to = row["reply_to"] if row else None
+    reply_to = row["reply_to"] if row else None
+    text, body_html = email["body_text"], email["body_html"]
+    if email["approval_links"] and row and row["approval_links_url"]:
+        text, body_html = _with_links(connection, email, row, text, body_html)
     try:
         provider_id = mailer.send(
             Outgoing(
                 from_address=email["from_address"],
                 recipients=list(email["recipients"]),
                 subject=email["subject"],
-                text=email["body_text"],
-                html=email["body_html"],
+                text=text,
+                html=body_html,
                 idempotency_key=f"pantheon-email-{email['id']}",
                 reply_to=reply_to,
             )
@@ -176,6 +184,36 @@ def send(connection: psycopg.Connection, mailer: Mailer | None, email_id: UUID |
     return _record(connection, email_id, "sent", provider_id=provider_id)
 
 
+def _with_links(
+    connection: psycopg.Connection,
+    email: dict[str, Any],
+    mailing_list: dict[str, Any],
+    text: str,
+    body_html: str,
+) -> tuple[str, str]:
+    """The email with its approval links added. Minted now, never stored in
+    the email row, so no agent can read a token."""
+    from app.approvals.links import mint, section_html, section_text
+
+    minted = mint(
+        connection,
+        email=email,
+        base_url=mailing_list["approval_links_url"],
+        hours=mailing_list["approval_link_hours"],
+    )
+    if not minted.links:
+        return text, body_html
+    section = section_html(minted)
+    # Above the footer, else before </body>, else at the end.
+    at = body_html.find(_FOOTER)
+    if at < 0:
+        at = body_html.rfind("</body>")
+    if at < 0:
+        at = len(body_html)
+    return f"{text}\n\n{section_text(minted)}", body_html[:at] + section + body_html[at:]
+
+
+_FOOTER = '<p style="color:#777;font-size:12px;margin-top:24px">'
 _BOLD = re.compile(r"\*\*(.+?)\*\*")
 
 
@@ -199,7 +237,7 @@ def render_html(subject: str, body: str) -> str:
         '<!doctype html><html><body style="font-family:-apple-system,Segoe UI,Helvetica,'
         "Arial,sans-serif;font-size:15px;line-height:1.5;color:#1a1a1a;max-width:620px;"
         f'margin:0 auto;padding:16px"><h2 style="font-size:18px">{html.escape(subject)}</h2>'
-        f'{inner}<p style="color:#777;font-size:12px;margin-top:24px">Written by Pantheon.</p>'
+        f"{inner}{_FOOTER}Written by Pantheon.</p>"
         "</body></html>"
     )
 
@@ -241,6 +279,8 @@ def list_view(row: dict[str, Any]) -> dict[str, Any]:
         "timezone",
         "send_without_approval",
         "enabled",
+        "approval_links_url",
+        "approval_link_hours",
         "updated_at",
     )
     return {k: row[k] for k in keys}

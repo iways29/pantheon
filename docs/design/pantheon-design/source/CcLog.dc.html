@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Control Center, change log</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&amp;family=Hanken+Grotesk:wght@400;500;600&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="{{root}}" style="position: relative; width: 1440px; height: 900px; overflow: hidden; color: var(--ink); font-family: 'Hanken Grotesk', system-ui, sans-serif">
+<dc-import name="CcShell" screen="log" theme="{{theme}}" hint-size="1440px,900px"></dc-import>
+<main style="position: absolute; left: 264px; top: 72px; width: 1160px; height: 772px; box-sizing: border-box; padding: 16px 8px 0 8px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px">
+<div><h1 class="disp" style="margin: 0; font-size: 30px">Change log</h1><p class="muted" style="margin: 4px 0 0; font-size: 14px">Every change to how the company works, the moment it happened. Nothing here can be edited.</p></div>
+<button class="btn">Export</button>
+</div>
+<div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
+<label style="width: 260px"><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Search the log</span><input class="inp" placeholder="Search 1,406 changes" style="border-radius: 999px"></label>
+<button class="chip" aria-pressed="true">All screens</button><button class="chip" aria-pressed="false">Departments</button><button class="chip" aria-pressed="false">Agents</button><button class="chip" aria-pressed="false">Prompts</button><button class="chip" aria-pressed="false">Tools</button><button class="chip" aria-pressed="false">Judge</button><button class="chip" aria-pressed="false">Email</button>
+<button class="chip" aria-pressed="false">By: anyone<svg class="ic" width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4"></path></svg></button>
+</div>
+<section class="tbl" aria-label="Changes">
+<div class="th" style="grid-template-columns: 70px minmax(0, 1fr) 150px 130px 80px"><span>Time</span><span>Change</span><span>By</span><span>Screen</span><span></span></div>
+<sc-for list="{{log}}" as="l" hint-placeholder-count="12">
+<sc-if value="{{l.isDay}}" hint-placeholder-val="{{ false }}"><div class="disp" style="font-size: 15px; padding: 14px 14px 6px">{{l.x}}</div></sc-if>
+<sc-if value="{{l.isEv}}" hint-placeholder-val="{{ true }}"><div class="row" style="grid-template-columns: 70px minmax(0, 1fr) 150px 130px 80px; min-height: 42px"><span class="num faint">{{l.t}}</span><span>{{l.x}}</span><span class="muted">{{l.by}}</span><span class="muted">{{l.s}}</span><sc-if value="{{l.undo}}" hint-placeholder-val="{{ false }}"><button class="btn quiet" style="height: 26px; color: var(--ice)">Undo</button></sc-if></div></sc-if>
+</sc-for>
+</section>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var theme = this.props.theme || 'dark';
+    var D = function (x) { return { isDay: true, isEv: false, x: x }; };
+    var E = function (t, x, by, s, undo) { return { isDay: false, isEv: true, t: t, x: x, by: by, s: s, undo: !!undo }; };
+    return {
+      root: 'pan ' + theme, theme: theme,
+      log: [
+        D('Today'),
+        E('13:58', 'search_web changed on Search tools. Switched off until approved', 'Pantheon', 'Tools'),
+        E('09:14', 'Research daily budget $5.00 → $6.00', 'You', 'Departments', true),
+        E('09:10', 'Added Patent watcher to Research, switched off', 'You', 'Agents', true),
+        E('08:55', 'Market scanner system prompt v11 → v12', 'You', 'Prompts', true),
+        E('08:31', 'Morning brief held for approval', 'Pantheon', 'Email'),
+        D('Yesterday'),
+        E('17:20', 'Accepted Chief of Staff’s suggestion: Source reader stays L1', 'You', 'Autonomy', true),
+        E('16:02', 'Judge gate “Brief ranking”: lead with 5 items, was 7', 'You', 'Judge', true),
+        E('11:40', 'Added recipient ops@theunreallab.com to Morning brief', 'You', 'Email', true),
+        E('09:05', 'Retired rule “Research only public companies”', 'You', 'Standing rules', true),
+        E('08:00', 'Routine “Competitor pages” switched on', 'You', 'Morning routine', true)
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

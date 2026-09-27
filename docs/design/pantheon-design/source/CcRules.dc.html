@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Control Center, standing rules</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&amp;family=Hanken+Grotesk:wght@400;500;600&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="{{root}}" style="position: relative; width: 1440px; height: 900px; overflow: hidden; color: var(--ink); font-family: 'Hanken Grotesk', system-ui, sans-serif">
+<dc-import name="CcShell" screen="rules" theme="{{theme}}" hint-size="1440px,900px"></dc-import>
+<main style="position: absolute; left: 264px; top: 72px; width: 1160px; height: 772px; box-sizing: border-box; padding: 16px 8px 0 8px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px">
+<div><h1 class="disp" style="margin: 0; font-size: 30px">Standing rules</h1><p class="muted" style="margin: 4px 0 0; font-size: 14px">Your rules in plain words. Jev checks every order and approval against them.</p></div>
+<button class="btn"><svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"></circle><path d="M8 5v3l2 1.5"></path></svg>History</button>
+</div>
+<form style="display: flex; gap: 10px; max-width: 880px">
+<label style="flex-grow: 1"><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">New rule</span><input class="inp" placeholder="Add a rule, for example: Never contact a client without asking me" style="height: 46px; border-radius: 14px; font-size: 15px"></label>
+<button class="btn pri lg" type="button" style="height: 46px">Add rule</button>
+</form>
+<section class="tbl" aria-label="Rules in force" style="max-width: 1060px">
+<div class="th" style="grid-template-columns: minmax(0, 1fr) 110px 190px 90px"><span>In force</span><span>Added</span><span>Flagged</span><span></span></div>
+<sc-for list="{{rules}}" as="r" hint-placeholder-count="5">
+<div class="row" style="grid-template-columns: minmax(0, 1fr) 110px 190px 90px; min-height: 58px"><span class="disp" style="font-size: 17px">{{r.t}}</span><span class="muted num">{{r.d}}</span><span class="num">{{r.f}}</span><button class="btn quiet">Retire</button></div>
+</sc-for>
+</section>
+<details style="max-width: 1060px"><summary class="muted" style="cursor: pointer; font-size: 13.5px; padding: 6px 0">Retired rules (2)</summary></details>
+<div class="surf" style="max-width: 1060px; padding: 14px 16px; display: flex; gap: 14px; align-items: center">
+<span class="gl wait" aria-hidden="true"></span>
+<span style="font-size: 13.5px; flex-grow: 1">Last flag: the LinkedIn post on Ashvas clashes with “No public launch claims…”. It’s waiting for your decision.</span>
+<a class="btn" href="Approval.dc.html">Open the approval</a>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var theme = this.props.theme || 'dark';
+    return {
+      root: 'pan ' + theme, theme: theme,
+      rules: [
+        { t: 'No public launch claims until the security review is done.', d: '12 Sep', f: '1 approval, waiting' },
+        { t: 'No research on crypto tokens.', d: '2 Sep', f: '3 orders' },
+        { t: 'Never email anyone who hasn’t opted in.', d: '28 Aug', f: 'None yet' },
+        { t: 'Keep total spend under $200 a month.', d: '28 Aug', f: '1 order' },
+        { t: 'Don’t name clients in public posts.', d: '20 Aug', f: '2 approvals' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

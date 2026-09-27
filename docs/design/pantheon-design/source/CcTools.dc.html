@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Control Center, tools and MCP</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&amp;family=Hanken+Grotesk:wght@400;500;600&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="{{root}}" style="position: relative; width: 1440px; height: 900px; overflow: hidden; color: var(--ink); font-family: 'Hanken Grotesk', system-ui, sans-serif">
+<dc-import name="CcShell" screen="tools" theme="{{theme}}" hint-size="1440px,900px"></dc-import>
+<main style="position: absolute; left: 264px; top: 72px; width: 1160px; height: 772px; box-sizing: border-box; padding: 16px 8px 0 8px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px">
+<div><h1 class="disp" style="margin: 0; font-size: 30px">Tools and MCP</h1><p class="muted" style="margin: 4px 0 0; font-size: 14px">What agents can do outside their own thinking, and how risky each thing is.</p></div>
+<div style="display: flex; gap: 8px; align-items: center">
+<div class="seg" role="tablist" aria-label="View"><button role="tab" aria-pressed="{{t.builtin}}" onClick="{{go.builtin}}">Built-in <span class="faint">9</span></button><button role="tab" aria-pressed="{{t.mcp}}" onClick="{{go.mcp}}">MCP servers <span class="faint">3</span></button><button role="tab" aria-pressed="{{t.assign}}" onClick="{{go.assign}}">Assign</button></div>
+<button class="btn"><svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"></circle><path d="M8 5v3l2 1.5"></path></svg>History</button>
+</div>
+</div>
+
+<sc-if value="{{isBuiltin}}" hint-placeholder-val="{{ true }}">
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 14px">
+<section class="tbl" aria-label="Built-in tools">
+<div class="th" style="grid-template-columns: minmax(0, 1.5fr) 44px minmax(0, 1fr) 70px 80px 70px 84px"><span>Tool</span><span>Risk</span><span>Approval</span><span>Timeout</span><span>Output cap</span><span>Per day</span><span>On</span></div>
+<sc-for list="{{tools}}" as="x" hint-placeholder-count="9">
+<div class="{{x.rc}}" style="grid-template-columns: minmax(0, 1.5fr) 44px minmax(0, 1fr) 70px 80px 70px 84px; min-height: 48px">
+<span><span class="nm">{{x.n}}</span><span class="sub">{{x.d}}</span></span>
+<span class="tag r">{{x.r}}</span>
+<span style="display: flex; align-items: center; gap: 6px"><sc-if value="{{x.locked}}" hint-placeholder-val="{{ false }}"><svg class="ic" width="13" height="13" viewBox="0 0 16 16" aria-label="Locked"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5"></rect><path d="M5.5 7V5a2.5 2.5 0 015 0v2"></path></svg></sc-if>{{x.p}}</span>
+<span class="num">{{x.to}}</span><span class="num">{{x.oc}}</span><span class="num">{{x.cap}}</span>
+<button class="tog" role="switch" aria-checked="{{x.on}}" aria-label="{{x.n}}"><span class="tr"></span>{{x.onT}}</button>
+</div>
+</sc-for>
+</section>
+<div style="display: flex; flex-direction: column; gap: 14px">
+<section class="surf" aria-label="Risk classes" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 8px">
+<h2 class="disp" style="margin: 0; font-size: 18px">Risk classes</h2>
+<div style="display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 8px 10px; font-size: 12.5px; line-height: 1.4; align-items: start">
+<span class="tag r">R0</span><span>Reads inside Pantheon only.</span>
+<span class="tag r">R1</span><span>Reads the outside world.</span>
+<span class="tag r">R2</span><span>Changes Pantheon’s own data.</span>
+<span class="tag r">R3</span><span>Changes things outside; can be undone.</span>
+<span class="tag r">R4</span><span>Public or can’t be undone.</span>
+</div>
+<div class="lock"><svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5"></rect><path d="M5.5 7V5a2.5 2.5 0 015 0v2"></path></svg><span><b>R4 tools always ask you.</b> Fixed for safety.</span></div>
+</section>
+<section class="surf" aria-label="Web search settings" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+<h2 class="disp" style="margin: 0; font-size: 18px">Web search settings</h2>
+<div class="fld"><label class="lbl" for="w-eng">Search engine</label><select id="w-eng" class="inp"><option>[search provider]</option></select></div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+<div class="fld"><label class="lbl" for="w-r">Results per search</label><input id="w-r" class="inp num" value="8"></div>
+<div class="fld"><label class="lbl" for="w-d">Searches per day</label><input id="w-d" class="inp num" value="200"></div>
+</div>
+<div class="cost"><span>Today <b>61</b> searches</span><span>7 days <b>384</b></span><span class="spark" aria-hidden="true"><i style="height: 8px"></i><i style="height: 12px"></i><i style="height: 10px"></i><i style="height: 15px"></i><i style="height: 9px"></i><i style="height: 11px"></i><i style="height: 13px"></i></span></div>
+</section>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{isMcp}}" hint-placeholder-val="{{ false }}">
+<div style="display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 14px">
+<section aria-label="MCP servers" style="display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; gap: 8px"><label style="flex-grow: 1"><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Server address</span><input class="inp" placeholder="Server address, https://…"></label><button class="btn">Add</button></div>
+<div class="surf" style="padding: 12px 14px; display: flex; flex-direction: column; gap: 6px"><div style="display: flex; align-items: center; gap: 8px"><span class="nm" style="flex-grow: 1">Code host</span><span class="tag ok">Connected</span></div><span class="faint" style="font-size: 12px">14 tools, refreshed today 07:00</span></div>
+<div class="surf" style="padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; box-shadow: inset 0 0 0 1px var(--ice)"><div style="display: flex; align-items: center; gap: 8px"><span class="nm" style="flex-grow: 1">Search tools</span><span class="tag flag">1 tool changed</span></div><span class="faint" style="font-size: 12px">6 tools, refreshed today 13:58</span><button class="btn quiet" style="height: 26px; padding: 0; align-self: flex-start">Refresh tools</button></div>
+<div class="surf" style="padding: 12px 14px; display: flex; flex-direction: column; gap: 6px"><div style="display: flex; align-items: center; gap: 8px"><span class="nm" style="flex-grow: 1">Notes workspace</span><span class="tag">Needs sign-in</span></div><button class="btn" style="align-self: flex-start">Sign in</button></div>
+<div class="surf" style="padding: 12px 14px; display: flex; flex-direction: column; gap: 6px"><div style="display: flex; align-items: center; gap: 8px"><span class="nm" style="flex-grow: 1">Calendar bridge</span><span class="tag err">Error</span></div><span class="muted" style="font-size: 12.5px; line-height: 1.4">The server didn’t answer within 10 seconds. Check the address, then try again.</span><button class="btn quiet" style="height: 26px; padding: 0; align-self: flex-start">Try again</button></div>
+</section>
+<section class="surf" aria-label="Tools on Search tools" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; gap: 10px"><h2 class="disp" style="margin: 0; font-size: 20px; flex-grow: 1">search_web</h2><span class="tag flag">Changed, switched off</span></div>
+<p class="muted" style="margin: 0; font-size: 13.5px; line-height: 1.5">The server changed this tool’s definition at 13:58. It stays off until you approve the new one. Research can’t search the web until then.</p>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+<div class="diffcol"><span class="lbl" style="margin-bottom: 4px">Approved, 2 Sep</span>
+<div class="dl"><span class="mk"></span><span>Search the web and return results.</span></div>
+<div class="dl"><span class="mk"></span><span>Inputs: query</span></div>
+<div class="dl del"><span class="mk">−</span><span>Server hint: read-only</span></div>
+</div>
+<div class="diffcol"><span class="lbl" style="margin-bottom: 4px">New, today 13:58</span>
+<div class="dl"><span class="mk"></span><span>Search the web and return results.</span></div>
+<div class="dl add"><span class="mk">+</span><span>Inputs: query, save_to_path</span></div>
+<div class="dl add"><span class="mk">+</span><span>Server hint: may write files</span></div>
+</div>
+</div>
+<div style="display: flex; gap: 12px; align-items: center; font-size: 13px"><span class="faint">Suggested risk</span><span class="tag r">R1</span><span>→</span><span class="tag r" style="border-color: var(--ice); color: var(--ice)">R3</span><span class="muted">because it can now write files</span></div>
+<div style="display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap">
+<div class="fld"><span class="lbl">Your risk class</span><div class="seg" role="group" aria-label="Risk class"><button aria-pressed="false">R0</button><button aria-pressed="false">R1</button><button aria-pressed="false">R2</button><button aria-pressed="true">R3</button><button aria-pressed="false">R4</button></div></div>
+<div class="fld"><label class="lbl" for="m-cap">Daily cap (optional)</label><input id="m-cap" class="inp num" value="100" style="width: 90px"></div>
+</div>
+<div class="lock"><svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5"></rect><path d="M5.5 7V5a2.5 2.5 0 015 0v2"></path></svg><span><b>A changed tool stays off until you approve it.</b> Approving doesn’t switch it on.</span></div>
+<div style="margin-top: auto; display: flex; gap: 8px; justify-content: flex-end; padding-top: 12px; border-top: 1px solid var(--line)"><button class="btn lg">Keep the old definition</button><button class="btn pri lg">Approve new definition</button></div>
+</section>
+</div>
+</sc-if>
+
+<sc-if value="{{isAssign}}" hint-placeholder-val="{{ false }}">
+<section aria-label="Assign tools" style="display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; gap: 18px; align-items: center; font-size: 12.5px" class="muted">
+<span>Each cell shows what happens when that agent uses that tool, given its level.</span><span style="flex-grow: 1"></span>
+<span class="cell run" style="height: 26px"><span class="m"></span>Runs</span><span class="cell jev" style="height: 26px"><span class="m"></span>Jev checks</span><span class="cell ask" style="height: 26px"><span class="m"></span>Asks you</span><span class="cell none" style="height: 26px">Not given</span>
+</div>
+<div role="grid" aria-label="Agents by tools" style="display: grid; grid-template-columns: 170px 40px repeat(7, minmax(0, 1fr)); gap: 6px; align-items: center">
+<span class="lbl">Agent</span><span class="lbl">Level</span>
+<sc-for list="{{toolCols}}" as="c" hint-placeholder-count="7"><span class="lbl" style="display: flex; flex-direction: column; gap: 2px"><span style="color: var(--ink); font-weight: 500">{{c.n}}</span>{{c.r}}</span></sc-for>
+<sc-for list="{{grid}}" as="g" hint-placeholder-count="10">
+<span class="nm" style="font-size: 13px">{{g.n}}</span><span class="num faint" style="font-size: 12.5px">{{g.l}}</span>
+<sc-for list="{{g.cells}}" as="c" hint-placeholder-count="7"><span class="{{c.c}}"><span class="m"></span>{{c.t}}</span></sc-for>
+</sc-for>
+</div>
+<span class="faint" style="font-size: 12px">Striped cells are fixed: R4 tools always ask you, whatever the level.</span>
+</section>
+</sc-if>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"sub":{"editor":"enum","options":["builtin","mcp","assign"],"default":"builtin"},"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var self = this, st = this.state || {};
+    var sub = st.sub || this.props.sub || 'builtin';
+    var theme = this.props.theme || 'dark';
+    var T = function (n, d, r, p, to, oc, cap, on, locked, flag) { return { n: n, d: d, r: r, p: p, to: to, oc: oc, cap: cap, on: on ? 'true' : 'false', onT: on ? 'On' : 'Off', locked: !!locked, rc: 'row' + (flag ? ' new' : '') }; };
+    var tools = [
+      T('Web search', 'Finds pages on the open web', 'R1', 'Runs, per level', '20 s', '8 KB', '200', true),
+      T('Page reader', 'Reads one page and screens it', 'R0', 'Runs', '30 s', '40 KB', '1,000', true),
+      T('Brain read', 'Looks up facts in the brain', 'R0', 'Runs', '5 s', '20 KB', '—', true),
+      T('Brain write', 'Sends a fact to Jev for the brain', 'R2', 'Jev checks', '5 s', '4 KB', '500', true),
+      T('Send email', 'Sends mail through the outbox', 'R3', 'Asks, per level', '15 s', '—', '20', true),
+      T('File write', 'Saves a file to the shared drive', 'R3', 'Asks, per level', '15 s', '2 MB', '50', false),
+      T('Calendar read', 'Reads your calendar', 'R1', 'Runs, per level', '10 s', '8 KB', '100', true),
+      T('Code run', 'Runs code in a sandbox', 'R3', 'Asks, per level', '60 s', '64 KB', '30', false),
+      T('Publish post', 'Posts on company social accounts', 'R4', 'Always asks', '20 s', '—', '5', true, true)
+    ];
+    var cols = [['Web search', 'R1'], ['Page reader', 'R0'], ['Brain write', 'R2'], ['Send email', 'R3'], ['Code run', 'R3'], ['search_web', 'R3, off'], ['Publish post', 'R4']];
+    var ladder = { L0: ['run', 'ask', 'jev', 'ask', 'ask'], L1: ['run', 'run', 'jev', 'ask', 'ask'], L2: ['run', 'run', 'run', 'jev', 'ask'], L3: ['run', 'run', 'run', 'run', 'ask'] };
+    var rIdx = { R0: 0, R1: 1, R2: 2, R3: 3, R4: 4 };
+    var words = { run: 'Runs', jev: 'Jev checks', ask: 'Asks you' };
+    var agents = [['Chief of Staff', 'L2', [0, 1, 1, 1, 0, 0, 0]], ['Briefing writer', 'L1', [0, 1, 1, 1, 0, 0, 0]], ['Research head', 'L2', [1, 1, 1, 0, 0, 0, 0]], ['Market scanner', 'L1', [1, 1, 1, 0, 0, 1, 0]], ['Source reader', 'L1', [0, 1, 1, 0, 0, 0, 0]], ['Analyst', 'L1', [1, 1, 1, 0, 1, 0, 0]], ['Marketing head', 'L1', [0, 1, 1, 1, 0, 0, 1]], ['Copywriter', 'L1', [0, 1, 1, 0, 0, 0, 0]], ['Social planner', 'L0', [1, 1, 0, 0, 0, 0, 1]], ['Patent watcher', 'L0', [1, 1, 0, 0, 0, 0, 0]]];
+    var grid = agents.map(function (a) {
+      return { n: a[0], l: a[1], cells: a[2].map(function (has, j) {
+        if (!has) return { c: 'cell none', t: '—' };
+        var rc = cols[j][1].slice(0, 2);
+        if (j === 5) return { c: 'cell ask', t: 'Off, needs you' };
+        var kind = ladder[a[1]][rIdx[rc]];
+        return { c: 'cell ' + kind + (rc === 'R4' ? ' lockd' : ''), t: words[kind] };
+      }) };
+    });
+    var go = {}; ['builtin', 'mcp', 'assign'].forEach(function (k) { go[k] = function () { self.setState({ sub: k }); }; });
+    return {
+      root: 'pan ' + theme, theme: theme, tools: tools,
+      toolCols: cols.map(function (c) { return { n: c[0], r: c[1] }; }), grid: grid,
+      isBuiltin: sub === 'builtin', isMcp: sub === 'mcp', isAssign: sub === 'assign',
+      t: { builtin: String(sub === 'builtin'), mcp: String(sub === 'mcp'), assign: String(sub === 'assign') },
+      go: go
+    };
+  }
+}
+</script>
+</body>
+</html>

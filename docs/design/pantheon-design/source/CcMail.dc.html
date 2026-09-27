@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Control Center, newsletter and email</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&amp;family=Hanken+Grotesk:wght@400;500;600&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="{{root}}" style="position: relative; width: 1440px; height: 900px; overflow: hidden; color: var(--ink); font-family: 'Hanken Grotesk', system-ui, sans-serif">
+<dc-import name="CcShell" screen="mail" theme="{{theme}}" hint-size="1440px,900px"></dc-import>
+<main style="position: absolute; left: 264px; top: 72px; width: 1160px; height: 772px; box-sizing: border-box; padding: 16px 8px 0 8px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px">
+<div><h1 class="disp" style="margin: 0; font-size: 30px">Newsletter and email</h1><p class="muted" style="margin: 4px 0 0; font-size: 14px">Who gets the brief, and every email that has gone out or is waiting.</p></div>
+<div style="display: flex; gap: 8px"><button class="btn"><svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"></circle><path d="M8 5v3l2 1.5"></path></svg>History</button><button class="btn pri">New list</button></div>
+</div>
+<div style="display: grid; grid-template-columns: 260px minmax(0, 1fr) 360px; gap: 14px">
+<section aria-label="Lists" style="display: flex; flex-direction: column; gap: 8px">
+<div class="surf" style="padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; box-shadow: inset 0 0 0 1px var(--edge); background: var(--surf2)"><div style="display: flex; align-items: center; gap: 8px"><span class="nm" style="flex-grow: 1">Morning brief</span><span class="tag live">On</span></div><span class="faint" style="font-size: 12px">4 people, waits for your approval</span></div>
+<div class="surf" style="padding: 12px 14px; display: flex; flex-direction: column; gap: 6px"><div style="display: flex; align-items: center; gap: 8px"><span class="nm" style="flex-grow: 1">Weekly investor note</span><span class="tag off">Off, new</span></div><span class="faint" style="font-size: 12px">1 person, waits for your approval</span></div>
+</section>
+<section class="surf" aria-label="Morning brief list" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 11px">
+<div style="display: flex; align-items: center; gap: 10px"><h2 class="disp" style="margin: 0; font-size: 20px; flex-grow: 1">Morning brief</h2><button class="tog" role="switch" aria-checked="true"><span class="tr"></span>On</button></div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+<div class="fld"><label class="lbl" for="m-from">Sender</label><input id="m-from" class="inp" value="brief@theunreallab.com"></div>
+<div class="fld"><label class="lbl" for="m-rt">Reply-to</label><input id="m-rt" class="inp" value="you@theunreallab.com"></div>
+<div class="fld"><label class="lbl" for="m-sub">Subject</label><input id="m-sub" class="inp" value="Morning brief, {date}"></div>
+<div class="fld"><label class="lbl" for="m-tz">Time zone</label><select id="m-tz" class="inp"><option>America/New_York</option></select></div>
+</div>
+<div class="fld"><span class="lbl">Sending</span><div class="seg" role="group" aria-label="Sending"><button aria-pressed="true">Waits for my approval</button><button aria-pressed="false">Sends on its own</button></div></div>
+<div style="display: flex; gap: 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--ice); background: var(--iceS); font-size: 13px; line-height: 1.45"><span class="gl wait" aria-hidden="true" style="margin-top: 4px"></span><span>This list has 3 people besides you. If it sends on its own, they get each brief without your review.</span></div>
+<div class="sec"><div class="sech"><span class="lbl">Recipients</span><span class="faint num" style="font-size: 12px">4 of 50</span></div>
+<div style="display: flex; gap: 8px; align-items: flex-start"><div class="fld" style="flex-grow: 1"><label for="m-add" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Add a person</label><input id="m-add" class="inp bad" value="sales@" aria-invalid="true" aria-describedby="m-err"><span id="m-err" class="err"><svg class="ic" width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5l6 10.5H2zM8 7v2.5M8 11.3v.1"></path></svg>“sales@” isn’t a full address. Add the part after @.</span></div><button class="btn">Add</button></div>
+<div class="tbl">
+<div class="row" style="grid-template-columns: minmax(0, 1fr) 80px; min-height: 38px; border-top: 0"><span>you@theunreallab.com <span class="faint">(you)</span></span><span></span></div>
+<div class="row" style="grid-template-columns: minmax(0, 1fr) 80px; min-height: 38px"><span>cto@theunreallab.com</span><button class="btn quiet" style="height: 26px">Remove</button></div>
+<div class="row" style="grid-template-columns: minmax(0, 1fr) 80px; min-height: 38px"><span>advisor@example.com</span><button class="btn quiet" style="height: 26px">Remove</button></div>
+<div class="row" style="grid-template-columns: minmax(0, 1fr) 80px; min-height: 38px"><span>ops@theunreallab.com</span><button class="btn quiet" style="height: 26px">Remove</button></div>
+</div></div>
+</section>
+<section aria-label="Outbox" style="display: flex; flex-direction: column; gap: 8px">
+<div class="sech"><h2 style="font-size: 18px">Outbox</h2></div>
+<sc-for list="{{out}}" as="o" hint-placeholder-count="5">
+<div class="surf" style="padding: 11px 13px; display: flex; flex-direction: column; gap: 5px">
+<div style="display: flex; align-items: center; gap: 8px"><span class="{{o.g}}" aria-hidden="true"></span><span style="font-size: 13px; font-weight: 600; flex-grow: 1">{{o.s}}</span><span class="faint num" style="font-size: 12px">{{o.t}}</span></div>
+<span class="muted" style="font-size: 12.5px">{{o.subj}}</span>
+<sc-if value="{{o.why}}" hint-placeholder-val="{{ false }}"><span style="font-size: 12.5px; line-height: 1.4; color: var(--verm)">{{o.why}}</span></sc-if>
+<sc-if value="{{o.retry}}" hint-placeholder-val="{{ false }}"><button class="btn" style="align-self: flex-start; height: 30px">Retry</button></sc-if>
+<sc-if value="{{o.review}}" hint-placeholder-val="{{ false }}"><button class="btn pri" style="align-self: flex-start; height: 30px">Review and send</button></sc-if>
+</div>
+</sc-for>
+</section>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var theme = this.props.theme || 'dark';
+    var O = function (g, s, t, subj, why, retry, review) { return { g: g, s: s, t: t, subj: subj, why: why || '', retry: !!retry, review: !!review }; };
+    return {
+      root: 'pan ' + theme, theme: theme,
+      out: [
+        O('gl wait', 'Waiting for your approval', 'Today 08:30', 'Morning brief, 25 Sep, to 4 people', '', false, true),
+        O('gl done', 'Sent', 'Yesterday 08:34', 'Morning brief, 24 Sep, to 4 people'),
+        O('gl fail', 'Failed', 'Tue 08:31', 'Morning brief, 23 Sep', 'Resend refused it: the reply-to domain isn’t verified yet.', true),
+        O('gl stop', 'Cancelled by you', 'Mon 08:40', 'Morning brief, 22 Sep'),
+        O('gl done', 'Sent', 'Sun 20:05', 'Weekly brief, week 38, to you')
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

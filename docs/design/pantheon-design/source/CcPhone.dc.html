@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Control Center on phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&amp;family=Hanken+Grotesk:wght@400;500;600&amp;display=swap">
+<style>body{margin:0}
+.ptab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;height:56px;border:0;background:transparent;color:var(--ink3);font:500 11px/1 'Hanken Grotesk',sans-serif;border-radius:22px;text-decoration:none}
+.ptab[aria-current="page"]{color:var(--ink);background:var(--glass2)}
+.prow{display:flex;align-items:center;gap:12px;min-height:58px;padding:8px 14px;border-top:1px solid var(--line);box-sizing:border-box}
+</style>
+</helmet>
+<div class="{{root}}" style="position: relative; width: 390px; height: 844px; overflow: hidden; background: var(--bg); color: var(--ink); font-family: 'Hanken Grotesk', system-ui, sans-serif">
+<dc-import name="CcShell" bare="{{ true }}" hint-size="0px,0px"></dc-import>
+<div aria-hidden="true" style="position: absolute; right: -200px; top: -220px; width: 520px; height: 520px; border-radius: 50%; background: radial-gradient(circle, var(--iceS) 0%, transparent 64%)"></div>
+<div aria-hidden="true" style="position: absolute; left: -220px; bottom: -200px; width: 560px; height: 560px; border-radius: 50%; background: radial-gradient(circle, var(--goldS) 0%, transparent 64%)"></div>
+<div style="position: absolute; inset: 0; padding: 12px 16px 0; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; gap: 10px; height: 44px">
+<h1 class="disp" style="margin: 0; font-size: 24px; flex-grow: 1">Control Center</h1>
+<div class="glass" role="status" style="display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; border-radius: 999px; font-size: 14px; font-weight: 600"><span class="run-dot" aria-hidden="true"></span>Running</div>
+</div>
+<nav aria-label="Sections" style="display: flex; gap: 6px; overflow: hidden">
+<sc-for list="{{tabs}}" as="t" hint-placeholder-count="5"><a class="chip" href="{{t.href}}" aria-pressed="{{t.on}}" style="height: 36px; padding: 0 10px; text-decoration: none; flex: none">{{t.n}}</a></sc-for>
+</nav>
+<div class="lock" style="font-size: 12.5px"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="4" width="19" height="13" rx="2"></rect><path d="M8 20h8"></path></svg><span>Charters, prompts, the ladder and the judge are edited on desktop.</span></div>
+
+<sc-if value="{{v.log}}" hint-placeholder-val="{{ true }}">
+<section aria-label="Change log" class="surf" style="padding: 4px 0; display: flex; flex-direction: column">
+<sc-for list="{{log}}" as="l" hint-placeholder-count="7"><div class="prow" style="{{l.st}}"><span class="{{l.g}}" aria-hidden="true"></span><span style="flex-grow: 1; font-size: 14px; line-height: 1.4">{{l.x}}<span class="sub num">{{l.w}}</span></span></div></sc-for>
+</section>
+</sc-if>
+
+<sc-if value="{{v.routines}}" hint-placeholder-val="{{ false }}">
+<section aria-label="Routines" class="surf" style="padding: 4px 0; display: flex; flex-direction: column">
+<sc-for list="{{rts}}" as="r" hint-placeholder-count="6"><div class="prow" style="{{r.st}}"><span class="num" style="font-weight: 600; width: 44px">{{r.t}}</span><span style="flex-grow: 1; font-size: 14px">{{r.n}}<span class="sub">{{r.d}}</span></span><button class="tog" role="switch" aria-checked="{{r.on}}" aria-label="{{r.n}}" style="height: 44px"><span class="tr"></span>{{r.onT}}</button></div></sc-for>
+</section>
+</sc-if>
+
+<sc-if value="{{v.depts}}" hint-placeholder-val="{{ false }}">
+<section aria-label="Departments" class="surf" style="padding: 4px 0; display: flex; flex-direction: column">
+<sc-for list="{{depts}}" as="d" hint-placeholder-count="4"><div class="prow" style="{{d.st}}"><span style="flex-grow: 1; font-size: 14px">{{d.n}}<span class="sub num">{{d.s}}</span></span><button class="tog" role="switch" aria-checked="{{d.on}}" aria-label="{{d.n}}" style="height: 44px"><span class="tr"></span>{{d.onT}}</button></div></sc-for>
+</section>
+<span class="faint" style="font-size: 12.5px; line-height: 1.45; padding: 0 4px">Switching a department off also switches off its agents and routines. Work in progress pauses.</span>
+</sc-if>
+
+<sc-if value="{{v.recipients}}" hint-placeholder-val="{{ false }}">
+<section aria-label="Morning brief recipients" style="display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: baseline; justify-content: space-between"><h2 class="disp" style="margin: 0; font-size: 19px">Morning brief</h2><span class="faint num" style="font-size: 12px">4 of 50</span></div>
+<div style="display: flex; gap: 8px"><label style="flex-grow: 1"><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Add a person</span><input class="inp" placeholder="name@company.com" style="height: 44px; font-size: 16px"></label><button class="btn lg">Add</button></div>
+<div class="surf" style="padding: 4px 0">
+<div class="prow" style="border-top: 0"><span style="flex-grow: 1; font-size: 14px">you@theunreallab.com<span class="sub">You</span></span></div>
+<div class="prow"><span style="flex-grow: 1; font-size: 14px">cto@theunreallab.com</span><button class="btn quiet" style="height: 44px">Remove</button></div>
+<div class="prow"><span style="flex-grow: 1; font-size: 14px">advisor@example.com</span><button class="btn quiet" style="height: 44px">Remove</button></div>
+<div class="prow"><span style="flex-grow: 1; font-size: 14px">ops@theunreallab.com</span><button class="btn quiet" style="height: 44px">Remove</button></div>
+</div>
+<div style="display: flex; gap: 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--ice); background: var(--iceS); font-size: 13px; line-height: 1.45"><span class="gl wait" aria-hidden="true" style="margin-top: 4px"></span><span>This list waits for your approval before each send.</span></div>
+</section>
+</sc-if>
+
+<sc-if value="{{v.mcp}}" hint-placeholder-val="{{ false }}">
+<section aria-label="Tools to re-approve" style="display: flex; flex-direction: column; gap: 10px">
+<h2 class="disp" style="margin: 0; font-size: 19px">To re-approve</h2>
+<div class="surf" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; gap: 8px"><span class="nm" style="flex-grow: 1; font-size: 15px">search_web</span><span class="tag flag">Changed, off</span></div>
+<span class="muted" style="font-size: 13px">Search tools, changed today 13:58</span>
+<div class="diffcol"><div class="dl add"><span class="mk">+</span><span>Inputs: query, save_to_path</span></div><div class="dl del"><span class="mk">−</span><span>Server hint: read-only</span></div><div class="dl add"><span class="mk">+</span><span>Server hint: may write files</span></div></div>
+<div style="display: flex; gap: 10px; align-items: center; font-size: 13px"><span class="faint">Risk</span><span class="tag r">R1</span><span>→</span><span class="tag r">R3</span></div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px"><button class="btn lg">Keep old</button><button class="btn pri lg">Approve new</button></div>
+</div>
+<div class="empty" style="padding: 14px 16px"><span class="muted" style="font-size: 13px; line-height: 1.45">Nothing else is waiting. Adding servers and setting risk classes happen on desktop.</span></div>
+</section>
+</sc-if>
+</div>
+<nav class="glass" aria-label="App" style="position: absolute; left: 16px; right: 16px; bottom: 16px; height: 68px; border-radius: 30px; display: flex; align-items: center; gap: 4px; padding: 6px; box-sizing: border-box">
+<a class="ptab" href="Phone.dc.html"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="4.5"></circle></svg>Brain</a>
+<a class="ptab" href="PhoneApproval.dc.html"><span class="gl wait" aria-hidden="true" style="width: 12px; height: 12px; margin: 4px"></span>Needs you, 3</a>
+<a class="ptab" href="CcPhone.dc.html" aria-current="page"><svg class="ic" width="20" height="20" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 5h7M12.5 5h1M2.5 11h1M6.5 11h7"></path><circle cx="11" cy="5" r="1.5"></circle><circle cx="5" cy="11" r="1.5"></circle></svg>Control</a>
+</nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"view":{"editor":"enum","options":["log","routines","depts","recipients","mcp"],"default":"log"},"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var view = this.props.view || 'log';
+    var theme = this.props.theme || 'dark';
+    var names = [['log', 'Log', 'CcPhone.dc.html'], ['routines', 'Routines', 'CcPhoneRoutines.dc.html'], ['depts', 'Departments', 'CcPhoneDepts.dc.html'], ['recipients', 'Email', 'CcPhoneEmail.dc.html'], ['mcp', 'Tools', 'CcPhoneTools.dc.html']];
+    var v = {}; names.forEach(function (n) { v[n[0]] = n[0] === view; });
+    var first = function (arr) { return arr.map(function (x, i) { x.st = i === 0 ? 'border-top: 0' : ''; return x; }); };
+    var tog = function (on) { return { on: on ? 'true' : 'false', onT: on ? 'On' : 'Off' }; };
+    return {
+      root: 'pan ' + theme, v: v,
+      tabs: names.map(function (n) { return { n: n[1], href: n[2], on: n[0] === view ? 'true' : 'false' }; }),
+      log: first([
+        { g: 'gl wait', x: 'search_web changed; off until you approve', w: 'Pantheon, 13:58' },
+        { g: 'gl idle', x: 'Research budget $5.00 → $6.00', w: 'You, 09:14' },
+        { g: 'gl idle', x: 'Added Patent watcher, switched off', w: 'You, 09:10' },
+        { g: 'gl idle', x: 'Market scanner prompt v11 → v12', w: 'You, 08:55' },
+        { g: 'gl idle', x: 'Added ops@ to Morning brief', w: 'You, yesterday' },
+        { g: 'gl idle', x: 'Brief ranking leads with 5 items, was 7', w: 'You, yesterday' },
+        { g: 'gl idle', x: 'Retired “Research only public companies”', w: 'You, yesterday' }
+      ]),
+      rts: first([
+        Object.assign({ t: '07:30', n: 'Funding news scan', d: 'Mon to Fri' }, tog(true)),
+        Object.assign({ t: '08:00', n: 'Competitor pages', d: 'Mon, Wed, Fri' }, tog(true)),
+        Object.assign({ t: '08:30', n: 'Morning brief', d: 'Every day' }, tog(true)),
+        Object.assign({ t: '09:00', n: 'Brand mentions', d: 'New, switched off' }, tog(false)),
+        Object.assign({ t: '18:00', n: 'Spend digest', d: 'Every day' }, tog(true)),
+        Object.assign({ t: '20:00', n: 'Weekly brief', d: 'Sunday' }, tog(true))
+      ]),
+      depts: first([
+        Object.assign({ n: 'Executive Office', s: '3 agents, $1.12 of $3.00 today' }, tog(true)),
+        Object.assign({ n: 'Research', s: '5 agents, $2.46 of $6.00 today' }, tog(true)),
+        Object.assign({ n: 'Marketing', s: '3 agents, $0.54 of $2.00 today' }, tog(true)),
+        Object.assign({ n: 'Sales', s: 'New, switched off' }, tog(false))
+      ])
+    };
+  }
+}
+</script>
+</body>
+</html>

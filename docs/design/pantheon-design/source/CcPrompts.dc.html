@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Control Center, prompts</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&amp;family=Hanken+Grotesk:wght@400;500;600&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="{{root}}" style="position: relative; width: 1440px; height: 900px; overflow: hidden; color: var(--ink); font-family: 'Hanken Grotesk', system-ui, sans-serif">
+<dc-import name="CcShell" screen="prompts" theme="{{theme}}" hint-size="1440px,900px"></dc-import>
+<main style="position: absolute; left: 264px; top: 72px; width: 1160px; height: 772px; box-sizing: border-box; padding: 16px 8px 0 8px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px">
+<div><h1 class="disp" style="margin: 0; font-size: 30px">Prompts</h1><p class="muted" style="margin: 4px 0 0; font-size: 14px">Every edit is a new version. Compare any two, and make any version live again.</p></div>
+<button class="btn"><svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"></circle><path d="M8 5v3l2 1.5"></path></svg>History</button>
+</div>
+<div style="display: grid; grid-template-columns: 220px minmax(0, 1fr) 280px; gap: 16px; flex-grow: 1; min-height: 0">
+<nav aria-label="Agents" style="display: flex; flex-direction: column; gap: 4px">
+<input class="inp" placeholder="Find an agent" aria-label="Find an agent" style="border-radius: 999px; margin-bottom: 6px">
+<span class="navg" style="padding-left: 4px">Research</span>
+<a class="navi" href="#">Research head<span class="faint num" style="margin-left: auto; font-size: 12px">2</span></a>
+<a class="navi" href="#" aria-current="page">Market scanner<span class="faint num" style="margin-left: auto; font-size: 12px">3</span></a>
+<a class="navi" href="#">Source reader<span class="faint num" style="margin-left: auto; font-size: 12px">3</span></a>
+<a class="navi" href="#">Analyst<span class="faint num" style="margin-left: auto; font-size: 12px">2</span></a>
+<span class="navg" style="padding-left: 4px">Executive Office</span>
+<a class="navi" href="#">Chief of Staff<span class="faint num" style="margin-left: auto; font-size: 12px">3</span></a>
+<a class="navi" href="#">Briefing writer<span class="faint num" style="margin-left: auto; font-size: 12px">4</span></a>
+<span class="navg" style="padding-left: 4px">Marketing</span>
+<a class="navi" href="#">Copywriter<span class="faint num" style="margin-left: auto; font-size: 12px">3</span></a>
+<span class="faint" style="font-size: 12px; padding: 8px 4px">48 prompts, 312 versions</span>
+</nav>
+<section class="surf" aria-label="Market scanner prompts" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; min-height: 0">
+<div style="display: flex; align-items: center; gap: 8px">
+<div class="seg" role="tablist" aria-label="Prompt slot">
+<button role="tab" aria-pressed="true" aria-selected="true"><span class="code">system</span><span class="faint">v12</span></button>
+<button role="tab" aria-pressed="false" aria-selected="false"><span class="code">explain</span><span class="faint">v4</span></button>
+<button role="tab" aria-pressed="false" aria-selected="false"><span class="code">extract</span><span class="faint">v9</span></button>
+<button role="tab" aria-pressed="false" aria-selected="false" disabled="" title="Only the brief writer uses this slot"><span class="code">brief</span><span class="faint">not used</span></button>
+</div>
+<span style="flex-grow: 1"></span>
+<div class="seg" role="group" aria-label="View"><button aria-pressed="false">Edit</button><button aria-pressed="true">Compare</button></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+<div style="display: flex; align-items: center; gap: 8px"><span class="tag">v11</span><span class="faint" style="font-size: 12px">you, Mon 16:02</span></div>
+<div style="display: flex; align-items: center; gap: 8px"><span class="tag live">v12 live</span><span class="faint" style="font-size: 12px">you, today 08:55</span></div>
+<div class="diffcol">
+<div class="dl"><span class="mk"></span><span>You scan funding news for companies in AI code security.</span></div>
+<div class="dl"><span class="mk"></span><span>Report each round as one fact: company, amount, date and stage.</span></div>
+<div class="dl del"><span class="mk">−</span><span>Use any news source you can find.</span></div>
+<div class="dl"><span class="mk"></span><span>If two sources disagree, file both and mark the fact as disputed.</span></div>
+<div class="dl"><span class="mk"></span><span>Stop after 20 pages.</span></div>
+</div>
+<div class="diffcol">
+<div class="dl"><span class="mk"></span><span>You scan funding news for companies in AI code security.</span></div>
+<div class="dl"><span class="mk"></span><span>Report each round as one fact: company, amount, date and stage.</span></div>
+<div class="dl add"><span class="mk">+</span><span>Prefer the company’s own announcement. Use news reports only to confirm it.</span></div>
+<div class="dl add"><span class="mk">+</span><span>Skip reposts and aggregators.</span></div>
+<div class="dl"><span class="mk"></span><span>If two sources disagree, file both and mark the fact as disputed.</span></div>
+<div class="dl"><span class="mk"></span><span>Stop after 20 pages.</span></div>
+</div>
+</div>
+<div class="surf" style="padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; background: transparent">
+<span class="lbl">Runs by version, last 7 days</span>
+<div style="display: grid; grid-template-columns: 50px minmax(0, 1fr) 150px; gap: 8px 12px; align-items: center; font-size: 13px">
+<span class="num">v12</span><span class="bar"><i style="width: 15%"></i></span><span class="num faint">38 runs, 3 rejected facts</span>
+<span class="num">v11</span><span class="bar"><i style="width: 86%"></i></span><span class="num faint">214 runs, 29 rejected</span>
+<span class="num">v10</span><span class="bar"><i style="width: 22%"></i></span><span class="num faint">55 runs, 11 rejected</span>
+</div>
+<span class="faint" style="font-size: 12px">Last run on v12: today 14:21, order “Find three competitors to Ashvas…”</span>
+</div>
+<div style="margin-top: auto; display: flex; gap: 10px; align-items: flex-end; padding-top: 12px; border-top: 1px solid var(--line)">
+<div class="fld" style="flex-grow: 1"><label class="lbl" for="p-note">Note for the next version</label><input id="p-note" class="inp" placeholder="What changed and why"></div>
+<button class="btn lg">Save as draft v13</button>
+</div>
+</section>
+<aside aria-label="Versions" style="display: flex; flex-direction: column; gap: 8px">
+<div class="sech"><h2>Versions</h2><span class="faint num" style="font-size: 12px">12</span></div>
+<span class="faint" style="font-size: 12px">Pick two to compare.</span>
+<sc-for list="{{vers}}" as="v" hint-placeholder-count="6">
+<div class="{{v.c}}" style="padding: 10px 12px; border-radius: 14px; display: flex; flex-direction: column; gap: 4px">
+<div style="display: flex; align-items: center; gap: 8px"><input type="checkbox" checked="{{v.pick}}" aria-label="Compare {{v.v}}" style="width: 15px; height: 15px; accent-color: var(--gold)"><span class="num" style="font-weight: 600">{{v.v}}</span><sc-if value="{{v.live}}" hint-placeholder-val="{{ false }}"><span class="tag live">Live</span></sc-if><span class="faint num" style="margin-left: auto; font-size: 12px">{{v.when}}</span></div>
+<span style="font-size: 12.5px" class="muted">{{v.who}}</span>
+<sc-if value="{{v.note}}" hint-placeholder-val="{{ true }}"><span style="font-size: 12.5px">“{{v.note}}”</span></sc-if>
+<sc-if value="{{v.canLive}}" hint-placeholder-val="{{ true }}"><button class="btn quiet" style="height: 26px; padding: 0; align-self: flex-start; color: var(--ice)">Make this version live</button></sc-if>
+</div>
+</sc-for>
+</aside>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var theme = this.props.theme || 'dark';
+    var V = function (v, when, who, note, live, pick) { return { v: v, when: when, who: who, note: note, live: !!live, pick: !!pick, canLive: !live, c: pick ? 'surf' : '' }; };
+    return {
+      root: 'pan ' + theme, theme: theme,
+      vers: [
+        V('v12', 'Today 08:55', 'You', 'Prefer primary sources', true, true),
+        V('v11', 'Mon 16:02', 'You', 'Tighter scope', false, true),
+        V('v10', '14 Sep', 'Chief of Staff suggested, you approved', 'Add the 20-page limit'),
+        V('v9', '9 Sep', 'You', ''),
+        V('v8', '2 Sep', 'You', 'First version for Ashvas research')
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

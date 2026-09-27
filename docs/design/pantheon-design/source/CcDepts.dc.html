@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Control Center, departments</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&amp;family=Hanken+Grotesk:wght@400;500;600&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="{{root}}" style="position: relative; width: 1440px; height: 900px; overflow: hidden; color: var(--ink); font-family: 'Hanken Grotesk', system-ui, sans-serif">
+<dc-import name="CcShell" screen="depts" theme="{{theme}}" hint-size="1440px,900px"></dc-import>
+<main style="position: absolute; left: 264px; top: 72px; width: 1160px; height: 772px; box-sizing: border-box; padding: 16px 8px 0 8px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px">
+<div><h1 class="disp" style="margin: 0; font-size: 30px">Departments</h1><p class="muted" style="margin: 4px 0 0; font-size: 14px">Each department runs on a charter. Edit a draft, publish it, then apply it.</p></div>
+<div style="display: flex; gap: 8px"><button class="btn" onClick="{{openHistory}}"><svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"></circle><path d="M8 5v3l2 1.5"></path></svg>History</button><button class="btn pri"><svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10"></path></svg>New department</button></div>
+</div>
+<div style="display: grid; grid-template-columns: 404px minmax(0, 1fr); gap: 16px; min-height: 0; flex-grow: 1">
+<section aria-label="Departments" style="display: flex; flex-direction: column; gap: 8px">
+<div class="tbl">
+<div class="th" style="grid-template-columns: minmax(0, 1fr) 70px 86px"><span>Department</span><span>Today</span><span>On</span></div>
+<div class="row" style="grid-template-columns: minmax(0, 1fr) 70px 86px; padding-top: 8px; padding-bottom: 8px"><span><span class="nm">Executive Office</span> <span class="tag live" style="margin-left: 6px">Live v4</span><span class="sub">Chief of Staff, 3 agents, $3.00 a day</span></span><span class="num">$1.12</span><button class="tog" role="switch" aria-checked="true" aria-label="Executive Office on"><span class="tr"></span>On</button></div>
+<div class="row sel" style="grid-template-columns: minmax(0, 1fr) 70px 86px; padding-top: 8px; padding-bottom: 8px"><span><span class="nm">Research</span> <span class="tag draft" style="margin-left: 6px">Draft v8</span><span class="sub">Research head, 5 agents, $5.00 a day</span></span><span class="num">$2.46</span><button class="tog" role="switch" aria-checked="true" aria-label="Research on"><span class="tr"></span>On</button></div>
+<div class="row" style="grid-template-columns: minmax(0, 1fr) 70px 86px; padding-top: 8px; padding-bottom: 8px"><span><span class="nm">Marketing</span> <span class="tag live" style="margin-left: 6px">Live v3</span><span class="sub">Marketing head, 3 agents, $2.00 a day</span></span><span class="num">$0.54</span><button class="tog" role="switch" aria-checked="true" aria-label="Marketing on"><span class="tr"></span>On</button></div>
+<div class="row new" style="grid-template-columns: minmax(0, 1fr) 70px 86px; padding-top: 8px; padding-bottom: 8px"><span><span class="nm">Sales</span> <span class="tag off" style="margin-left: 6px">Off, new</span><span class="sub">No head yet, 0 agents, $0.00 a day</span></span><span class="faint num">—</span><button class="tog" role="switch" aria-checked="false" aria-label="Sales off"><span class="tr"></span>Off</button></div>
+</div>
+<div class="surf" style="padding: 12px 14px; display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; justify-content: space-between; font-size: 13px"><span class="muted">Budgets set</span><span class="num"><b>$10.00</b> <span class="faint">of $15.00 a day</span></span></div>
+<span class="bar"><i style="width: 67%"></i></span>
+<span class="faint" style="font-size: 12px">New departments start switched off. Switching one on also switches on its agents and routines.</span>
+</div>
+<div class="surf" style="padding: 14px; display: flex; flex-direction: column; gap: 10px">
+<div class="sech"><h3>Research report</h3><div class="seg" role="group" aria-label="Period"><button aria-pressed="false">7 days</button><button aria-pressed="true">14 days</button><button aria-pressed="false">30 days</button></div></div>
+<div style="display: flex; align-items: baseline; gap: 10px"><span class="disp num" style="font-size: 30px">11 of 14</span><span class="muted" style="font-size: 13px">days met the done test</span></div>
+<div role="img" aria-label="Done test by day: 11 met, 3 missed" style="display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); gap: 4px">
+<sc-for list="{{days}}" as="d" hint-placeholder-count="14"><span title="{{d.t}}" style="height: 26px; border-radius: 5px; display: grid; place-items: center; {{d.st}}"><span class="{{d.g}}" aria-hidden="true"></span></span></sc-for>
+</div>
+<div class="cost"><span>Cost per run <b>$0.38</b></span><span>Runs <b>41</b></span><span>Done test: “3 checked facts per order”</span></div>
+</div>
+</section>
+
+<section class="surf" aria-label="Research charter" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; min-height: 0; overflow: hidden">
+<div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
+<h2 class="disp" style="margin: 0; font-size: 22px">Research charter</h2>
+<span class="tag draft">Draft v8</span><span class="faint" style="font-size: 12px">Live is v7, since 18 Sep</span>
+<span style="flex-grow: 1"></span>
+<button class="btn quiet">Compare with live</button>
+<button class="tog" role="switch" aria-checked="true"><span class="tr"></span>Draft</button>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+<div class="fld"><label class="lbl" for="purpose">Purpose</label><textarea id="purpose" class="inp" rows="3">Find, check and file facts about markets, competitors and funding, so the owner decides with evidence.</textarea></div>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div class="fld"><span class="lbl">Daily budget</span><div style="display: flex; gap: 10px; align-items: center"><input class="inp num" value="$6.00" aria-label="Daily budget" style="width: 96px"><span class="cost"><span>Today <b>$2.46</b></span><span>7 days <b>$19.80</b></span><span class="spark" aria-hidden="true"><i style="height: 9px"></i><i style="height: 12px"></i><i style="height: 8px"></i><i style="height: 14px"></i><i style="height: 11px"></i><i style="height: 13px"></i><i style="height: 10px"></i></span></span></div></div>
+<div class="fld"><span class="lbl">Default autonomy</span><div class="seg" role="group" aria-label="Autonomy"><button aria-pressed="false">L0</button><button aria-pressed="true">L1</button><button aria-pressed="false">L2</button><button aria-pressed="false">L3</button></div></div>
+</div>
+</div>
+<div class="sec">
+<div class="sech"><h3>People</h3><button class="btn quiet">Add worker</button></div>
+<div class="tbl">
+<div class="th" style="grid-template-columns: minmax(0, 1.3fr) 110px 90px 90px minmax(0, 1.2fr) 70px"><span>Name</span><span>Role type</span><span>Runner</span><span>Tier</span><span>Tools</span><span>Prompts</span></div>
+<sc-for list="{{people}}" as="p" hint-placeholder-count="6">
+<div class="{{p.rc}}" style="grid-template-columns: minmax(0, 1.3fr) 110px 90px 90px minmax(0, 1.2fr) 70px; min-height: 38px"><span class="nm">{{p.n}}<sc-if value="{{p.isNew}}" hint-placeholder-val="{{ false }}"> <span class="tag off" style="margin-left: 4px">Off, new</span></sc-if></span><span>{{p.role}}</span><span>{{p.runner}}</span><span>{{p.tier}}</span><span class="muted">{{p.tools}}</span><span class="num">{{p.prompts}}</span></div>
+</sc-for>
+</div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px">
+<div class="sec"><span class="lbl">Morning routine</span><div style="display: flex; flex-direction: column; gap: 6px; font-size: 13px"><span><span class="num faint">07:30</span> Scan funding news</span><span><span class="num faint">08:00</span> Read new competitor pages</span><span class="faint" style="text-decoration: line-through">08:30 Old digest</span></div></div>
+<div class="sec"><span class="lbl">Approval rules</span><div style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; line-height: 1.4"><span>Ask me before one task spends over $1.</span><span>Ask me before contacting anyone outside the company.</span></div></div>
+<div class="sec"><span class="lbl">Judge checks</span><div class="chipset"><button class="chip" aria-pressed="true">Fact check</button><button class="chip" aria-pressed="true">Page screening</button><button class="chip" aria-pressed="true">Clash with you</button><button class="chip" aria-pressed="false">Brief ranking</button></div></div>
+</div>
+<div style="display: flex; align-items: center; gap: 10px; margin-top: auto; padding-top: 12px; border-top: 1px solid var(--line)">
+<span class="faint" style="font-size: 12.5px; flex-grow: 1">A draft can’t be applied. Publish it to make v8 live, then apply.</span>
+<button class="btn">Switch off department</button>
+<button class="btn" disabled="">Apply</button>
+<button class="btn pri" onClick="{{openPreview}}">Publish v8</button>
+</div>
+</section>
+</div>
+</main>
+
+<sc-if value="{{showPreview}}" hint-placeholder-val="{{ false }}">
+<div class="scrim">
+<section class="glass" role="dialog" aria-labelledby="pv-h" style="width: 520px; box-sizing: border-box; padding: 26px; border-radius: 28px; display: flex; flex-direction: column; gap: 16px">
+<span class="faint" style="font-size: 12.5px">Research charter, v7 to v8</span>
+<h2 id="pv-h" class="disp" style="margin: 0; font-size: 26px">Publish and apply v8?</h2>
+<p class="muted" style="margin: 0; font-size: 14px; line-height: 1.5">Creates 1 agent (switched off), updates 2 prompts, switches off 1 routine and raises the budget by $1.00 a day.</p>
+<div class="tbl surf" style="padding: 4px 0">
+<div class="row" style="grid-template-columns: 22px minmax(0, 1fr) auto; border-top: 0"><span class="dl add" style="padding: 0; background: none"><span class="mk">+</span></span><span>Creates <b>Patent watcher</b>, switched off</span><span class="tag off">Off</span></div>
+<div class="row" style="grid-template-columns: 22px minmax(0, 1fr) auto"><span class="faint" style="font-weight: 600">~</span><span>Updates Market scanner <span class="code">system</span> to v12</span><span class="faint num">1 line</span></div>
+<div class="row" style="grid-template-columns: 22px minmax(0, 1fr) auto"><span class="faint" style="font-weight: 600">~</span><span>Updates Analyst <span class="code">extract</span> to v9</span><span class="faint num">3 lines</span></div>
+<div class="row" style="grid-template-columns: 22px minmax(0, 1fr) auto"><span style="color: var(--verm); font-weight: 600">−</span><span>Switches off routine “08:30 Old digest”</span><span class="tag off">Off</span></div>
+<div class="row" style="grid-template-columns: 22px minmax(0, 1fr) auto"><span class="faint" style="font-weight: 600">~</span><span>Daily budget</span><span class="num">$5.00 → <b>$6.00</b></span></div>
+</div>
+<div class="lock"><svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5"></rect><path d="M5.5 7V5a2.5 2.5 0 015 0v2"></path></svg><span><b>New agents start switched off.</b> You switch Patent watcher on yourself, from Agents.</span></div>
+<div class="fld"><label class="lbl" for="pv-note">Note for the log (optional)</label><input id="pv-note" class="inp" placeholder="Why this change"></div>
+<div style="display: flex; justify-content: flex-end; gap: 8px"><button class="btn lg" onClick="{{closeAll}}">Cancel</button><button class="btn pri lg">Publish and apply</button></div>
+</section>
+</div>
+</sc-if>
+
+<sc-if value="{{showHistory}}" hint-placeholder-val="{{ false }}">
+<aside class="glass" aria-label="History of the Research charter" style="position: absolute; right: 16px; top: 72px; width: 380px; height: 772px; box-sizing: border-box; padding: 18px 20px; border-radius: 26px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; gap: 8px"><h2 class="disp" style="margin: 0; font-size: 20px; flex-grow: 1">History</h2><button class="btn ibtn quiet" aria-label="Close history" onClick="{{closeAll}}"><svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"></path></svg></button></div>
+<span class="muted" style="font-size: 13px; margin-top: -6px">Research charter and everything in it</span>
+<div class="seg" role="group" aria-label="Show"><button aria-pressed="true">Changes</button><button aria-pressed="false">Versions</button></div>
+<div style="display: flex; flex-direction: column">
+<sc-for list="{{hist}}" as="h" hint-placeholder-count="8">
+<div class="ev"><span class="{{h.g}}" aria-hidden="true"></span><span>{{h.x}}<span class="w num">{{h.w}}</span><sc-if value="{{h.undo}}" hint-placeholder-val="{{ false }}"><button class="btn quiet" style="height: 26px; padding: 0; margin-top: 4px; color: var(--ice)">Undo</button></sc-if></span></div>
+</sc-for>
+</div>
+<a class="btn" href="CcLog.dc.html" style="margin-top: auto; align-self: flex-start">Open the company log</a>
+</aside>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"sub":{"editor":"enum","options":["edit","preview","history"],"default":"edit"},"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var self = this, st = this.state || {};
+    var sub = st.sub || this.props.sub || 'edit';
+    var theme = this.props.theme || 'dark';
+    var met = [1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1];
+    var days = met.map(function (m, i) { return { t: m ? 'Met' : 'Missed', g: m ? 'gl done' : 'gl fail', st: m ? 'background: var(--goldS)' : 'background: transparent; border: 1px dashed var(--edge)' }; });
+    var P = function (n, role, runner, tier, tools, prompts, isNew) { return { n: n, role: role, runner: runner, tier: tier, tools: tools, prompts: prompts, isNew: !!isNew, rc: 'row' + (isNew ? ' new' : '') }; };
+    var hist = [
+      { g: 'gl idle', x: 'Daily budget $5.00 → $6.00, you', w: 'Today 09:14. Note: more pages on funding days', undo: true },
+      { g: 'gl idle', x: 'Added worker Patent watcher (switched off), you', w: 'Today 09:10', undo: true },
+      { g: 'gl idle', x: 'Routine “08:30 Old digest” marked for switch-off, you', w: 'Today 09:08', undo: true },
+      { g: 'gl done', x: 'Market scanner system prompt v11 → v12, you', w: 'Today 08:55. Note: prefer primary sources', undo: false },
+      { g: 'gl done', x: 'Charter v7 made live, you', w: '18 Sep, 17:40', undo: false },
+      { g: 'gl done', x: 'Judge check “Clash with you” switched on, you', w: '12 Sep, 11:02', undo: false },
+      { g: 'gl wait', x: 'Chief of Staff suggested L2 for Source reader. You ignored it.', w: '9 Sep, 16:20', undo: false }
+    ];
+    return {
+      root: 'pan ' + theme, theme: theme, days: days,
+      people: [
+        P('Research head', 'Head', 'router', 'standard', 'Brain read, Brain write', '2'),
+        P('Market scanner', 'Worker', 'deep', 'standard', 'Web search, Page reader', '3'),
+        P('Source reader', 'Worker', 'pipeline', 'cheap', 'Page reader, Brain write', '3'),
+        P('Analyst', 'Worker', 'deep', 'frontier', 'Brain read', '2'),
+        P('Archivist', 'Worker', 'digest', 'cheap', 'Brain read', '1'),
+        P('Patent watcher', 'Worker', 'pipeline', 'cheap', 'Web search', '1', true)
+      ],
+      hist: hist,
+      showPreview: sub === 'preview', showHistory: sub === 'history',
+      openPreview: function () { self.setState({ sub: 'preview' }); },
+      openHistory: function () { self.setState({ sub: 'history' }); },
+      closeAll: function () { self.setState({ sub: 'edit' }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

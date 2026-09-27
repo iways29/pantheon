@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Control Center shell</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&amp;family=Hanken+Grotesk:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+.pan.dark{--bg:#070B18;--ink:#ECE6D6;--ink2:#AEB4C6;--ink3:#8189A0;--gold:#E8BC62;--goldS:rgba(232,188,98,.16);--ice:#94BBFF;--iceS:rgba(148,187,255,.16);--verm:#FF8466;--vermS:rgba(255,132,102,.14);--glass:rgba(24,32,60,.46);--glass2:rgba(40,52,92,.5);--surf:rgba(236,230,214,.035);--surf2:rgba(236,230,214,.06);--edge:rgba(255,255,255,.11);--hi:rgba(255,255,255,.14);--shadow:0 18px 50px rgba(0,0,0,.45);--glow:rgba(232,188,98,.15);--veil:rgba(7,11,24,.55);--line:rgba(236,230,214,.10);--rimA:rgba(255,255,255,.34);--rimB:rgba(255,255,255,.04)}
+.pan.light{--bg:#E9ECF3;--ink:#141A2E;--ink2:#3C4560;--ink3:#566079;--gold:#96650F;--goldS:rgba(150,101,15,.12);--ice:#2C5BC8;--iceS:rgba(44,91,200,.12);--verm:#B93D14;--vermS:rgba(185,61,20,.10);--glass:rgba(255,255,255,.52);--glass2:rgba(255,255,255,.72);--surf:rgba(255,255,255,.55);--surf2:rgba(255,255,255,.8);--edge:rgba(20,26,46,.10);--hi:rgba(255,255,255,.9);--shadow:0 18px 50px rgba(40,50,90,.16);--glow:rgba(150,101,15,.10);--veil:rgba(233,236,243,.6);--line:rgba(20,26,46,.10);--rimA:rgba(255,255,255,.95);--rimB:rgba(255,255,255,.2)}
+.glass{position:relative;isolation:isolate;background:var(--glass);-webkit-backdrop-filter:blur(26px) saturate(170%);backdrop-filter:blur(26px) saturate(170%);border:1px solid transparent;box-shadow:inset 0 1px 0 var(--hi),var(--shadow)}
+.glass::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;pointer-events:none;background:radial-gradient(140% 90% at 18% 0%,rgba(255,255,255,.10),rgba(255,255,255,0) 42%)}
+.glass::after{content:"";position:absolute;inset:-1px;border-radius:inherit;padding:1px;pointer-events:none;background:linear-gradient(150deg,var(--rimA),var(--rimB) 34%,rgba(255,255,255,0) 62%,var(--rimB));-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
+.glass .glass{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--glass2);box-shadow:inset 0 1px 0 var(--hi)}
+.glass .glass::before,.glass .glass::after{display:none}
+.glass .glass{border:1px solid var(--edge)}
+@media (prefers-reduced-transparency:reduce){.glass{-webkit-backdrop-filter:blur(40px);backdrop-filter:blur(40px);background:var(--bg)}}
+@media (prefers-contrast:more){.glass{border:1.5px solid var(--ink2)}.glass::after{display:none}.surf,.row{border-color:var(--ink3)}}
+.disp{font-family:'Marcellus',Georgia,serif;font-weight:400;letter-spacing:.01em}
+.code{font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:12px}
+.ic{fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.muted{color:var(--ink2)}.faint{color:var(--ink3)}.num{font-variant-numeric:tabular-nums}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:0 14px;border-radius:999px;font:500 13px/1 'Hanken Grotesk',system-ui,sans-serif;color:var(--ink);cursor:pointer;white-space:nowrap;box-sizing:border-box;text-decoration:none;border:1px solid var(--edge);background:var(--surf2)}
+.btn.lg{height:44px;padding:0 18px;font-size:14px}
+.btn.pri{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn.kill{background:transparent;border-color:var(--verm);color:var(--verm)}
+.btn.quiet{background:transparent;border-color:transparent;color:var(--ink2)}
+.btn.ibtn{width:36px;padding:0}
+.btn:disabled{opacity:.42;cursor:not-allowed}
+button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--ice);outline-offset:2px}
+.surf{background:var(--surf);border:1px solid var(--line);border-radius:18px}
+.sec{display:flex;flex-direction:column;gap:10px}
+.sech{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.sech h2,.sech h3{margin:0;font-family:'Marcellus',Georgia,serif;font-weight:400}
+.sech h2{font-size:20px}.sech h3{font-size:16px}
+.lbl{font-size:12px;color:var(--ink3)}
+.inp{height:38px;border-radius:10px;border:1px solid var(--edge);background:var(--surf2);color:var(--ink);font:400 14px/1 'Hanken Grotesk',sans-serif;padding:0 12px;box-sizing:border-box;width:100%}
+.inp::placeholder{color:var(--ink3)}
+textarea.inp{height:auto;padding:9px 12px;line-height:1.45;resize:none}
+.inp.bad{border-color:var(--verm)}
+.err{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--verm)}
+.fld{display:flex;flex-direction:column;gap:5px}
+.seg{display:inline-flex;gap:2px;padding:3px;border-radius:12px;background:var(--surf);border:1px solid var(--line)}
+.seg button{height:30px;padding:0 11px;border:0;border-radius:9px;background:transparent;color:var(--ink2);font:500 12.5px/1 'Hanken Grotesk',sans-serif;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.seg button[aria-pressed="true"]{background:var(--glass2);color:var(--ink);box-shadow:inset 0 1px 0 var(--hi),0 0 0 1px var(--edge)}
+.tog{display:inline-flex;align-items:center;gap:8px;height:28px;padding:0;border:0;background:transparent;color:var(--ink2);font:500 12px/1 'Hanken Grotesk',sans-serif;cursor:pointer}
+.tog .tr{position:relative;width:34px;height:20px;border-radius:999px;background:var(--line);border:1px solid var(--edge);box-sizing:border-box;flex:none}
+.tog .tr::after{content:"";position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:50%;background:var(--ink3)}
+.tog[aria-checked="true"]{color:var(--ink)}
+.tog[aria-checked="true"] .tr{background:var(--goldS);border-color:var(--gold)}
+.tog[aria-checked="true"] .tr::after{left:16px;background:var(--gold)}
+.tag{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 9px;border-radius:999px;font:500 11.5px/1 'Hanken Grotesk',sans-serif;border:1px solid var(--edge);color:var(--ink2);white-space:nowrap}
+.tag.live{color:var(--ink)}
+.tag.live::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--gold)}
+.tag.draft{border-style:dashed;color:var(--ink)}
+.tag.draft::before{content:"";width:6px;height:6px;border-radius:50%;border:1px dashed var(--ink2)}
+.tag.off::before{content:"";width:6px;height:6px;border:1.2px solid var(--ink3);border-radius:1px;box-sizing:border-box}
+.tag.flag{color:var(--ice);border-color:var(--ice)}
+.tag.flag::before{content:"";width:6px;height:6px;border:1.2px solid var(--ice);transform:rotate(45deg);box-sizing:border-box}
+.tag.err{color:var(--verm);border-color:var(--verm)}
+.tag.err::before{content:"!";font-weight:700}
+.tag.ok{color:var(--ink)}
+.tag.ok::before{content:"";width:7px;height:4px;border-left:1.5px solid var(--gold);border-bottom:1.5px solid var(--gold);transform:rotate(-45deg) translateY(-1px)}
+.tag.r{font-weight:600;color:var(--ink);border-radius:6px;padding:0 7px}
+.tbl{display:flex;flex-direction:column}
+.th,.row{display:grid;align-items:center;column-gap:14px;padding:0 14px}
+.th{height:32px;font-size:12px;color:var(--ink3)}
+.row{min-height:46px;font-size:13px;border-top:1px solid var(--line)}
+.row.sel{background:var(--surf2);border-radius:12px;border-top-color:transparent;box-shadow:inset 0 0 0 1px var(--edge)}
+.row.new{background:linear-gradient(90deg,var(--iceS),transparent 60%)}
+.nm{font-weight:500;color:var(--ink)}
+.sub{display:block;font-size:12px;color:var(--ink3);margin-top:2px}
+.lock{display:flex;gap:10px;align-items:center;padding:9px 12px;border-radius:12px;font-size:12.5px;line-height:1.4;color:var(--ink2);border:1px solid var(--line);background:repeating-linear-gradient(135deg,var(--surf) 0 6px,transparent 6px 12px)}
+.lock b{color:var(--ink);font-weight:600}
+.cost{display:inline-flex;align-items:center;gap:12px;font-size:12px;color:var(--ink3);font-variant-numeric:tabular-nums}
+.cost b{color:var(--ink);font-weight:600}
+.spark{display:inline-flex;align-items:flex-end;gap:2px;height:16px}
+.spark i{display:block;width:4px;border-radius:1px;background:var(--gold);opacity:.75}
+.bar{position:relative;display:block;height:5px;border-radius:3px;background:var(--line);overflow:hidden}
+.bar i{position:absolute;left:0;top:0;bottom:0;border-radius:3px;background:var(--gold)}
+.bar.over i{background:repeating-linear-gradient(135deg,var(--verm) 0 3px,transparent 3px 5px)}
+.chipset{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 11px;border-radius:999px;border:1px solid var(--edge);background:transparent;color:var(--ink2);font:500 12px/1 'Hanken Grotesk',sans-serif;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--glass2);color:var(--ink);border-color:var(--ink3)}
+.chip[aria-pressed="true"]::before{content:"";width:7px;height:4px;border-left:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(-45deg) translateY(-1px)}
+.day{width:34px;height:34px;border-radius:50%;border:1px solid var(--edge);background:transparent;color:var(--ink3);font:600 12px/1 'Hanken Grotesk',sans-serif;cursor:pointer}
+.day[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.gl{display:inline-block;flex:none;width:10px;height:10px;box-sizing:border-box;position:relative}
+.gl.idle{border:1.5px solid var(--ink2);border-radius:50%}
+.gl.work{background:var(--gold);border-radius:50%;box-shadow:0 0 8px var(--gold)}
+.gl.wait{border:1.5px solid var(--ice);background:var(--iceS);transform:rotate(45deg);border-radius:2px}
+.gl.pause{background:linear-gradient(90deg,var(--ink2) 0 34%,transparent 34% 66%,var(--ink2) 66%)}
+.gl.stop{border:1.5px solid var(--ink3);border-radius:1px}
+.gl.done{background:var(--ink2);border-radius:50%;transform:scale(.8)}
+.gl.fail{width:11px;height:11px}
+.gl.fail::before,.gl.fail::after{content:"";position:absolute;left:0;top:50%;width:11px;height:1.8px;margin-top:-.9px;background:var(--verm);transform:rotate(45deg)}
+.gl.fail::after{transform:rotate(-45deg)}
+.gl.f-act{width:8px;height:8px;background:var(--gold);border-radius:50%}
+.gl.f-dis{width:7px;height:7px;background:var(--verm);border-radius:50%;box-shadow:0 0 0 2px var(--bg),0 0 0 3px var(--verm)}
+.cell{display:flex;align-items:center;gap:7px;height:34px;padding:0 10px;border-radius:10px;font-size:12px;border:1px solid var(--line);background:var(--surf);color:var(--ink)}
+.cell.run .m{width:8px;height:8px;border-radius:50%;background:var(--gold);flex:none}
+.cell.jev .m{width:10px;height:10px;border-radius:50%;border:1.5px solid var(--ink2);flex:none;box-sizing:border-box;position:relative}
+.cell.jev .m::after{content:"";position:absolute;inset:2px;border-radius:50%;background:var(--ink2)}
+.cell.ask .m{width:8px;height:8px;border:1.5px solid var(--ice);transform:rotate(45deg);flex:none;box-sizing:border-box}
+.cell.ask{border-color:var(--iceS)}
+.cell.none{color:var(--ink3);border-style:dashed;background:transparent}
+.cell.lockd{background:repeating-linear-gradient(135deg,var(--surf) 0 5px,transparent 5px 10px);color:var(--ink2)}
+.diffcol{display:flex;flex-direction:column;gap:2px;font-size:13px;line-height:1.5}
+.dl{display:grid;grid-template-columns:18px minmax(0,1fr);padding:3px 8px;border-radius:6px;color:var(--ink2)}
+.dl.add{background:var(--iceS);color:var(--ink)}
+.dl.del{background:var(--vermS);color:var(--ink);text-decoration:line-through;text-decoration-color:var(--verm)}
+.dl .mk{color:var(--ink3);font-weight:600}
+.dl.add .mk{color:var(--ice)}.dl.del .mk{color:var(--verm)}
+.empty{display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:20px;border:1px dashed var(--edge);border-radius:16px}
+.navi{display:flex;align-items:center;gap:10px;height:36px;padding:0 12px;border-radius:12px;color:var(--ink2);font-size:13.5px;text-decoration:none}
+.navi:hover{color:var(--ink);background:var(--surf)}
+.navi[aria-current="page"]{color:var(--ink);background:var(--glass2);font-weight:600;box-shadow:inset 0 1px 0 var(--hi),0 0 0 1px var(--edge)}
+.navg{font-size:11.5px;color:var(--ink3);padding:10px 12px 4px}
+.tab{display:inline-flex;align-items:center;height:34px;padding:0 16px;border-radius:999px;color:var(--ink2);font:500 13.5px/1 'Hanken Grotesk',sans-serif;text-decoration:none}
+.tab[aria-current="page"]{background:var(--glass2);color:var(--ink);box-shadow:inset 0 1px 0 var(--hi)}
+.run-dot{width:8px;height:8px;border-radius:50%;background:var(--gold);flex:none;animation:breatheG 3.6s ease-in-out infinite}
+@keyframes breatheG{0%,100%{box-shadow:0 0 0 0 var(--goldS)}50%{box-shadow:0 0 0 6px var(--goldS)}}
+.scrim{position:absolute;inset:0;background:var(--veil);display:flex;align-items:center;justify-content:center}
+.ev{display:grid;grid-template-columns:12px minmax(0,1fr);column-gap:12px;padding:10px 0;border-top:1px solid var(--line);font-size:13px;line-height:1.45}
+.ev .gl{margin-top:5px}
+.ev .w{display:block;font-size:12px;color:var(--ink3);margin-top:2px}
+.rm *,.rm *::after,.rm *::before{animation:none!important}
+.pan.bare{display:none!important}
+@media (prefers-reduced-motion:reduce){.run-dot{animation:none}}
+</style>
+</helmet>
+<div class="{{rootCls}}" style="position: absolute; left: 0; top: 0; width: 1440px; height: 900px; overflow: hidden; background: var(--bg); color: var(--ink); font-family: 'Hanken Grotesk', system-ui, sans-serif">
+<div aria-hidden="true" style="position: absolute; left: 520px; top: 60px; width: 900px; height: 900px; border-radius: 50%; border: 1px solid var(--line); opacity: .5"></div>
+<div aria-hidden="true" style="position: absolute; left: 610px; top: 150px; width: 720px; height: 720px; border-radius: 50%; border: 1px dashed var(--line); opacity: .45"></div>
+<div aria-hidden="true" style="position: absolute; right: -220px; top: -300px; width: 760px; height: 760px; border-radius: 50%; background: radial-gradient(circle, var(--iceS) 0%, transparent 64%)"></div>
+<div aria-hidden="true" style="position: absolute; left: -260px; bottom: -320px; width: 820px; height: 820px; border-radius: 50%; background: radial-gradient(circle, var(--goldS) 0%, transparent 64%)"></div>
+
+<header style="position: absolute; left: 0; top: 0; width: 1440px; height: 64px; box-sizing: border-box; padding: 0 16px 0 24px; display: flex; align-items: center; gap: 18px">
+<div style="display: flex; align-items: center; gap: 10px; width: 224px">
+<svg class="ic" width="26" height="26" viewBox="0 0 24 24" aria-hidden="true" style="color: var(--gold)"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="5.5"></circle><path d="M12 2v3M12 12l4.5-5.5"></path></svg>
+<span class="disp" style="font-size: 20px">Pantheon</span>
+</div>
+<nav class="glass" aria-label="Main" style="display: flex; gap: 2px; padding: 3px; border-radius: 999px">
+<a class="tab" href="Main.dc.html">The brain</a>
+<a class="tab" href="CcDepts.dc.html" aria-current="page">Control Center</a>
+</nav>
+<div style="flex-grow: 1; display: flex; justify-content: center">
+<label for="cc-search" style="position: relative; width: 380px; display: block">
+<span class="vh" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Search the Control Center</span>
+<svg class="ic" width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" style="position: absolute; left: 14px; top: 11px; color: var(--ink3)"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5l3 3"></path></svg>
+<input id="cc-search" class="inp glass" placeholder="Search agents, prompts, tools, rules" style="border-radius: 999px; padding-left: 36px; height: 38px">
+</label>
+</div>
+<div style="display: flex; align-items: center; gap: 10px">
+<div class="glass" role="status" style="display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 14px; border-radius: 999px; box-sizing: border-box">
+<span class="run-dot" aria-hidden="true"></span><span style="font-size: 13.5px; font-weight: 600">Running</span><span class="faint" style="font-size: 12.5px">4 at work, 2 waiting</span>
+</div>
+<button class="btn glass lg" style="height: 38px"><svg class="ic" width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 3.5v9M10.5 3.5v9"></path></svg>Pause</button>
+<button class="btn kill lg" style="height: 38px"><svg class="ic" width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"></circle><rect x="6" y="6" width="4" height="4"></rect></svg>Kill</button>
+</div>
+</header>
+
+<nav class="glass" aria-label="Control Center sections" style="position: absolute; left: 16px; top: 72px; width: 232px; height: 772px; box-sizing: border-box; padding: 14px 10px; border-radius: 26px; display: flex; flex-direction: column; gap: 2px">
+<div style="padding: 2px 12px 8px"><div class="disp" style="font-size: 19px">Control Center</div><div class="faint" style="font-size: 12px; line-height: 1.4; margin-top: 3px">Every change is saved as a version and logged.</div></div>
+<div class="navg">Company</div>
+<a class="navi" href="CcDepts.dc.html" aria-current="{{cur.depts}}">Departments<span class="faint num" style="margin-left: auto; font-size: 12px">4</span></a>
+<a class="navi" href="CcAgents.dc.html" aria-current="{{cur.agents}}">Agents<span class="faint num" style="margin-left: auto; font-size: 12px">13</span></a>
+<a class="navi" href="CcPrompts.dc.html" aria-current="{{cur.prompts}}">Prompts<span class="faint num" style="margin-left: auto; font-size: 12px">48</span></a>
+<a class="navi" href="CcRoutines.dc.html" aria-current="{{cur.routines}}">Morning routine<span class="faint num" style="margin-left: auto; font-size: 12px">6</span></a>
+<a class="navi" href="CcKnowledge.dc.html" aria-current="{{cur.knowledge}}">Knowledge<span style="margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ice)"><span class="gl wait" aria-hidden="true" style="width: 8px; height: 8px"></span>1</span></a>
+<div class="navg">Spend and safety</div>
+<a class="navi" href="CcModels.dc.html" aria-current="{{cur.models}}">Models and spend</a>
+<a class="navi" href="CcTools.dc.html" aria-current="{{cur.tools}}">Tools and MCP<span style="margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ice)"><span class="gl wait" aria-hidden="true" style="width: 8px; height: 8px"></span>1</span></a>
+<a class="navi" href="CcAutonomy.dc.html" aria-current="{{cur.autonomy}}">Autonomy and limits</a>
+<a class="navi" href="CcJudge.dc.html" aria-current="{{cur.judge}}">Judge</a>
+<a class="navi" href="CcRules.dc.html" aria-current="{{cur.rules}}">Standing rules<span class="faint num" style="margin-left: auto; font-size: 12px">5</span></a>
+<div class="navg">Outbound</div>
+<a class="navi" href="CcMail.dc.html" aria-current="{{cur.mail}}">Newsletter and email</a>
+<div class="navg">Record</div>
+<a class="navi" href="CcLog.dc.html" aria-current="{{cur.log}}">Change log</a>
+<div style="flex-grow: 1"></div>
+<div class="lock" style="margin: 0 4px"><svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5"></rect><path d="M5.5 7V5a2.5 2.5 0 015 0v2"></path></svg><span>Only you can pause, kill or decide an approval.</span></div>
+</nav>
+
+<sc-if value="{{isEmpty}}" hint-placeholder-val="{{ false }}">
+<div style="position: absolute; left: 280px; top: 96px; width: 520px" class="empty">
+<span class="disp" style="font-size: 24px">Choose a section</span>
+<span class="muted" style="font-size: 14px; line-height: 1.5">Start with Departments. A department’s charter decides who works there, what they may spend and what needs your approval.</span>
+<a class="btn pri" href="CcDepts.dc.html">Open Departments</a>
+</div>
+</sc-if>
+
+<footer aria-label="Today’s pulse" style="position: absolute; left: 0; top: 852px; width: 1440px; height: 48px; box-sizing: border-box; padding: 0 24px; display: flex; align-items: center; gap: 36px; font-size: 13px">
+<span class="disp" style="font-size: 16px">Today</span>
+<span style="display: flex; align-items: center; gap: 10px"><span class="faint">Spend</span><span class="num" style="font-weight: 600">$4.12</span><span class="faint num">of $15.00</span><span class="bar" aria-hidden="true" style="width: 72px"><i style="width: 27%"></i></span></span>
+<span style="display: flex; align-items: center; gap: 10px"><span class="faint">Facts</span><span class="num" style="font-weight: 600">+38 added</span><span class="faint num">6 rejected</span></span>
+<span style="display: flex; align-items: center; gap: 10px"><span class="faint">Tasks</span><span class="num" style="font-weight: 600">14 done</span></span>
+<span style="display: flex; align-items: center; gap: 10px"><span class="faint">Waiting for you</span><span class="gl wait" aria-hidden="true"></span><span class="num" style="font-weight: 600; color: var(--ice)">3</span></span>
+<span style="flex-grow: 1"></span>
+<span class="faint" style="font-size: 12.5px">Last change: Research budget, by you, 09:14</span>
+</footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"screen":{"editor":"enum","options":["none","depts","agents","prompts","routines","knowledge","models","tools","autonomy","judge","rules","mail","log"],"default":"none"},"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"reducedMotion":{"editor":"boolean","default":false},"bare":{"editor":"boolean","default":false},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var s = this.props.screen || 'none';
+    var keys = ['depts', 'agents', 'prompts', 'routines', 'knowledge', 'models', 'tools', 'autonomy', 'judge', 'rules', 'mail', 'log'];
+    var cur = {};
+    keys.forEach(function (k) { cur[k] = k === s ? 'page' : 'false'; });
+    return {
+      rootCls: 'pan ' + (this.props.theme || 'dark') + (this.props.reducedMotion ? ' rm' : '') + (this.props.bare ? ' bare' : ''),
+      cur: cur, isEmpty: s === 'none'
+    };
+  }
+}
+</script>
+</body>
+</html>

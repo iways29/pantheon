@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Control Center, agents</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&amp;family=Hanken+Grotesk:wght@400;500;600&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="{{root}}" style="position: relative; width: 1440px; height: 900px; overflow: hidden; color: var(--ink); font-family: 'Hanken Grotesk', system-ui, sans-serif">
+<dc-import name="CcShell" screen="agents" theme="{{theme}}" hint-size="1440px,900px"></dc-import>
+<main style="position: absolute; left: 264px; top: 72px; width: 1160px; height: 772px; box-sizing: border-box; padding: 16px 8px 0 8px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px">
+<div><h1 class="disp" style="margin: 0; font-size: 30px">Agents</h1><p class="muted" style="margin: 4px 0 0; font-size: 14px">Add an agent here. It starts switched off until you switch it on.</p></div>
+<button class="btn"><svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"></circle><path d="M8 5v3l2 1.5"></path></svg>History</button>
+</div>
+<div style="display: grid; grid-template-columns: 380px minmax(0, 1fr); gap: 16px; flex-grow: 1; min-height: 0">
+<form class="surf" aria-label="New agent" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 12px">
+<h2 class="disp" style="margin: 0; font-size: 20px">New agent</h2>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+<div class="fld"><label class="lbl" for="a-dept">Department</label><select id="a-dept" class="inp"><option>Research</option></select></div>
+<div class="fld"><label class="lbl" for="a-name">Name</label><input id="a-name" class="inp" value="Patent watcher"></div>
+</div>
+<div class="fld"><span class="lbl">Role type</span><div class="seg" role="group" aria-label="Role type"><button aria-pressed="false" type="button">Head</button><button aria-pressed="true" type="button">Worker</button><button aria-pressed="false" type="button">Chief of Staff</button></div></div>
+<div class="fld"><span class="lbl">Runner</span><div class="seg" role="group" aria-label="Runner"><button aria-pressed="false" type="button">deep</button><button aria-pressed="true" type="button">pipeline</button><button aria-pressed="false" type="button">router</button><button aria-pressed="false" type="button">digest</button></div></div>
+<div class="fld"><span class="lbl">Model tier</span><div class="seg" role="group" aria-label="Model tier"><button aria-pressed="true" type="button">cheap</button><button aria-pressed="false" type="button">standard</button><button aria-pressed="false" type="button">frontier</button></div></div>
+<div class="fld"><label class="lbl" for="a-bud">Daily budget</label><div style="display: flex; gap: 10px; align-items: center"><input id="a-bud" class="inp num" value="$0.40" style="width: 90px"><span class="faint" style="font-size: 12px">Research has $1.20 a day not yet given to anyone</span></div></div>
+<div class="fld"><label class="lbl" for="a-pr">Starting prompt</label><textarea id="a-pr" class="inp" rows="3">You watch new patent filings in AI code security. File each one as a fact with its number, owner and date.</textarea></div>
+<div class="fld"><span class="lbl">Tools</span><div class="chipset"><button class="chip" aria-pressed="true" type="button">Web search <span class="faint">R1</span></button><button class="chip" aria-pressed="true" type="button">Page reader <span class="faint">R0</span></button><button class="chip" aria-pressed="false" type="button">Brain write <span class="faint">R2</span></button><button class="chip" aria-pressed="false" type="button">Send email <span class="faint">R3</span></button></div></div>
+<div class="fld"><span class="lbl">Autonomy</span><div class="seg" role="group" aria-label="Autonomy level"><button aria-pressed="true" type="button">L0</button><button aria-pressed="false" type="button">L1</button><button aria-pressed="false" type="button">L2</button><button aria-pressed="false" type="button">L3</button></div><span class="faint" style="font-size: 12px">L0 asks you before every tool outside the brain.</span></div>
+<div style="margin-top: auto; display: flex; align-items: center; gap: 10px; padding-top: 10px; border-top: 1px solid var(--line)"><span class="tag off">Created switched off</span><span style="flex-grow: 1"></span><button class="btn pri lg" type="button">Create agent</button></div>
+</form>
+<section aria-label="All agents" style="display: flex; flex-direction: column; gap: 10px; min-height: 0">
+<div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
+<label style="position: relative; width: 220px"><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Search agents</span><input class="inp" placeholder="Search 13 agents" style="border-radius: 999px"></label>
+<button class="chip" aria-pressed="false">Department: all<svg class="ic" width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4"></path></svg></button>
+<button class="chip" aria-pressed="false">State: all<svg class="ic" width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4"></path></svg></button>
+<button class="chip" aria-pressed="false">Runner: all<svg class="ic" width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4"></path></svg></button>
+<button class="chip" aria-pressed="false">Level: all<svg class="ic" width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4"></path></svg></button>
+</div>
+<div class="glass" style="display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 16px; border-radius: 16px"><span style="font-size: 13px; font-weight: 600">2 selected</span><span class="faint" style="font-size: 12.5px; flex-grow: 1">Patent watcher, Archivist</span><button class="btn">Switch on</button><button class="btn">Switch off</button></div>
+<div class="tbl">
+<div class="th" style="grid-template-columns: 22px minmax(0, 1.4fr) 110px 76px 76px 44px 120px 76px"><span></span><span>Agent</span><span>State</span><span>Runner</span><span>Tier</span><span>Level</span><span>Today / budget</span><span>On</span></div>
+<sc-for list="{{agents}}" as="a" hint-placeholder-count="13">
+<div class="{{a.rc}}" style="grid-template-columns: 22px minmax(0, 1.4fr) 110px 76px 76px 44px 120px 76px; min-height: 40px">
+<input type="checkbox" aria-label="Select {{a.n}}" checked="{{a.sel}}" style="width: 16px; height: 16px; accent-color: var(--gold)">
+<span><span class="nm">{{a.n}}</span><span class="faint" style="font-size: 12px"> {{a.d}}</span></span>
+<span style="display: flex; align-items: center; gap: 8px"><span class="{{a.g}}" aria-hidden="true"></span>{{a.s}}</span>
+<span>{{a.r}}</span><span>{{a.t}}</span><span class="num">{{a.l}}</span>
+<span class="num">{{a.sp}}</span>
+<button class="tog" role="switch" aria-checked="{{a.on}}" aria-label="{{a.n}}"><span class="tr"></span>{{a.onT}}</button>
+</div>
+</sc-for>
+</div>
+</section>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var theme = this.props.theme || 'dark';
+    var A = function (n, d, s, r, t, l, sp, on, sel, isNew) {
+      var g = { Working: 'gl work', Idle: 'gl idle', Waiting: 'gl wait', Off: 'gl stop' }[s];
+      return { n: n, d: d, s: s === 'Waiting' ? 'Waiting for you' : s, g: g, r: r, t: t, l: l, sp: sp, on: on ? 'true' : 'false', onT: on ? 'On' : 'Off', sel: !!sel, rc: 'row' + (isNew ? ' new' : '') + (sel ? ' sel' : '') };
+    };
+    return {
+      root: 'pan ' + theme, theme: theme,
+      agents: [
+        A('Patent watcher', 'Research', 'Off', 'pipeline', 'cheap', 'L0', '$0.00 / $0.40', false, true, true),
+        A('Chief of Staff', 'Executive Office', 'Waiting', 'router', 'standard', 'L2', '$0.62 / $1.50', true),
+        A('Briefing writer', 'Executive Office', 'Idle', 'digest', 'standard', 'L1', '$0.31 / $1.00', true),
+        A('Ledger keeper', 'Executive Office', 'Idle', 'digest', 'cheap', 'L1', '$0.19 / $0.50', true),
+        A('Research head', 'Research', 'Working', 'router', 'standard', 'L2', '$0.34 / $1.00', true),
+        A('Market scanner', 'Research', 'Working', 'deep', 'standard', 'L1', '$0.98 / $1.50', true),
+        A('Source reader', 'Research', 'Working', 'pipeline', 'cheap', 'L1', '$0.75 / $1.00', true),
+        A('Analyst', 'Research', 'Idle', 'deep', 'frontier', 'L1', '$0.39 / $1.20', true),
+        A('Archivist', 'Research', 'Off', 'digest', 'cheap', 'L1', '$0.00 / $0.30', false, true),
+        A('Marketing head', 'Marketing', 'Waiting', 'router', 'standard', 'L1', '$0.22 / $0.80', true),
+        A('Copywriter', 'Marketing', 'Idle', 'deep', 'standard', 'L1', '$0.24 / $0.70', true),
+        A('Social planner', 'Marketing', 'Idle', 'pipeline', 'cheap', 'L0', '$0.08 / $0.50', true),
+        A('Jev', 'Judge', 'Working', 'router', 'cheap', '—', '$0.02 / $0.30', true)
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

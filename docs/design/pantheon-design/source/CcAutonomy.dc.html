@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Control Center, autonomy and limits</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&amp;family=Hanken+Grotesk:wght@400;500;600&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="{{root}}" style="position: relative; width: 1440px; height: 900px; overflow: hidden; color: var(--ink); font-family: 'Hanken Grotesk', system-ui, sans-serif">
+<dc-import name="CcShell" screen="autonomy" theme="{{theme}}" hint-size="1440px,900px"></dc-import>
+<main style="position: absolute; left: 264px; top: 72px; width: 1160px; height: 772px; box-sizing: border-box; padding: 16px 8px 0 8px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px">
+<div><h1 class="disp" style="margin: 0; font-size: 30px">Autonomy and limits</h1><p class="muted" style="margin: 4px 0 0; font-size: 14px">How much each level may do alone, and the hard limits on all work.</p></div>
+<button class="btn"><svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"></circle><path d="M8 5v3l2 1.5"></path></svg>History</button>
+</div>
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px">
+<div style="display: flex; flex-direction: column; gap: 14px">
+<section class="surf" aria-label="The ladder" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+<div class="sech"><h2 style="font-size: 18px">The ladder</h2><span class="faint" style="font-size: 12px">Tap a cell to change it. v6, live since 12 Sep</span></div>
+<div role="grid" aria-label="Levels by risk classes" style="display: grid; grid-template-columns: 90px repeat(5, minmax(0, 1fr)); gap: 6px; align-items: center">
+<span></span><span class="lbl">R0 reads inside</span><span class="lbl">R1 reads outside</span><span class="lbl">R2 changes Pantheon</span><span class="lbl">R3 changes outside</span><span class="lbl" style="display: flex; align-items: center; gap: 4px"><svg class="ic" width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5"></rect><path d="M5.5 7V5a2.5 2.5 0 015 0v2"></path></svg>R4 public</span>
+<sc-for list="{{ladder}}" as="l" hint-placeholder-count="4">
+<span><span class="nm">{{l.n}}</span><span class="sub">{{l.d}}</span></span>
+<sc-for list="{{l.cells}}" as="c" hint-placeholder-count="5"><button class="{{c.c}}" style="font: inherit; font-size: 12px; cursor: pointer; justify-content: flex-start"><span class="m"></span>{{c.t}}</button></sc-for>
+</sc-for>
+</div>
+<div class="lock"><svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5"></rect><path d="M5.5 7V5a2.5 2.5 0 015 0v2"></path></svg><span><b>R4 always asks you.</b> It can’t be changed, so nothing public or permanent happens without you.</span></div>
+</section>
+<section class="surf" aria-label="Promotion suggestions" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 6px">
+<div class="sech"><h2 style="font-size: 18px">Suggested promotions</h2><span class="faint" style="font-size: 12px">From your approval decisions</span></div>
+<div class="tbl">
+<div class="row" style="grid-template-columns: minmax(0, 1fr) 180px 100px 150px; border-top: 0"><span><span class="nm">Copywriter</span><span class="sub">Marketing, now L1</span></span><span class="num">32 decisions, 97% agree</span><span style="font-weight: 600">Suggest L2</span><span style="display: flex; gap: 6px; justify-content: flex-end"><button class="btn quiet">Ignore</button><button class="btn pri">Accept</button></span></div>
+<div class="row" style="grid-template-columns: minmax(0, 1fr) 180px 100px 150px"><span><span class="nm">Source reader</span><span class="sub">Research, now L1</span></span><span class="num">27 decisions, 96% agree</span><span style="font-weight: 600">Suggest L2</span><span style="display: flex; gap: 6px; justify-content: flex-end"><button class="btn quiet">Ignore</button><button class="btn pri">Accept</button></span></div>
+<div class="row" style="grid-template-columns: minmax(0, 1fr) 180px 100px 150px"><span><span class="nm">Social planner</span><span class="sub">Marketing, now L0</span></span><span class="num">11 decisions, 91% agree</span><span class="faint">Not yet</span><span class="faint" style="font-size: 12px; text-align: right">Needs 25 decisions</span></div>
+</div>
+</section>
+</div>
+<div style="display: flex; flex-direction: column; gap: 14px">
+<section class="surf" aria-label="Limits" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 4px">
+<h2 class="disp" style="margin: 0 0 4px; font-size: 18px">Limits</h2>
+<sc-for list="{{limits}}" as="x" hint-placeholder-count="8">
+<div style="display: flex; align-items: center; gap: 10px; min-height: 40px; border-top: 1px solid var(--line); font-size: 13px"><label for="{{x.id}}" style="flex-grow: 1">{{x.n}}</label><input id="{{x.id}}" class="inp num" value="{{x.v}}" style="width: 64px; height: 32px; text-align: right"><span class="faint" style="width: 64px; font-size: 12px">{{x.u}}</span></div>
+</sc-for>
+</section>
+<section class="glass" aria-label="Run controls" style="padding: 16px; border-radius: 22px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; gap: 10px"><span class="run-dot" aria-hidden="true"></span><span style="font-weight: 600">Running</span><span class="faint" style="font-size: 12.5px">4 at work, 2 waiting</span></div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px"><button class="btn lg"><svg class="ic" width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 3.5v9M10.5 3.5v9"></path></svg>Pause</button><button class="btn kill lg"><svg class="ic" width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"></circle><rect x="6" y="6" width="4" height="4"></rect></svg>Kill</button></div>
+<div class="lock"><svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5"></rect><path d="M5.5 7V5a2.5 2.5 0 015 0v2"></path></svg><span>Only a person can pause, kill or decide an approval.</span></div>
+</section>
+</div>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var theme = this.props.theme || 'dark';
+    var words = { run: 'Runs', jev: 'Jev checks', ask: 'Asks you' };
+    var L = { L0: ['run', 'ask', 'jev', 'ask', 'ask'], L1: ['run', 'run', 'jev', 'ask', 'ask'], L2: ['run', 'run', 'run', 'jev', 'ask'], L3: ['run', 'run', 'run', 'run', 'ask'] };
+    var D = { L0: 'New agents', L1: 'Most agents', L2: 'Trusted', L3: 'Rarely used' };
+    var ladder = ['L0', 'L1', 'L2', 'L3'].map(function (n) { return { n: n, d: D[n], cells: L[n].map(function (k, j) { return { c: 'cell ' + k + (j === 4 ? ' lockd' : ''), t: words[k] }; }) }; });
+    var X = function (id, n, v, u) { return { id: id, n: n, v: v, u: u }; };
+    return {
+      root: 'pan ' + theme, theme: theme, ladder: ladder,
+      limits: [
+        X('l1', 'How deep work is handed down', '3', 'levels'),
+        X('l2', 'Sub-tasks per task', '6', ''),
+        X('l3', 'Tasks per department a day', '40', ''),
+        X('l4', 'Tasks per agent an hour', '12', ''),
+        X('l5', 'Same tool call repeated', '4', 'then stop'),
+        X('l6', 'A task counts as stuck after', '20', 'minutes'),
+        X('l7', 'Promotion needs at least', '25', 'decisions'),
+        X('l8', 'And agreement of at least', '95%', '')
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Control Center, judge</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&amp;family=Hanken+Grotesk:wght@400;500;600&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="{{root}}" style="position: relative; width: 1440px; height: 900px; overflow: hidden; color: var(--ink); font-family: 'Hanken Grotesk', system-ui, sans-serif">
+<dc-import name="CcShell" screen="judge" theme="{{theme}}" hint-size="1440px,900px"></dc-import>
+<main style="position: absolute; left: 264px; top: 72px; width: 1160px; height: 772px; box-sizing: border-box; padding: 16px 8px 0 8px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px">
+<div><h1 class="disp" style="margin: 0; font-size: 30px">Judge</h1><p class="muted" style="margin: 4px 0 0; font-size: 14px">Jev checks work at a set of gates. Here you decide what each gate asks and how strict it is.</p></div>
+<button class="btn"><svg class="ic" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"></circle><path d="M8 5v3l2 1.5"></path></svg>History</button>
+</div>
+<div style="display: grid; grid-template-columns: 380px minmax(0, 1fr); gap: 14px">
+<section class="tbl" aria-label="Gates">
+<div class="th" style="grid-template-columns: minmax(0, 1fr) 64px 76px"><span>Gate</span><span>Agrees</span><span>On</span></div>
+<sc-for list="{{gates}}" as="g" hint-placeholder-count="7">
+<div class="{{g.rc}}" style="grid-template-columns: minmax(0, 1fr) 64px 76px; min-height: 50px"><span><span class="nm">{{g.n}}</span><span class="sub">{{g.s}}</span></span><span class="num">{{g.a}}</span><button class="tog" role="switch" aria-checked="{{g.on}}" aria-label="{{g.n}}"><span class="tr"></span>{{g.onT}}</button></div>
+</sc-for>
+</section>
+<section class="surf" aria-label="Fact check before the brain" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; gap: 10px"><h2 class="disp" style="margin: 0; font-size: 22px; flex-grow: 1">Fact check before the brain</h2><span class="tag live">Live v5</span><button class="btn quiet">Versions</button></div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px">
+<div class="fld"><span class="lbl">Model</span><div class="seg" role="group" aria-label="Model tier"><button aria-pressed="true">cheap</button><button aria-pressed="false">standard</button></div></div>
+<div class="fld"><span class="lbl">If Jev can’t be reached</span><div class="seg" role="group" aria-label="Failure mode"><button aria-pressed="true">Hold facts</button><button aria-pressed="false">Let through</button></div></div>
+<div class="fld"><span class="lbl">Sensitive data</span><button class="tog" role="switch" aria-checked="false"><span class="tr"></span>Not allowed (default)</button></div>
+</div>
+<div class="sec"><span class="lbl">Settings</span>
+<div class="tbl surf" style="padding: 0 4px; background: transparent">
+<div class="row" style="grid-template-columns: minmax(0, 1fr) 150px; border-top: 0"><span>Sources needed for a fact</span><input class="inp num" value="2" aria-label="Sources needed" style="height: 30px"></div>
+<div class="row" style="grid-template-columns: minmax(0, 1fr) 150px"><span>Reject reposts and aggregators</span><select class="inp" aria-label="Reject reposts" style="height: 30px"><option>yes</option></select></div>
+<div class="row" style="grid-template-columns: minmax(0, 1fr) 150px"><span>Hold for you when confidence is below</span><input class="inp num" value="0.60" aria-label="Hold threshold" style="height: 30px"></div>
+</div></div>
+<div class="sec"><div class="sech"><span class="lbl">Questions Jev asks</span><button class="btn quiet" style="height: 26px">Add question</button></div>
+<div class="tbl">
+<div class="row" style="grid-template-columns: minmax(0, 1fr) 110px 60px; border-top: 0"><span>Does the source support this claim as written?</span><span class="tag">Yes or no</span><span class="faint num">v3</span></div>
+<div class="row" style="grid-template-columns: minmax(0, 1fr) 110px 60px"><span>Which fact already in the brain does this replace?<span class="sub">Options: none, or one of up to 5 neighbours</span></span><span class="tag">Choose one</span><span class="faint num">v2</span></div>
+<div class="row" style="grid-template-columns: minmax(0, 1fr) 110px 60px"><span>How reliable is this source?<span class="sub">1 rumour to 5 the company’s own statement</span></span><span class="tag">Score 1 to 5</span><span class="faint num">v4</span></div>
+</div></div>
+<div class="sec"><div class="sech"><span class="lbl">How often Jev agrees with you</span><a href="#" style="font-size: 12.5px; color: var(--ice)">See 212 labelled examples</a></div>
+<div style="display: grid; grid-template-columns: 70px minmax(0, 1fr) 120px; gap: 8px 12px; align-items: center; font-size: 13px">
+<span>Admit</span><span class="bar"><i style="width: 96%"></i></span><span class="num">96% of 140</span>
+<span>Reject</span><span class="bar"><i style="width: 91%"></i></span><span class="num">91% of 44</span>
+<span>Hold</span><span class="bar"><i style="width: 82%"></i></span><span class="num">82% of 28</span>
+</div></div>
+</section>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var theme = this.props.theme || 'dark';
+    var G = function (n, s, a, on, sel) { return { n: n, s: s, a: a, on: on ? 'true' : 'false', onT: on ? 'On' : 'Off', rc: 'row' + (sel ? ' sel' : '') }; };
+    return {
+      root: 'pan ' + theme, theme: theme,
+      gates: [
+        G('Page screening', 'cheap, holds pages if unsure', '98%', true),
+        G('Fact check before the brain', 'cheap, holds facts if Jev is down', '93%', true, true),
+        G('Tool risk', 'standard, asks you if Jev is down', '95%', true),
+        G('Order routing', 'cheap, tier for a simple order: cheap', '89%', true),
+        G('Brief ranking', 'cheap, leads with 5 items', '84%', true),
+        G('Clash with your decisions', 'standard, holds if Jev is down', '97%', true),
+        G('Outbound email check', 'standard, not in use yet', '—', false)
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

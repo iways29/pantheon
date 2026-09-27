@@ -286,9 +286,15 @@ def relabel(cursor: psycopg.Cursor, neighbourhood_id: UUID) -> str:
     return label
 
 
+#: Words a name never ends on ("Product features and").
+SMALL_WORDS = frozenset(
+    {"a", "an", "the", "of", "and", "or", "to", "in", "on", "for", "with", "is", "are", "was", "&"}
+)
+
+
 def claim_label(claim: str, words: int = 3) -> str:
     """The first few words of a claim, without the small ones at the ends."""
-    small = {"a", "an", "the", "of", "and", "or", "to", "in", "on", "for", "is", "are", "was"}
+    small = SMALL_WORDS
     tokens = re.findall(r"[\w'\u2019-]+", claim)
     picked = [t for t in tokens if t.lower() not in small][:words]
     return " ".join(picked)[:60]
@@ -319,7 +325,10 @@ def unnamed(cursor: psycopg.Cursor, org_id: UUID | str, limit: int) -> list[dict
 def name(cursor: psycopg.Cursor, neighbourhood_id: UUID, label: str) -> str | None:
     """Keep the librarian's name: one to three plain words."""
     cleaned = re.sub(r"[\"'`*#.:]", "", label).strip()
-    cleaned = " ".join(cleaned.split()[:3])[:40]
+    kept = cleaned.split()[:3]
+    while kept and kept[-1].lower() in SMALL_WORDS:
+        kept.pop()
+    cleaned = " ".join(kept)[:40]
     if not cleaned:
         return None
     cursor.execute(

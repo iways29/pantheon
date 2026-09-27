@@ -84,7 +84,7 @@ an AI).
 | --- | --- |
 | GitHub | `iways29/pantheon` |
 | Supabase project | `epelwbiehczkkgqtgkqt` (us-west-2), reachable through the Supabase MCP |
-| Migrations applied live | all of `supabase/migrations/` through `20260927140000_graph.sql` |
+| Migrations applied live | all of `supabase/migrations/` through `20260928090000_brain_screen.sql` (applied 2026-09-27, before PR #42 merged) |
 | Vercel team | `team_6UC1DSN83JcGLrVJC3P8aXE6` |
 | API project | `pantheon-api` (`prj_XHno72KOypj7fapEIXze9XtZZJMR`), `https://api-xi-opal-67.vercel.app`, deploys from `main` |
 | Web project | `pantheon-web` (`prj_XdV67seWTQSsmSDvBUH2NIg9AZNX`) |
@@ -149,6 +149,13 @@ apply from scratch on plain Postgres (guard anything needing `pg_cron`,
    the pooler was unreachable from the cloud session). The "Brain librarian"
    routine (07:40 daily) is **off** until the owner runs `scripts.graph on`.
    Piece 2b (search along the links) only after an eval shows it helps.
+3d. **Step 10 (2026-09-27), in progress.** Designs in `docs/design/pantheon-design/`
+   (read its `HANDOFF.md`). Decisions in ADR 036: Next.js, PixiJS, Realtime on
+   `events`, a map of facts from the embeddings, reads through `app/screen.py`.
+   Phase 1 (backend): migration applied live, PR #42. After it merges:
+   `scripts.brain layout` (first map, free), then `scripts.graph setup` and
+   `scripts.graph now` (names the neighbourhoods, a few cents), each with the
+   owner's go. Phases 2 to 5 (the web app) follow as separate PRs.
 4. After five unattended mornings: the Step 8.1 Milestone report. Stop.
 
 ## Switching on Step 9 (done 2026-09-27; kept for reference)

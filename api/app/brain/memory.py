@@ -129,6 +129,18 @@ def order_moment(task: dict[str, Any]) -> Moment:
     )
 
 
+def chat_moment(message: dict[str, Any], agent: str) -> Moment:
+    """Something the owner said in the chat (ADR 037), to be sorted."""
+    said = _clip(message["body"])
+    return Moment(
+        f"chat:{message['id']}",
+        f"On {_day(message['created_at'])} the owner said to {agent}: {said}",
+        said=said,
+        where=f"a chat with {agent}",
+        when=message["created_at"],
+    )
+
+
 def remember(
     writer: BrainWriter,
     found: list[Moment],

@@ -6,41 +6,13 @@ import { Icon } from '@/components/Icon';
 import { AGENT_MARK, AGENT_WORDS, Mark } from '@/components/Mark';
 import { api } from '@/lib/api';
 import { useCompany } from '@/lib/company';
-import { previewOrders } from '@/lib/fixtures';
-import { departmentName, money, when } from '@/lib/format';
+import { previewThread, previewTalkers } from '@/lib/fixtures';
+import { agentName, departmentName, money, when } from '@/lib/format';
+import type { ChatMessage, OrderCard, OrderQuestion, Talker } from '@/lib/types';
 
-interface Question {
-  approval_id: string;
-  status: string;
-  text: string | null;
-  recommended: string | null;
-  options: { department: string; probability: number }[];
-  verdict: string | null;
-  at: string;
-  decided_at: string | null;
-}
-
-interface Order {
-  id: string;
-  title: string;
-  text: string;
-  status: string;
-  result: string | null;
-  error: string | null;
-  at: string;
-  finished_at: string | null;
-  routed: { department: string | null; at: string }[];
-  questions: Question[];
-  cost_usd: number;
-}
-
-type Message =
-  | { key: string; kind: 'you' | 'cos'; text: string; at: string }
-  | { key: string; kind: 'q'; text: string; at: string; question: Question }
-  | { key: string; kind: 'sys'; text: string; at: string };
-
-/** Events after which the conversation may have moved on. */
-const ORDER_EVENTS = new Set([
+/** Events after which a thread may have moved on. */
+const THREAD_EVENTS = new Set([
+  'chat_replied',
   'order_routed',
   'order_question',
   'task_done',
@@ -50,93 +22,89 @@ const ORDER_EVENTS = new Set([
   'killed',
 ]);
 
-function messages(orders: Order[]): Message[] {
-  const out: Message[] = [];
-  for (const order of [...orders].reverse()) {
-    const own: Message[] = [{ key: `${order.id}:you`, kind: 'you', text: order.text, at: order.at }];
-    for (const [i, q] of order.questions.entries()) {
-      own.push({
-        key: `${order.id}:q${i}`,
-        kind: 'q',
-        text: q.text || 'A question about this order',
-        at: q.at,
-        question: q,
-      });
-      if (q.status !== 'pending')
-        own.push({
-          key: `${order.id}:a${i}`,
-          kind: 'sys',
-          text: q.status === 'approved' ? 'You answered.' : q.status === 'expired' ? 'The question was cancelled.' : 'You cancelled the order.',
-          at: q.decided_at ?? q.at,
-        });
-    }
-    for (const [i, r] of order.routed.entries())
-      own.push({ key: `${order.id}:r${i}`, kind: 'cos', text: `Routed to ${departmentName(r.department)}.`, at: r.at });
-    const end = order.finished_at ?? order.at;
-    if (order.status === 'done' && order.result)
-      own.push({ key: `${order.id}:done`, kind: 'cos', text: `${order.result}\n\nWhole chain: ${money(order.cost_usd)}.`, at: end });
-    if (order.status === 'failed')
-      own.push({ key: `${order.id}:failed`, kind: 'cos', text: `This could not be done: ${order.error ?? 'no reason given'}.`, at: end });
-    if (order.status === 'cancelled')
-      own.push({ key: `${order.id}:cancelled`, kind: 'sys', text: 'This order was cancelled.', at: end });
-    // In the order things happened; the order itself always first.
-    out.push(own[0]!, ...own.slice(1).sort((a, b) => a.at.localeCompare(b.at)));
-  }
-  return out;
+function title(talker: Talker): string {
+  return talker.role === 'chief_of_staff'
+    ? 'Chief of Staff'
+    : `${departmentName(talker.department)} head`;
 }
 
-/** The chat with the Chief of Staff: orders in plain words, answers back. */
+/**
+ * The chat (ADR 037): talk with the Chief of Staff or any department head.
+ * Answers come back in seconds; asking for work starts it at once, and the
+ * work's card follows it here: its route, any question, its result and cost.
+ */
 export function Chat() {
   const { agents, onEvent, preview } = useCompany();
-  const [orders, setOrders] = useState<Order[] | null>(null);
+  const [talkers, setTalkers] = useState<Talker[]>([]);
+  const [who, setWho] = useState<string | null>(null);
+  const [thread, setThread] = useState<ChatMessage[] | null>(null);
   const [text, setText] = useState('');
-  const [sending, setSending] = useState(false);
+  const [waiting, setWaiting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const log = useRef<HTMLDivElement>(null);
 
-  const load = useCallback(async () => {
+  useEffect(() => {
     if (preview) {
-      setOrders(previewOrders(preview));
+      const list = previewTalkers();
+      setTalkers(list);
+      setWho(list[0]?.name ?? null);
+      return;
+    }
+    api
+      .get<Talker[]>('chat')
+      .then((list) => {
+        setTalkers(list);
+        setWho((current) => current ?? list[0]?.name ?? null);
+      })
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
+  }, [preview]);
+
+  const load = useCallback(async () => {
+    if (!who) return;
+    if (preview) {
+      setThread(previewThread(who, preview));
       return;
     }
     try {
-      setOrders(await api.get<Order[]>('orders?limit=30'));
+      setThread(await api.get<ChatMessage[]>(`chat/${encodeURIComponent(who)}?limit=60`));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, [preview]);
+  }, [who, preview]);
 
   useEffect(() => {
+    setThread(null);
     void load();
     return onEvent((event) => {
-      if (ORDER_EVENTS.has(event.type)) void load();
+      if (THREAD_EVENTS.has(event.type)) void load();
     });
   }, [load, onEvent]);
 
-  const list = orders ? messages(orders) : [];
+  const count = (thread?.length ?? 0) + (waiting ? 2 : 0);
   useEffect(() => {
     log.current?.scrollTo({ top: log.current.scrollHeight });
-  }, [list.length]);
+  }, [count]);
 
   async function send(event: FormEvent) {
     event.preventDefault();
-    const order = text.trim();
-    if (!order || sending) return;
-    setSending(true);
+    const said = text.trim();
+    if (!said || waiting || !who) return;
+    setWaiting(said);
+    setText('');
     setError(null);
     try {
-      if (preview) throw new Error('The preview does not send orders.');
-      await api.post('orders', { text: order });
-      setText('');
+      if (preview) throw new Error('The preview does not send messages.');
+      await api.post(`chat/${encodeURIComponent(who)}`, { text: said, key: crypto.randomUUID() });
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+      setText(said);
     } finally {
-      setSending(false);
+      setWaiting(null);
     }
   }
 
-  async function answer(question: Question, department: string | null) {
+  async function answer(question: OrderQuestion, department: string | null) {
     setError(null);
     try {
       if (preview) throw new Error('The preview does not send answers.');
@@ -153,91 +121,95 @@ export function Chat() {
     }
   }
 
-  const chief = agents.find((a) => a.role === 'chief_of_staff');
+  const talker = talkers.find((t) => t.name === who);
+  const agent = agents.find((a) => a.name === who);
 
   return (
-    <aside className="glass panel chat" aria-label="Chat with the Chief of Staff">
+    <aside className="glass panel chat" aria-label="Chat">
       <div className="chat-head">
-        {chief ? <Mark kind={AGENT_MARK[chief.state]} size={12} /> : null}
-        <div style={{ display: 'grid', gap: 2, flexGrow: 1 }}>
+        {agent ? <Mark kind={AGENT_MARK[agent.state]} size={12} /> : null}
+        <div style={{ display: 'grid', gap: 2, flexGrow: 1, minWidth: 0 }}>
           <h2 className="disp" style={{ fontSize: 18 }}>
-            Chief of Staff
+            {talker ? title(talker) : 'Chat'}
           </h2>
           <span className="faint" style={{ fontSize: 12 }}>
-            {chief ? (chief.state === 'idle' ? 'Idle, listening for orders' : AGENT_WORDS[chief.state]) : ''}
+            {waiting
+              ? 'Thinking'
+              : agent
+                ? agent.state === 'idle'
+                  ? 'Idle, listening'
+                  : AGENT_WORDS[agent.state]
+                : ''}
           </span>
         </div>
       </div>
-      <div ref={log} role="log" aria-label="Messages" className="chat-log">
-        {orders && list.length === 0 ? (
+      {talkers.length > 1 ? (
+        <div className="chat-who" role="tablist" aria-label="Talk with">
+          {talkers.map((t) => (
+            <button
+              key={t.name}
+              role="tab"
+              aria-selected={t.name === who}
+              className="chip who"
+              onClick={() => setWho(t.name)}
+            >
+              {t.role === 'chief_of_staff' ? 'Chief of Staff' : departmentName(t.department)}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      <div ref={log} role="log" aria-label="Messages" aria-live="polite" className="chat-log">
+        {thread && thread.length === 0 && !waiting ? (
           <p className="faint" style={{ fontSize: 13, textAlign: 'center' }}>
-            No orders yet. Say what you want done, in plain words.
+            {talker?.role === 'head'
+              ? `Ask ${agentName(talker.name)} anything about ${departmentName(talker.department)}, or give it work.`
+              : 'Ask anything, or say what you want done.'}
           </p>
         ) : null}
-        {list.map((m) =>
-          m.kind === 'sys' ? (
-            <div key={m.key} className="sys">
-              {m.text}
-            </div>
-          ) : m.kind === 'q' ? (
-            <div key={m.key} className="msg q g2">
-              <div className="kicker" style={{ color: 'var(--ice)', marginBottom: 6 }}>
-                <span className="gl wait" aria-hidden="true" />
-                Waiting for you
-                <span className="faint num" style={{ marginLeft: 'auto' }}>
-                  {when(m.at)}
-                </span>
-              </div>
-              {m.text}
-              {m.question.status === 'pending' ? (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
-                  {m.question.options.map((o) => (
-                    <button
-                      key={o.department}
-                      className="btn sm glass"
-                      onClick={() => void answer(m.question, o.department)}
-                    >
-                      {departmentName(o.department)}
-                      {o.department === m.question.recommended ? (
-                        <span className="faint" style={{ fontSize: 11 }}>
-                          suggested
-                        </span>
-                      ) : null}
-                    </button>
-                  ))}
-                  <button className="btn sm glass" onClick={() => void answer(m.question, null)}>
-                    Cancel the order
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          ) : (
-            <div key={m.key} className={`msg ${m.kind}${m.kind === 'cos' ? ' g2' : ''}`}>
+        {thread?.map((m) => (
+          <div key={m.id} className="msg-group">
+            <div className={`msg ${m.role === 'owner' ? 'you' : 'cos g2'}`}>
               <span style={{ whiteSpace: 'pre-wrap' }}>{m.text}</span>
               <div className="num msg-time">{when(m.at)}</div>
             </div>
-          ),
-        )}
+            {m.role === 'agent' && m.order ? <Card order={m.order} onAnswer={answer} /> : null}
+          </div>
+        ))}
+        {waiting ? (
+          <>
+            <div className="msg you">
+              <span style={{ whiteSpace: 'pre-wrap' }}>{waiting}</span>
+            </div>
+            <div className="msg cos g2 typing" role="status" aria-label="Thinking">
+              <span />
+              <span />
+              <span />
+            </div>
+          </>
+        ) : null}
       </div>
+
       <form className="chat-form" onSubmit={send}>
         <label htmlFor="order-input" className="vh">
-          Order for the Chief of Staff
+          Message
         </label>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <input
             id="order-input"
             className="inp"
-            placeholder="Give an order in plain words"
+            placeholder={talker?.role === 'head' ? 'Ask, or give work' : 'Ask, or give an order'}
             style={{ borderRadius: 999, padding: '0 18px' }}
             value={text}
             onChange={(event) => setText(event.target.value)}
             maxLength={4000}
+            autoComplete="off"
           />
           <button
             className="btn pri ibtn"
-            aria-label="Send order"
+            aria-label="Send"
             style={{ width: 44, height: 44, flex: 'none' }}
-            disabled={sending || !text.trim()}
+            disabled={Boolean(waiting) || !text.trim() || !who}
           >
             <Icon name="send" />
           </button>
@@ -248,10 +220,87 @@ export function Chat() {
           </span>
         ) : (
           <span className="faint" style={{ fontSize: 12, paddingLeft: 18 }}>
-            Each order shows its path in the brain.
+            Work you start shows its path in the brain.
           </span>
         )}
       </form>
     </aside>
+  );
+}
+
+const STATUS_WORDS: Record<string, string> = {
+  queued: 'Starting',
+  running: 'Working',
+  blocked: 'Waiting on its team',
+  awaiting_approval: 'Waiting for you',
+  done: 'Done',
+  failed: 'Failed',
+  cancelled: 'Cancelled',
+};
+
+/** The work a message started: where it went, what it asks, how it ended. */
+function Card({
+  order,
+  onAnswer,
+}: {
+  order: OrderCard;
+  onAnswer: (question: OrderQuestion, department: string | null) => void;
+}) {
+  const pending = order.questions.find((q) => q.status === 'pending');
+  const mark =
+    order.status === 'done'
+      ? 'done'
+      : order.status === 'failed' || order.status === 'cancelled'
+        ? 'stop'
+        : pending || order.status === 'awaiting_approval'
+          ? 'wait'
+          : 'work';
+  const routed = order.routed[order.routed.length - 1];
+  return (
+    <div className="order-card g2">
+      <div className="kicker">
+        <Mark kind={mark} />
+        {pending ? 'Waiting for you' : (STATUS_WORDS[order.status] ?? order.status)}
+        {routed ? <span className="faint">· {departmentName(routed.department)}</span> : null}
+        <span className="faint num" style={{ marginLeft: 'auto' }}>
+          {money(order.cost_usd)}
+        </span>
+      </div>
+      <span style={{ fontWeight: 500, lineHeight: 1.35 }}>{order.title}</span>
+      {pending ? (
+        <div className="order-q">
+          <span style={{ color: 'var(--ice)', fontSize: 13 }}>
+            {pending.text || 'Which department should take this?'}
+          </span>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {pending.options.map((o) => (
+              <button
+                key={o.department}
+                className="btn sm glass"
+                onClick={() => onAnswer(pending, o.department)}
+              >
+                {departmentName(o.department)}
+                {o.department === pending.recommended ? (
+                  <span className="faint" style={{ fontSize: 11 }}>
+                    suggested
+                  </span>
+                ) : null}
+              </button>
+            ))}
+            <button className="btn sm glass" onClick={() => onAnswer(pending, null)}>
+              Cancel it
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {order.status === 'done' && order.result ? (
+        <p className="clamp" style={{ fontSize: 13, lineHeight: 1.45 }}>
+          {order.result}
+        </p>
+      ) : null}
+      {order.status === 'failed' && order.error ? (
+        <p style={{ fontSize: 13, color: 'var(--verm)' }}>{order.error}</p>
+      ) : null}
+    </div>
   );
 }

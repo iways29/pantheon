@@ -19,6 +19,8 @@ class BrainPolicy:
     remember_orders: bool = True
     remember_asks: bool = True
     remember_approved_drafts: bool = True
+    #: What the owner says in the chat (ADR 037), sorted like an order.
+    remember_chat: bool = True
 
 
 #: Said to an agent whose facts are not kept, so it reports them instead.

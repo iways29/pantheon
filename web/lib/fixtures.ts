@@ -5,7 +5,7 @@
  * Companies and amounts are made up, as in the mockups.
  */
 
-import type { Agent, Approval, McpTool, Snapshot } from '@/lib/types';
+import type { Agent, Approval, ChatMessage, McpTool, OrderCard, Snapshot, Talker } from '@/lib/types';
 
 export type PreviewState = 'rest' | 'busy' | 'needs' | 'paused' | 'killed';
 
@@ -215,53 +215,65 @@ export function previewSnapshot(state: PreviewState): {
   return { snapshot, approvals, changedTools };
 }
 
-export function previewOrders(state: PreviewState) {
-  if (state === 'rest')
-    return [
-      {
-        id: 'o1',
-        title: 'Draft the weekly brief',
-        text: 'Draft the weekly brief from this week’s decisions.',
-        status: 'done',
-        result: 'The weekly brief is ready. Three of your decisions from this week are now facts in the brain.',
-        error: null,
-        at: at('09:12'),
-        finished_at: at('18:40'),
-        routed: [{ department: 'executive', at: at('09:13') }],
-        questions: [],
-        cost_usd: 0.92,
-      },
-    ];
+export function previewTalkers(): Talker[] {
   return [
+    { name: 'chief-of-staff', role: 'chief_of_staff', enabled: true, department: 'executive', last: null },
+    { name: 'research-head', role: 'head', enabled: true, department: 'research', last: null },
+    { name: 'marketing-head', role: 'head', enabled: true, department: 'marketing', last: null },
+  ];
+}
+
+export function previewThread(who: string, state: PreviewState): ChatMessage[] {
+  if (who !== 'chief-of-staff') return [];
+  const order: OrderCard = {
+    id: 'o2',
+    title: 'Find three competitors to Ashvas',
+    text: 'Find three competitors to Ashvas that raised money this year.',
+    status: state === 'rest' ? 'done' : state === 'killed' ? 'cancelled' : 'blocked',
+    result:
+      state === 'rest'
+        ? 'Vireo, Ashline and Tern Labs each raised this year; the brief has the rounds.'
+        : null,
+    error: null,
+    at: at('14:02'),
+    finished_at: state === 'rest' ? at('18:40') : null,
+    routed: [{ department: 'research', head: 'research-head', at: at('14:03') }],
+    questions:
+      state === 'needs' || state === 'paused'
+        ? [
+            {
+              approval_id: 'ap2',
+              status: 'pending',
+              text: 'Does “this year” mean 2026 so far, or the last 12 months?',
+              recommended: 'research',
+              options: [
+                { department: 'research', probability: 0.62 },
+                { department: 'marketing', probability: 0.21 },
+              ],
+              verdict: null,
+              at: at('14:31'),
+              decided_at: null,
+            },
+          ]
+        : [],
+    cost_usd: 1.84,
+  };
+  return [
+    { id: 'm1', role: 'owner', text: 'Morning. Anything I should know?', at: at('09:02'), order: null },
     {
-      id: 'o2',
-      title: 'Find three competitors',
-      text: 'Find three competitors to Ashvas that raised money this year. Brief me by Friday.',
-      status: state === 'killed' ? 'cancelled' : 'blocked',
-      result: null,
-      error: null,
-      at: at('14:02'),
-      finished_at: null,
-      routed: [{ department: 'research', at: at('14:03') }],
-      questions:
-        state === 'busy'
-          ? []
-          : [
-              {
-                approval_id: 'ap2',
-                status: state === 'killed' ? 'expired' : 'pending',
-                text: 'Before I narrow the list: does “this year” mean 2026 so far, or the last 12 months?',
-                recommended: 'research',
-                options: [
-                  { department: 'research', probability: 0.62 },
-                  { department: 'marketing', probability: 0.21 },
-                ],
-                at: at('14:31'),
-                decided_at: state === 'killed' ? at('14:38') : null,
-                verdict: null,
-              },
-            ],
-      cost_usd: 1.84,
+      id: 'm2',
+      role: 'agent',
+      text: 'Morning, boss. Quiet night: the brief went out at 07:15 and nothing waits for you.',
+      at: at('09:02'),
+      order: null,
     },
+    {
+      id: 'm3',
+      role: 'owner',
+      text: 'Find three competitors to Ashvas that raised money this year.',
+      at: at('14:02'),
+      order,
+    },
+    { id: 'm4', role: 'agent', text: 'On it: I have handed it to Research.', at: at('14:02'), order },
   ];
 }

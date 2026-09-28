@@ -25,6 +25,10 @@ export interface Thread {
   way: 'in' | 'out';
   /** The fact it wrote or read, when the event names one. */
   factId?: string;
+  /** A hand-off: the thread runs to this agent instead of the brain. */
+  toAgentId?: string;
+  /** Part of an order being followed: stays drawn, does not fade. */
+  still?: boolean;
 }
 
 export type Locate = (factId: string) => { x: number; y: number; front: boolean } | null;
@@ -325,10 +329,27 @@ export function Dial({
       {threads.map((t) => {
         const angle = anchor(t.agentId);
         if (angle === null) return null;
+        const still = t.still ? ' still' : '';
+        if (t.toAgentId) {
+          // A hand-off between two seats: an ice thread bowed in toward the brain.
+          const other = anchor(t.toAgentId);
+          if (other === null || other === angle) return null;
+          const [x1, y1] = at(cx, cy, ringR, angle);
+          const [x2, y2] = at(cx, cy, ringR, other);
+          const kx = cx + ((x1 + x2) / 2 - cx) * 0.45;
+          const ky = cy + ((y1 + y2) / 2 - cy) * 0.45;
+          const d = `M ${x1.toFixed(1)} ${y1.toFixed(1)} Q ${kx.toFixed(1)} ${ky.toFixed(1)} ${x2.toFixed(1)} ${y2.toFixed(1)}`;
+          return (
+            <g key={t.key} className={`thread handoff${still}`}>
+              <path d={d} className="thread-path" />
+              <path d={d} pathLength={100} className="thread-bead" />
+            </g>
+          );
+        }
         const spot = t.factId && locate ? locate(t.factId) : null;
         const d = orbit(cx, cy, at(cx, cy, ringR, angle), spot ?? rimSpot(cx, cy, radius, angle), t.way);
         return (
-          <g key={t.key} className={`thread ${t.way}${spot && !spot.front ? ' behind' : ''}`}>
+          <g key={t.key} className={`thread ${t.way}${spot && !spot.front ? ' behind' : ''}${still}`}>
             <path d={d} className="thread-path" />
             <path d={d} pathLength={100} className="thread-bead" />
             {spot ? <circle cx={spot.x} cy={spot.y} r={5} className="thread-end" /> : null}

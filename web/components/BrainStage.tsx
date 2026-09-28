@@ -12,7 +12,7 @@ import { Icon } from '@/components/Icon';
 import { FACT_MARK, Mark } from '@/components/Mark';
 import { api } from '@/lib/api';
 import { isKilled, useCompany } from '@/lib/company';
-import { previewDay } from '@/lib/fixtures';
+import { previewDay, previewPath } from '@/lib/fixtures';
 import { count, time } from '@/lib/format';
 import type { MapFact, PantheonEvent } from '@/lib/types';
 
@@ -34,6 +34,16 @@ function startOfDay(): string {
   const offset = now.getTime() - ny.getTime();
   ny.setHours(0, 0, 0, 0);
   return new Date(ny.getTime() + offset).toISOString();
+}
+
+/** Facts drawn for a followed order; the rest of its facts stay bright. */
+const FOLLOW_FACTS = 12;
+
+interface Following {
+  id: string;
+  title: string;
+  steps: { id: string; parent_id: string | null; agent_id: string | null; status: string }[];
+  facts: { fact_id: string; way: 'in' | 'out'; agent_id: string | null }[];
 }
 
 interface FactPlace {
@@ -177,6 +187,62 @@ export function BrainStage({ filter = NO_FILTER }: { filter?: BrainFilter }) {
     return () => window.removeEventListener('pantheon:replay', onReplay);
   }, [startReplay]);
 
+  // "Follow this order": its hand-offs and the facts it touched stay drawn,
+  // and the view turns to them once, because the owner asked (ScaleNotes).
+  const [following, setFollowing] = useState<Following | null>(null);
+  const follow = useCallback(
+    async (id: string, title: string, turn: boolean) => {
+      try {
+        const path = preview
+          ? previewPath(id, snapshot?.facts ?? [], snapshot?.agents ?? [])
+          : await api.get<Omit<Following, 'title'>>(`orders/${id}/path`);
+        setFollowing({ ...path, title });
+        if (turn) setTimeout(() => globe.current?.lookAt(path.facts.map((f) => f.fact_id)), 60);
+      } catch {
+        setFollowing(null);
+      }
+    },
+    [preview, snapshot?.facts, snapshot?.agents],
+  );
+  useEffect(() => {
+    const onFollow = (event: Event) => {
+      const { id, title } = (event as CustomEvent<{ id: string; title: string }>).detail;
+      void follow(id, title, true);
+    };
+    window.addEventListener('pantheon:follow', onFollow);
+    return () => window.removeEventListener('pantheon:follow', onFollow);
+  }, [follow]);
+  // The order moves on: redraw its path, without turning the view again.
+  const followed = useRef<Following | null>(null);
+  followed.current = following;
+  useEffect(
+    () =>
+      onEvent((event) => {
+        const now = followed.current;
+        if (now && (event.type.startsWith('task_') || event.type === 'fact_write_decided'))
+          void follow(now.id, now.title, false);
+      }),
+    [onEvent, follow],
+  );
+  const pathThreads = useMemo<Thread[]>(() => {
+    if (!following) return [];
+    const agentOf = new Map(following.steps.map((st) => [st.id, st.agent_id]));
+    const handoffs = following.steps
+      .filter((st) => st.parent_id && st.agent_id && agentOf.get(st.parent_id))
+      .map((st) => ({
+        key: `follow:${st.id}`,
+        agentId: agentOf.get(st.parent_id!)!,
+        toAgentId: st.agent_id!,
+        way: 'out' as const,
+        still: true,
+      }));
+    const touched = following.facts
+      .filter((f) => f.agent_id)
+      .slice(0, FOLLOW_FACTS)
+      .map((f) => ({ key: `follow:${f.fact_id}`, agentId: f.agent_id!, factId: f.fact_id, way: f.way, still: true }));
+    return [...handoffs, ...touched];
+  }, [following]);
+
   const moments = useMemo(
     () => day.filter((e) => !replaying || Date.parse(e.created_at) <= replay.at!).map((e) => e.created_at),
     [day, replaying, replay.at],
@@ -213,8 +279,11 @@ export function BrainStage({ filter = NO_FILTER }: { filter?: BrainFilter }) {
   // What a filter keeps bright; the rest of the brain is dimmed, not hidden.
   // Replaying, a fact not yet made at the replayed minute is dimmed.
   const replayMinute = replaying ? Math.floor(replay.at! / 60000) : null;
+  const focus = following?.facts.length ? following.facts.map((f) => f.fact_id) : null;
   const bright = useMemo(() => {
     if (filter.needsOnly) return new Set<string>();
+    // Following an order: only what it touched stays bright.
+    if (focus) return new Set(focus);
     const since = windowStart(filter.window, pulse?.day_starts_at);
     const until = replayMinute === null ? null : (replayMinute + 1) * 60000;
     if (!filter.department && since === null && until === null) return null;
@@ -228,7 +297,7 @@ export function BrainStage({ filter = NO_FILTER }: { filter?: BrainFilter }) {
         .filter((f) => until === null || Date.parse(f.at) < until)
         .map((f) => f.id),
     );
-  }, [filter, facts, agents, pulse?.day_starts_at, replayMinute]);
+  }, [filter, facts, agents, pulse?.day_starts_at, replayMinute, focus?.join()]);
 
   const onView = useCallback((next: View) => {
     const now = performance.now();
@@ -276,7 +345,7 @@ export function BrainStage({ filter = NO_FILTER }: { filter?: BrainFilter }) {
         open={open}
         onToggle={toggle}
         moments={moments}
-        threads={threads}
+        threads={pathThreads.length ? [...pathThreads, ...threads] : threads}
         selected={agent}
         locate={(id) => globe.current?.locate(id) ?? null}
         handAt={replay.at}
@@ -360,6 +429,21 @@ export function BrainStage({ filter = NO_FILTER }: { filter?: BrainFilter }) {
       </div>
 
       <ReplayBar replay={replay} count={day.length} />
+
+      {following ? (
+        <div className="glass follow-banner" role="status">
+          <Icon name="path" size={14} />
+          <span className="clamp1">
+            Following <b>{following.title}</b>
+          </span>
+          <span className="faint num">
+            {count(following.steps.length, 'step')} · {count(following.facts.length, 'fact')}
+          </span>
+          <button type="button" className="btn sm glass" onClick={() => setFollowing(null)}>
+            Stop following
+          </button>
+        </div>
+      ) : null}
 
       {fact ? <FactPanel id={fact} onClose={() => setFact(null)} onSelect={setFact} /> : null}
       {agent ? <AgentPanel name={agent} onClose={() => setAgent(null)} onTalk={talk} /> : null}

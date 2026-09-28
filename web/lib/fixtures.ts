@@ -353,3 +353,31 @@ export function previewDay(
     };
   });
 }
+
+/** An order's path for the preview's "Follow this order": the Chief of Staff
+ * to a head to two workers, and a few sample facts they touched. */
+export function previewPath(
+  id: string,
+  facts: { id: string }[],
+  agents: { id: string; role: string; department_id: string | null }[],
+) {
+  const chief = agents.find((a) => a.role === 'chief_of_staff') ?? agents[0];
+  const head = agents.find((a) => a.role === 'head') ?? agents[1];
+  const workers = agents.filter((a) => a.role === 'worker' && a.department_id === head?.department_id).slice(0, 2);
+  const steps = [
+    { id: `${id}:0`, parent_id: null, agent_id: chief?.id ?? null, status: 'blocked' },
+    { id: `${id}:1`, parent_id: `${id}:0`, agent_id: head?.id ?? null, status: 'blocked' },
+    ...workers.map((w, i) => ({ id: `${id}:w${i}`, parent_id: `${id}:1`, agent_id: w.id, status: 'running' })),
+  ];
+  const doers = workers.length ? workers : [head];
+  const picked = facts.slice(40, 49);
+  return {
+    id,
+    steps,
+    facts: picked.map((f, i) => ({
+      fact_id: f.id,
+      way: (i % 3 === 0 ? 'in' : 'out') as 'in' | 'out',
+      agent_id: doers[i % doers.length]?.id ?? null,
+    })),
+  };
+}

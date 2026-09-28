@@ -291,6 +291,41 @@ def test_an_orders_path_is_its_whole_tree(api: Any, world: World) -> None:
     assert api().get(f"/orders/{uuid.uuid4()}/path").status_code == 404
 
 
+def test_an_orders_path_names_the_facts_it_touched(
+    db: psycopg.Connection, tenants: Tenants, api: Any, world: World
+) -> None:
+    """ "Follow this order" draws to these: reads and writes, once each."""
+    read_only, written, refused = str(uuid.uuid4()), str(uuid.uuid4()), str(uuid.uuid4())
+    with as_service_role(db) as conn, conn.cursor() as cursor:
+        cursor.execute(
+            "select id, agent_id from public.runs where task_id = %s", (str(world.lead_task),)
+        )
+        run = cursor.fetchone()
+        for kind, payload in [
+            ("tool_called", {"tool": "brain_search", "fact_ids": [read_only, written]}),
+            ("fact_write_decided", {"outcome": "accepted", "fact_id": written}),
+            ("fact_write_decided", {"outcome": "rejected", "fact_id": refused}),
+        ]:
+            cursor.execute(
+                "insert into public.events (org_id, run_id, agent_id, type, payload) "
+                "values (%s, %s, %s, %s, %s)",
+                (
+                    str(tenants.org_a),
+                    str(run["id"]),
+                    str(run["agent_id"]),
+                    kind,
+                    psycopg.types.json.Jsonb(payload),
+                ),
+            )
+
+    path = api().get(f"/orders/{world.order}/path").json()
+
+    assert [(f["fact_id"], f["way"]) for f in path["facts"]] == [
+        (read_only, "out"),
+        (written, "in"),
+    ], "a write outranks a read; a rejected write is not drawn"
+
+
 def test_an_agents_detail(api: Any, world: World) -> None:
     lead = api().get("/agents/research-lead/detail").json()
 

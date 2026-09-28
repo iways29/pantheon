@@ -628,6 +628,41 @@
   outline: none;
 }
 
+/* Following an order: a quiet banner low in the middle, with a way out. */
+.follow-banner {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 6px 5px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  max-width: min(420px, calc(100% - 32px));
+  color: var(--ice);
+}
+
+.follow-banner .num {
+  white-space: nowrap;
+}
+
+.follow-banner b {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.replay-bar ~ .follow-banner {
+  bottom: 64px;
+}
+
+.follow-btn {
+  align-self: flex-start;
+  height: 26px;
+}
+
 /* The replay player, bottom right of the stage, clear of the key. */
 .replay-bar {
   position: absolute;
@@ -731,6 +766,20 @@
 
 .thread.in .thread-end {
   stroke: var(--gold);
+}
+
+/* An order being followed: its threads stay until the owner stops. */
+.thread.still {
+  animation: none;
+}
+
+.thread.still .thread-path {
+  stroke-opacity: 0.7;
+}
+
+.thread.handoff .thread-path,
+.thread.handoff .thread-bead {
+  stroke: var(--ice);
 }
 
 /* A fact behind the ball's centre: the thread reads as going round the back. */

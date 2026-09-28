@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 
+import { FollowButton } from '@/components/FollowButton';
 import { Icon } from '@/components/Icon';
 import { AGENT_MARK, AGENT_WORDS, Mark } from '@/components/Mark';
 import { api, stream } from '@/lib/api';
@@ -490,6 +491,7 @@ function Card({
         </span>
       </div>
       <span style={{ fontWeight: 500, lineHeight: 1.35 }}>{order.title}</span>
+      {order.routed.length ? <FollowButton id={order.id} title={order.title} /> : null}
       {pending ? (
         <div className="order-q">
           <span style={{ color: 'var(--ice)', fontSize: 13 }}>

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
+import { FollowButton } from '@/components/FollowButton';
 import { Mark, type MarkKind } from '@/components/Mark';
 import { api } from '@/lib/api';
 import { useCompany } from '@/lib/company';
@@ -87,9 +88,12 @@ export function OrderPath() {
   return (
     <section className="order-path" aria-labelledby="order-h">
       <div className="rule" />
-      <h2 id="order-h" className="disp" style={{ fontSize: 18 }}>
-        {moving ? 'Order in motion' : 'Last order'}
-      </h2>
+      <div className="row-between" style={{ alignItems: 'center' }}>
+        <h2 id="order-h" className="disp" style={{ fontSize: 18 }}>
+          {moving ? 'Order in motion' : 'Last order'}
+        </h2>
+        <FollowButton id={order.id} title={order.title} short />
+      </div>
       <p style={{ fontSize: 14, lineHeight: 1.4 }} className="clamp">
         {order.text}
       </p>

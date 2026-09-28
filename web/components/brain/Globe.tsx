@@ -33,6 +33,9 @@ export interface GlobeHandle {
   /** Where a fact is on screen now, in the stage's CSS pixels; front is
    * false when it lies behind the ball's centre. Null if it is not drawn. */
   locate: (factId: string) => { x: number; y: number; front: boolean } | null;
+  /** Turn smoothly to face these facts ("Follow this order", a rim marker).
+   * The view only ever moves when the owner asks (ScaleNotes.dc.html). */
+  lookAt: (factIds: string[]) => void;
 }
 
 interface Props {
@@ -719,6 +722,45 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
         if (index < 0) return;
         w.lit.set(index, performance.now() / 1000);
         w.request();
+      },
+      lookAt(factIds: string[]) {
+        const w = world.current;
+        if (!w) return;
+        const position = w.points.geometry.getAttribute('position') as THREE.BufferAttribute | undefined;
+        if (!position) return;
+        const centre = new THREE.Vector3();
+        let n = 0;
+        for (const id of factIds) {
+          const index = w.ids.indexOf(id);
+          if (index < 0) continue;
+          centre.add(new THREE.Vector3().fromBufferAttribute(position, index));
+          n += 1;
+        }
+        if (!n) return;
+        centre.divideScalar(n);
+        // Facts spread all round have no one side to face.
+        if (centre.lengthSq() < 0.01) return;
+        const distance = w.camera.position.length();
+        const from = w.camera.position.clone().normalize();
+        const to = centre.normalize();
+        const turn = new THREE.Quaternion().setFromUnitVectors(from, to);
+        const done = () => {
+          w.camera.position.copy(to).multiplyScalar(distance);
+          w.controls.update();
+          w.request();
+        };
+        if (prefersStill()) return done();
+        const t0 = performance.now();
+        const step = () => {
+          const t = Math.min(1, (performance.now() - t0) / 900);
+          const e = 1 - Math.pow(1 - t, 3);
+          const q = new THREE.Quaternion().slerp(turn, e);
+          w.camera.position.copy(from).applyQuaternion(q).multiplyScalar(distance);
+          w.controls.update();
+          w.request();
+          if (t < 1) requestAnimationFrame(step);
+        };
+        step();
       },
       locate(factId: string) {
         const w = world.current;

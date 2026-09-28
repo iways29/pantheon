@@ -501,7 +501,28 @@ function Card({
           </div>
         </div>
       ) : null}
-      {order.status === 'done' && order.result ? (
+      {order.waiting?.length ? (
+        <div className="order-q">
+          {order.waiting.map((w) => (
+            <div key={w.approval_id} className="row-between" style={{ alignItems: 'center' }}>
+              <span style={{ fontSize: 13 }}>
+                <span style={{ color: 'var(--ice)' }}>
+                  {w.kind === 'draft_review' ? 'A draft waits for your yes' : 'Waits for your yes'}
+                </span>
+                <br />
+                {w.title}
+              </span>
+              <button
+                className="btn sm glass"
+                onClick={() => window.dispatchEvent(new CustomEvent('pantheon:approval', { detail: w.approval_id }))}
+              >
+                Open
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {order.status === 'done' && order.result && !order.waiting?.length ? (
         <p className="clamp" style={{ fontSize: 13, lineHeight: 1.45 }}>
           {order.result}
         </p>

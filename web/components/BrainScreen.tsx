@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { ApprovalCard } from '@/components/ApprovalCard';
 import { BrainStage } from '@/components/BrainStage';
@@ -25,17 +25,45 @@ const PHONE = '(max-width: 760px)';
 export function BrainScreen() {
   const phone = useMedia(PHONE);
   const [open, setOpen] = useState<Approval | null>(null);
+  const { approvals } = useCompany();
+  // A work card's "Open" asks for its approval by id.
+  useEffect(() => {
+    const onAsk = (event: Event) => {
+      const id = (event as CustomEvent<string>).detail;
+      const found = approvals.find((a) => a.id === id);
+      if (found) setOpen(found);
+    };
+    window.addEventListener('pantheon:approval', onAsk);
+    return () => window.removeEventListener('pantheon:approval', onAsk);
+  }, [approvals]);
   const card = open ? <ApprovalCard approval={open} onClose={() => setOpen(null)} /> : null;
-  return phone ? <PhoneScreen onOpen={setOpen} card={card} /> : <DeskScreen onOpen={setOpen} card={card} />;
+  return phone ? (
+    <PhoneScreen onOpen={setOpen} card={card} />
+  ) : (
+    <DeskScreen onOpen={setOpen} onCloseCard={() => setOpen(null)} card={card} />
+  );
 }
 
-function DeskScreen({ onOpen, card }: { onOpen: (a: Approval) => void; card: React.ReactNode }) {
+function DeskScreen({
+  onOpen,
+  onCloseCard,
+  card,
+}: {
+  onOpen: (a: Approval) => void;
+  onCloseCard: () => void;
+  card: React.ReactNode;
+}) {
   const { error, departments, pulse, agents } = useCompany();
   const [filter, setFilter] = useState<BrainFilter>(NO_FILTER);
   const [chat, setChat] = useState<PanelMode>('open');
   const [needs, setNeeds] = useState<'open' | 'min'>('open');
   const waiting = pulse?.needs_you_total ?? 0;
   const chief = agents.find((a) => a.role === 'chief_of_staff');
+  // Folding Needs you closes the card it opened.
+  function foldNeeds() {
+    setNeeds('min');
+    onCloseCard();
+  }
   const layout = `body${needs === 'min' ? ' no-needs' : ''}${chat === 'min' ? ' no-chat' : ''}${chat === 'max' ? ' chat-max' : ''}`;
 
   return (
@@ -45,19 +73,25 @@ function DeskScreen({ onOpen, card }: { onOpen: (a: Approval) => void; card: Rea
         center={<Filters filter={filter} onChange={setFilter} departments={departments} waiting={waiting} />}
       />
       <div className={layout}>
-        {needs === 'open' && chat !== 'max' ? (
-          <aside className="glass panel needs-panel" aria-label="Needs you" style={{ padding: '18px 16px' }}>
-            <NeedsYou onOpen={onOpen} onCollapse={() => setNeeds('min')} />
-            <OrderPath />
-            {error ? (
-              <p role="alert" style={{ marginTop: 'auto', color: 'var(--verm)', fontSize: 13 }}>
-                {error}
-              </p>
-            ) : null}
-          </aside>
-        ) : null}
+        {/* Folded panels stay mounted (hidden), so opening them again is instant. */}
+        <aside
+          className="glass panel needs-panel"
+          aria-label="Needs you"
+          hidden={needs !== 'open' || chat === 'max'}
+          style={{ padding: '18px 16px' }}
+        >
+          <NeedsYou onOpen={onOpen} onCollapse={foldNeeds} />
+          <OrderPath />
+          {error ? (
+            <p role="alert" style={{ marginTop: 'auto', color: 'var(--verm)', fontSize: 13 }}>
+              {error}
+            </p>
+          ) : null}
+        </aside>
         {chat !== 'max' ? <BrainStage filter={filter} /> : null}
-        {chat !== 'min' ? <Chat mode={chat} onMode={setChat} /> : null}
+        <div className="chat-slot" hidden={chat === 'min'}>
+          <Chat mode={chat} onMode={setChat} />
+        </div>
       </div>
       <PulseStrip />
       {needs === 'min' ? (

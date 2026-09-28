@@ -58,8 +58,10 @@ OWNER_TZ = ZoneInfo("America/New_York")
 _TOOL_TEXT = {
     "chief_of_staff": (
         "give_order",
-        "Start work: hand the owner's request to the company as an order, which you then "
-        "route to the right department. Only when the owner asks for something to be done.",
+        "Hand the owner's request to a department as an order. Only for company work "
+        "that needs a department: web research, its tools, content to publish, several "
+        "steps, or an approval. Never for small talk or anything you can write or answer "
+        "yourself in your reply.",
         "order",
     ),
     "head": (

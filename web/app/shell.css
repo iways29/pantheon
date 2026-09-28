@@ -1503,3 +1503,23 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* Folded panels stay in the page, out of the layout. */
+.body > [hidden] {
+  display: none !important;
+}
+
+.chat-slot {
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+}
+
+.chat-slot > .chat {
+  flex: 1;
+}
+
+.body.chat-max .chat-slot {
+  width: min(920px, 100%);
+  justify-self: center;
+}

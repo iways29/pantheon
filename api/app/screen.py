@@ -338,10 +338,28 @@ def _card(cursor: psycopg.Cursor, t: dict[str, Any]) -> dict[str, Any]:
         }
         for r in cursor.fetchall()
     ]
+    # What the work is waiting on the owner for (a draft, an email, an action),
+    # anywhere in its tree: the outcome the owner acts on.
+    cursor.execute(
+        """
+        select ap.id, ap.action_type, coalesce(ap.payload ->> 'title', ap.payload ->> 'subject',
+               tk.title) as title
+          from public.approvals ap join public.tasks tk on tk.id = ap.task_id
+         where ap.status = 'pending' and ap.action_type <> 'route_order'
+           and (tk.id = %s or tk.root_task_id = %s)
+         order by ap.created_at
+        """,
+        (str(t["id"]), str(t["id"])),
+    )
+    waiting = [
+        {"approval_id": str(r["id"]), "kind": r["action_type"], "title": r["title"]}
+        for r in cursor.fetchall()
+    ]
     return {
         "id": str(t["id"]),
         "title": t["title"],
         "text": t["instructions"] or t["title"],
+        "waiting": waiting,
         "status": t["status"],
         "result": ((t["result"] or {}).get("summary") or "")[:4000] or None,
         "error": t["error"],

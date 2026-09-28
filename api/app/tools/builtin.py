@@ -6,6 +6,7 @@ version is what agents read.
 """
 
 from typing import Any, Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -574,13 +575,45 @@ def _check_draft(ctx: ToolContext, args: CheckDraftArgs) -> dict[str, Any]:
         "voice_score": result.voice_score,
     }
     if result.blocking:
-        output["fix_these"] = result.blocking
-        output["next"] = "Send the reasons back to the writer for a revised draft."
+        # Only what the fixer needs: the owner's hints stay on the draft.
+        output["fix_these"] = [
+            {k: v for k, v in b.items() if k in ("check", "sentence", "reason")}
+            for b in result.blocking
+        ]
+        # The text and its facts, so the fix can be made: the editor was told
+        # to fix drafts it had no way to read (2026-09-27).
+        output["draft"] = _draft_for_fixing(ctx, result.draft_id)
+        output["next"] = (
+            "Fix only these sentences in the text above and save it with save_draft, "
+            "revises set to this draft id and the same fact ids."
+        )
     if result.flags:
         output["for_the_owner"] = result.flags
     if result.status == "ready":
         output["next"] = "It waits for the owner's approval."
     return output
+
+
+def _draft_for_fixing(ctx: ToolContext, draft_id: UUID | str) -> dict[str, Any]:
+    with ctx.connection.cursor() as cursor:
+        cursor.execute(
+            "select d.title, d.channel, d.format, d.body, array(select c.fact_id::text "
+            "from public.artifact_claims c where c.draft_id = d.id "
+            "and c.relation = 'relied_on') as fact_ids from public.drafts d where d.id = %s",
+            (str(draft_id),),
+        )
+        row = cursor.fetchone()
+    if row is None:
+        return {}
+    body = row["body"]
+    return {
+        "title": row["title"],
+        "channel": row["channel"],
+        "format": row["format"],
+        # Under the tool's output cap with the reasons beside it.
+        "body": body if len(body) <= 5000 else body[:5000] + " [cut here]",
+        "fact_ids": row["fact_ids"],
+    }
 
 
 register(

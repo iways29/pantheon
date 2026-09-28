@@ -43,8 +43,9 @@
   --ink: #141a2e;
   --ink2: #3c4560;
   --ink3: #566079;
-  --gold: #96650f;
-  --goldS: rgba(150, 101, 15, 0.12);
+  /* 5.1:1 on the page: gold text (the dial's time) stays readable. */
+  --gold: #855a0c;
+  --goldS: rgba(133, 90, 12, 0.12);
   --ice: #2c5bc8;
   --iceS: rgba(44, 91, 200, 0.12);
   --verm: #b93d14;
@@ -699,3 +700,4 @@ select:focus-visible {
   gap: 6px;
   font-size: 13px;
 }
+

@@ -784,8 +784,66 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
     [],
   );
 
+  // The keyboard turns and zooms the ball as a drag or a pinch would.
+  function onKey(event: React.KeyboardEvent<HTMLDivElement>) {
+    const w = world.current;
+    if (!w) return;
+    const step = THREE.MathUtils.degToRad(event.shiftKey ? 45 : 15);
+    const turn: Record<string, [number, number]> = {
+      ArrowLeft: [-step, 0],
+      ArrowRight: [step, 0],
+      ArrowUp: [0, -step],
+      ArrowDown: [0, step],
+    };
+    if (turn[event.key]) {
+      const [azimuth, polar] = turn[event.key]!;
+      const at = new THREE.Spherical().setFromVector3(w.camera.position);
+      at.theta += azimuth;
+      at.phi = THREE.MathUtils.clamp(at.phi + polar, w.controls.minPolarAngle, w.controls.maxPolarAngle);
+      w.camera.position.setFromSpherical(at);
+      w.controls.update();
+      w.request();
+    } else if (event.key === '+' || event.key === '=') {
+      handleZoom(0.8);
+    } else if (event.key === '-' || event.key === '_') {
+      handleZoom(1.25);
+    } else if (event.key === '0') {
+      w.fit();
+    } else {
+      return;
+    }
+    event.preventDefault();
+  }
+
+  function handleZoom(factor: number) {
+    const w = world.current;
+    if (!w) return;
+    const offset = w.camera.position.clone().sub(w.controls.target);
+    offset.setLength(THREE.MathUtils.clamp(offset.length() * factor, w.controls.minDistance, w.controls.maxDistance));
+    w.camera.position.copy(w.controls.target).add(offset);
+    w.controls.update();
+    w.request();
+  }
+
+  const summary = `The brain: ${facts.length} facts${
+    neighbourhoods.length
+      ? ` in ${neighbourhoods.length} neighbourhoods: ${neighbourhoods
+          .slice(0, 12)
+          .map((h) => `${h.label} (${h.size})`)
+          .join(', ')}`
+      : ''
+  }. Arrow keys turn it, plus and minus zoom, 0 shows it all.`;
+
   return (
-    <div className="globe" ref={host}>
+    <div
+      className="globe"
+      ref={host}
+      tabIndex={0}
+      role="application"
+      aria-roledescription="globe"
+      aria-label={summary}
+      onKeyDown={onKey}
+    >
       <div className="lens" ref={lens} aria-hidden="true">
         <div className="lg-rim" />
         <div className="lg-body" />

@@ -543,6 +543,13 @@
   inset: 0;
 }
 
+/* Focused from the keyboard: a ring round the stage, not a box on the canvas. */
+.globe:focus-visible {
+  outline: 2px solid var(--ice);
+  outline-offset: -4px;
+  border-radius: 12px;
+}
+
 .globe canvas {
   cursor: grab;
   touch-action: none;
@@ -805,6 +812,17 @@
 @media (prefers-reduced-motion: reduce) {
   .rim-mark {
     animation: none;
+  }
+}
+
+/* Reduced motion (Events.dc.html): a thread appears whole, no bead. */
+:root.rm .thread-bead {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thread-bead {
+    display: none;
   }
 }
 

@@ -132,7 +132,11 @@ def test_small_talk_gets_an_answer_and_starts_nothing(
         cursor.execute(
             "select type from public.events where type like 'chat_%' order by created_at"
         )
-        assert [r["type"] for r in cursor.fetchall()] == ["chat_said", "chat_replied"]
+        assert [r["type"] for r in cursor.fetchall()] == [
+            "chat_started",
+            "chat_said",
+            "chat_replied",
+        ]
         cursor.execute("select count(*) as n from public.model_calls")
         assert cursor.fetchone()["n"] == 1, "one model call per message, logged"
     assert chat.remembered == [body["said"]["id"]], "sorted into memory after the reply"
@@ -251,3 +255,63 @@ def test_a_streamed_reply_arrives_in_pieces_then_whole(chat: Any) -> None:
 
 def test_streaming_refuses_a_worker_before_it_starts(chat: Any) -> None:
     assert chat.post("/chat/web-researcher/stream", json={"text": "hi"}).status_code == 409
+
+
+# --- Conversations ("New chat") -------------------------------------------------
+
+
+def test_a_new_chat_starts_fresh_and_the_old_one_stays(chat: Any) -> None:
+    first = chat.post("/chat/chief-of-staff", json={"text": "remember the word falcon"}).json()
+    fresh = chat.post("/chat/chief-of-staff", json={"text": "hello again", "new": True}).json()
+
+    sent = chat.model.calls[-1]["messages"]
+    assert [m["content"] for m in sent[1:]] == ["hello again"], "the old talk is not read"
+    assert fresh["said"]["conversation_id"] != first["said"]["conversation_id"]
+    listed = chat.get("/chat/chief-of-staff/conversations").json()
+    assert [c["title"] for c in listed] == ["hello again", "remember the word falcon"]
+    assert [m["text"] for m in chat.get("/chat/chief-of-staff").json()] == [
+        "hello again",
+        "You said: hello again",
+    ], "the latest conversation by default"
+    old = chat.get(
+        "/chat/chief-of-staff", params={"conversation": first["said"]["conversation_id"]}
+    ).json()
+    assert old[0]["text"] == "remember the word falcon"
+
+
+def test_a_past_chat_can_be_carried_on(chat: Any) -> None:
+    first = chat.post("/chat/chief-of-staff", json={"text": "falcon"}).json()
+    chat.post("/chat/chief-of-staff", json={"text": "something else", "new": True})
+    again = chat.post(
+        "/chat/chief-of-staff",
+        json={"text": "and then?", "conversation_id": first["said"]["conversation_id"]},
+    ).json()
+
+    assert again["said"]["conversation_id"] == first["said"]["conversation_id"]
+    sent = chat.model.calls[-1]["messages"]
+    assert [m["content"] for m in sent[1:]] == ["falcon", "You said: falcon", "and then?"]
+
+
+def test_after_a_quiet_gap_the_next_message_starts_a_new_chat(
+    db: psycopg.Connection,
+    chat: Any,
+) -> None:
+    first = chat.post("/chat/chief-of-staff", json={"text": "yesterday"}).json()
+    with as_service_role(db) as conn:
+        conn.execute("update public.chat_conversations set last_at = now() - interval '13 hours'")
+
+    later = chat.post("/chat/chief-of-staff", json={"text": "today"}).json()
+
+    assert later["said"]["conversation_id"] != first["said"]["conversation_id"]
+    assert [m["content"] for m in chat.model.calls[-1]["messages"][1:]] == ["today"]
+
+
+def test_new_chat_with_nothing_said_makes_nothing(
+    db: psycopg.Connection,
+    chat: Any,
+) -> None:
+    assert chat.get("/chat/chief-of-staff/conversations").json() == []
+    assert chat.get("/chat/chief-of-staff").json() == []
+    with db.cursor() as cursor:
+        cursor.execute("select count(*) as n from public.chat_conversations")
+        assert cursor.fetchone()["n"] == 0, "a conversation exists only once something is said"

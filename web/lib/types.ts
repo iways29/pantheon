@@ -179,10 +179,20 @@ export interface OrderCard {
   cost_usd: number;
 }
 
+/** A past chat with one agent (GET /chat/{agent}/conversations). */
+export interface Conversation {
+  id: string;
+  title: string;
+  started_at: string;
+  last_at: string;
+  messages: number;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'owner' | 'agent';
   text: string;
   at: string;
+  conversation_id?: string | null;
   order: OrderCard | null;
 }

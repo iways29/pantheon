@@ -41,7 +41,14 @@ from app.screen import order_card, pulse
 router = APIRouter(tags=["chat"])
 
 FLAG = "chat"
-DEFAULTS: dict[str, Any] = {"max_tokens": 900, "history": 20, "facts": 5, "orders": 5}
+DEFAULTS: dict[str, Any] = {
+    "max_tokens": 900,
+    "history": 20,
+    "facts": 5,
+    "orders": 5,
+    # After this long without a word, the next message starts a new conversation.
+    "idle_hours": 12,
+}
 PROMPT_SLOT = "chat"
 #: Who the owner can talk with.
 TALKERS = ("chief_of_staff", "head")
@@ -206,19 +213,91 @@ def _message(row: dict[str, Any], cursor: psycopg.Cursor) -> dict[str, Any]:
         "role": row["role"],
         "text": row["body"],
         "at": row["created_at"].isoformat(),
+        "conversation_id": str(row["conversation_id"]) if row.get("conversation_id") else None,
         "order": order_card(cursor, row["task_id"]) if row["task_id"] else None,
     }
 
 
-def thread(cursor: psycopg.Cursor, agent_id: UUID, limit: int) -> list[dict[str, Any]]:
-    """The conversation with one agent, oldest first."""
+def thread(
+    cursor: psycopg.Cursor, agent_id: UUID, limit: int, conversation: UUID | None = None
+) -> list[dict[str, Any]]:
+    """One conversation with an agent, oldest first: the one named, else the
+    latest."""
+    if conversation is None:
+        cursor.execute(
+            "select id from public.chat_conversations where agent_id = %s "
+            "order by last_at desc limit 1",
+            (str(agent_id),),
+        )
+        latest = cursor.fetchone()
+        if latest is None:
+            return []
+        conversation = latest["id"]
     cursor.execute(
-        "select * from (select id, role, body, created_at, task_id from public.chat_messages "
-        "where agent_id = %s order by created_at desc, id desc limit %s) m "
-        "order by created_at, id",
-        (str(agent_id), limit),
+        "select * from (select id, role, body, created_at, task_id, conversation_id "
+        "from public.chat_messages where agent_id = %s and conversation_id = %s "
+        "order by created_at desc, id desc limit %s) m order by created_at, id",
+        (str(agent_id), str(conversation), limit),
     )
     return [_message(r, cursor) for r in cursor.fetchall()]
+
+
+def conversations(cursor: psycopg.Cursor, agent_id: UUID, limit: int) -> list[dict[str, Any]]:
+    """Past chats with an agent, newest first."""
+    cursor.execute(
+        "select c.id, c.title, c.created_at, c.last_at, "
+        "(select count(*) from public.chat_messages m where m.conversation_id = c.id) as n "
+        "from public.chat_conversations c where c.agent_id = %s "
+        "order by c.last_at desc limit %s",
+        (str(agent_id), limit),
+    )
+    return [
+        {
+            "id": str(r["id"]),
+            "title": r["title"] or "A conversation",
+            "started_at": r["created_at"].isoformat(),
+            "last_at": r["last_at"].isoformat(),
+            "messages": r["n"],
+        }
+        for r in cursor.fetchall()
+    ]
+
+
+def _conversation(
+    cursor: psycopg.Cursor,
+    org_id: str,
+    user_id: str,
+    agent_id: UUID,
+    body: "Say",
+    conf: dict[str, Any],
+    text: str,
+) -> dict[str, Any]:
+    """Which conversation this message belongs to: the one named, a new one
+    when asked for or after `idle_hours` of quiet, else the latest."""
+    if body.conversation_id is not None:
+        cursor.execute(
+            "select id, title from public.chat_conversations where id = %s and agent_id = %s",
+            (str(body.conversation_id), str(agent_id)),
+        )
+        found = cursor.fetchone()
+        if found is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "No such conversation with this agent")
+        return found
+    if not body.new:
+        cursor.execute(
+            "select id, title from public.chat_conversations where agent_id = %s "
+            "and last_at > now() - %s * interval '1 hour' order by last_at desc limit 1",
+            (str(agent_id), float(conf["idle_hours"])),
+        )
+        found = cursor.fetchone()
+        if found is not None:
+            return found
+    cursor.execute(
+        "insert into public.chat_conversations (org_id, agent_id, title, created_by) "
+        "values (%s, %s, %s, %s) returning id, title",
+        (org_id, str(agent_id), " ".join(text.split())[:120], user_id),
+    )
+    return cursor.fetchone()
 
 
 def _prompt(cursor: psycopg.Cursor, org_id: str, agent: dict[str, Any]) -> str:
@@ -312,6 +391,10 @@ class Say(BaseModel):
     text: str = Field(min_length=1, max_length=4000)
     #: The browser's key for this send: a retry is one message.
     key: str | None = Field(default=None, max_length=100)
+    #: Carry on this conversation (a past chat reopened).
+    conversation_id: UUID | None = None
+    #: Start a new conversation ("New chat").
+    new: bool = False
 
 
 @router.get("/chat")
@@ -351,10 +434,25 @@ def get_thread(
     principal: OwnerPrincipal,
     connection: Connection,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    conversation: UUID | None = None,
 ) -> list[dict[str, Any]]:
+    """A conversation with the agent: the one named, else the latest."""
     owner_org(connection, principal.user_id)
     with acting_as(connection, user_id=principal.user_id) as conn, conn.cursor() as cursor:
-        return thread(cursor, _talker(cursor, agent)["id"], limit)
+        return thread(cursor, _talker(cursor, agent)["id"], limit, conversation)
+
+
+@router.get("/chat/{agent}/conversations")
+def get_conversations(
+    agent: str,
+    principal: OwnerPrincipal,
+    connection: Connection,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> list[dict[str, Any]]:
+    """Past chats with the agent, newest first."""
+    owner_org(connection, principal.user_id)
+    with acting_as(connection, user_id=principal.user_id) as conn, conn.cursor() as cursor:
+        return conversations(cursor, _talker(cursor, agent)["id"], limit)
 
 
 @router.post("/chat/{agent}")
@@ -462,9 +560,10 @@ def converse(
         if seen is not None:
             # A retried send: the answer that followed it, when there is one.
             cursor.execute(
-                "select id, role, body, created_at, task_id from public.chat_messages "
-                "where agent_id = %s and created_at >= (select created_at from "
-                "public.chat_messages where id = %s) order by created_at, id limit 2",
+                "select id, role, body, created_at, task_id, conversation_id "
+                "from public.chat_messages where agent_id = %s and created_at >= "
+                "(select created_at from public.chat_messages where id = %s) "
+                "order by created_at, id limit 2",
                 (str(talker["id"]), str(seen["id"])),
             )
             pair = cursor.fetchall()
@@ -472,22 +571,24 @@ def converse(
                 done = {"said": _message(pair[0], cursor), "reply": _message(pair[1], cursor)}
                 return done, None
             said = pair[0]  # saved, but never answered: answer it now
+            conf = _settings(cursor, org_id)
         else:
+            conf = _settings(cursor, org_id)
+            chat = _conversation(cursor, org_id, user_id, talker["id"], body, conf, text)
             cursor.execute(
                 "insert into public.chat_messages "
-                "(org_id, agent_id, role, body, idempotency_key, created_by) "
-                "values (%s, %s, 'owner', %s, %s, %s) "
-                "returning id, role, body, created_at, task_id",
-                (org_id, str(talker["id"]), text, key, user_id),
+                "(org_id, agent_id, conversation_id, role, body, idempotency_key, created_by) "
+                "values (%s, %s, %s, 'owner', %s, %s, %s) "
+                "returning id, role, body, created_at, task_id, conversation_id",
+                (org_id, str(talker["id"]), str(chat["id"]), text, key, user_id),
             )
             said = cursor.fetchone()
-        conf = _settings(cursor, org_id)
         prompt = _prompt(cursor, org_id, talker)
         cursor.execute(
             "select role, body from (select role, body, created_at, id from public.chat_messages "
-            "where agent_id = %s and id <> %s order by created_at desc, id desc limit %s) m "
-            "order by created_at, id",
-            (str(talker["id"]), str(said["id"]), int(conf["history"])),
+            "where conversation_id = %s and id <> %s order by created_at desc, id desc "
+            "limit %s) m order by created_at, id",
+            (str(said["conversation_id"]), str(said["id"]), int(conf["history"])),
         )
         history = [
             {"role": "user" if r["role"] == "owner" else "assistant", "content": r["body"]}
@@ -563,11 +664,14 @@ def converse(
             (str(task.id) if task else None, str(said["id"])),
         )
         cursor.execute(
-            "insert into public.chat_messages (org_id, agent_id, role, body, task_id, meta) "
-            "values (%s, %s, 'agent', %s, %s, %s) returning id, role, body, created_at, task_id",
+            "insert into public.chat_messages "
+            "(org_id, agent_id, conversation_id, role, body, task_id, meta) "
+            "values (%s, %s, %s, 'agent', %s, %s, %s) "
+            "returning id, role, body, created_at, task_id, conversation_id",
             (
                 org_id,
                 str(talker["id"]),
+                str(said["conversation_id"]) if said["conversation_id"] else None,
                 reply_text[:8000],
                 str(task.id) if task else None,
                 json.dumps(
@@ -582,8 +686,14 @@ def converse(
             ),
         )
         reply = cursor.fetchone()
+        if said["conversation_id"]:
+            cursor.execute(
+                "update public.chat_conversations set last_at = clock_timestamp() where id = %s",
+                (str(said["conversation_id"]),),
+            )
         cursor.execute(
-            "select id, role, body, created_at, task_id from public.chat_messages where id = %s",
+            "select id, role, body, created_at, task_id, conversation_id "
+            "from public.chat_messages where id = %s",
             (str(said["id"]),),
         )
         said = cursor.fetchone()

@@ -52,3 +52,13 @@ history, facts, recent orders), audited.
   (OpenRouter `stream: true`, usage and cost from the last chunk), so every
   gate and the cost log still apply. The web relay passes the stream through.
 - `POST /orders` stays for scripts; the web app uses the chat.
+- Conversations (owner, 2026-09-27: "New chat"): each message belongs to a
+  conversation with one agent (`chat_conversations`, migration
+  `20260928170000_chat_conversations.sql`); the agent reads only its
+  conversation's recent messages, while preferences and the brain carry
+  across. A conversation is made by its first message, never by the button,
+  so "New chat" on an empty chat makes nothing. After the `chat` flag's
+  `idle_hours` (12) of quiet the next message starts a new one. Past chats
+  are listed and can be carried on. An empty chat opens with a greeting and a
+  line on today, from what the screen already knows (no model call).
+

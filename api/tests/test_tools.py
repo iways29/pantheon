@@ -304,6 +304,28 @@ def test_the_database_will_not_let_an_r4_tool_run_without_approval(
             )
 
 
+def test_a_brain_read_names_the_facts_it_found(
+    db: psycopg.Connection, tenants: Tenants, agent: UUID
+) -> None:
+    """The brain screen draws the read's thread to these facts."""
+    allow(db, agent, ["brain_search"])
+    with acting_as(db, user_id=str(tenants.user_a)) as conn:
+        fact = Brain(conn, HashingEmbedder()).insert_fact(
+            org_id=tenants.org_a,
+            claim="Acme was founded in 2019.",
+            admission=admit(conn, tenants.org_a),
+        )
+    with acting_as(db, user_id=str(tenants.user_a), agent_id=str(agent)) as conn:
+        runtime(conn, tenants, agent).call("brain_search", {"query": "Acme founding"})
+
+    with as_service_role(db) as conn:
+        payload = conn.execute(
+            "select payload from public.events where type = 'tool_called' and agent_id = %s",
+            (str(agent),),
+        ).fetchone()["payload"]
+    assert payload["fact_ids"] == [str(fact.id)]
+
+
 def test_tool_output_is_capped(db: psycopg.Connection, tenants: Tenants, agent: UUID) -> None:
     with as_service_role(db) as conn, conn.cursor() as cursor:
         cursor.execute("update public.tools set max_output_chars = 100 where name = 'brain_search'")

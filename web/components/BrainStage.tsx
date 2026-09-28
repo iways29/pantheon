@@ -18,6 +18,12 @@ import type { MapFact, PantheonEvent } from '@/lib/types';
 const THREAD_MS = 2600;
 /** Tools that read the brain: a thread runs out to the agent. */
 const READS = new Set(['brain_search', 'brain_recall', 'brain_read']);
+/** Threads drawn for one read: enough to show where, not a hairball. */
+const THREADS_PER_EVENT = 3;
+
+function ids(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
+}
 
 /** Midnight in New York, as an instant: where the dial's day starts. */
 function startOfDay(): string {
@@ -85,11 +91,16 @@ export function BrainStage({ filter = NO_FILTER }: { filter?: BrainFilter }) {
       .catch(() => setMoments([]));
   }, [preview]);
 
-  const thread = useCallback((agentId: string | null, way: Thread['way']) => {
+  // One thread per fact the event names (a few at most), else one to the glass.
+  const thread = useCallback((agentId: string | null, way: Thread['way'], factIds: string[] = []) => {
     if (!agentId) return;
-    const key = `${agentId}:${performance.now()}`;
-    setThreads((list) => [...list.filter((t) => t.agentId !== agentId), { key, agentId, way }]);
-    setTimeout(() => setThreads((list) => list.filter((t) => t.key !== key)), THREAD_MS);
+    const stamp = performance.now();
+    const made: Thread[] = (factIds.length ? factIds.slice(0, THREADS_PER_EVENT) : [undefined]).map(
+      (factId, i) => ({ key: `${agentId}:${stamp}:${i}`, agentId, way, factId }),
+    );
+    const keys = new Set(made.map((t) => t.key));
+    setThreads((list) => [...list.filter((t) => t.agentId !== agentId), ...made]);
+    setTimeout(() => setThreads((list) => list.filter((t) => !keys.has(t.key))), THREAD_MS);
   }, []);
 
   // Every movement comes from one real event.
@@ -98,12 +109,14 @@ export function BrainStage({ filter = NO_FILTER }: { filter?: BrainFilter }) {
       onEvent((event) => {
         setMoments((list) => [...list, event.created_at]);
         const p = event.payload ?? {};
-        if (event.type === 'tool_called' && READS.has(String(p.tool))) thread(event.agent_id, 'out');
-        if (event.type === 'chat_replied') thread(event.agent_id, 'out');
+        if (event.type === 'tool_called' && READS.has(String(p.tool))) thread(event.agent_id, 'out', ids(p.fact_ids));
+        // A chat reply reads the facts nearest the owner's message first.
+        if (event.type === 'chat_recalled') thread(event.agent_id, 'out', ids(p.fact_ids));
         if (event.type === 'fact_write_decided') {
-          thread(event.agent_id, 'in');
           const id = typeof p.fact_id === 'string' ? p.fact_id : null;
-          if (id && p.outcome !== 'rejected') {
+          thread(event.agent_id, 'in', id && p.outcome !== 'rejected' ? [id] : []);
+          // The preview's sample writes name facts already drawn; no API there.
+          if (id && p.outcome !== 'rejected' && !preview) {
             api
               .get<FactPlace>(`facts/${id}`)
               .then((f) => {
@@ -130,7 +143,7 @@ export function BrainStage({ filter = NO_FILTER }: { filter?: BrainFilter }) {
           }
         }
       }),
-    [onEvent, thread],
+    [onEvent, thread, preview],
   );
 
   const byStatus = (s: MapFact['status']) => facts.filter((f) => f.status === s).length;
@@ -225,6 +238,7 @@ export function BrainStage({ filter = NO_FILTER }: { filter?: BrainFilter }) {
         moments={moments}
         threads={threads}
         selected={agent}
+        locate={(id) => globe.current?.locate(id) ?? null}
         onSelect={(name) => {
           setAgent(name);
           setFact(null);

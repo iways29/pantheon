@@ -21,10 +21,8 @@ import threading
 from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Annotated, Any
 from uuid import UUID, uuid4
-from zoneinfo import ZoneInfo
 
 import psycopg
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
@@ -32,11 +30,13 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.auth import OwnerPrincipal
+from app.clock import owner_now
 from app.config import Settings, get_settings
 from app.db import acting_as, connect
 from app.gateway import GatewayError
 from app.owner_api import Connection, owner_org
 from app.screen import order_card, pulse
+from app.tracing import in_session
 
 router = APIRouter(tags=["chat"])
 
@@ -53,7 +53,6 @@ PROMPT_SLOT = "chat"
 #: Who the owner can talk with.
 TALKERS = ("chief_of_staff", "head")
 #: The owner's time zone, for "today" in what the agent is told.
-OWNER_TZ = ZoneInfo("America/New_York")
 
 _TOOL_TEXT = {
     "chief_of_staff": (
@@ -333,7 +332,7 @@ def _context(
     """Who the agent is and the state of things, fresh for this message."""
     from app.brain.memory import preamble
 
-    now = datetime.now(OWNER_TZ)
+    now = owner_now()
     role = "Chief of Staff" if agent["role_type"] == "chief_of_staff" else "head"
     parts = [
         f"You are {agent['name']}, {role} of the {agent['department'] or 'company'} "
@@ -602,14 +601,29 @@ def converse(
     with acting_as(connection, user_id=user_id) as conn, conn.cursor() as cursor:
         if talk.brain is not None and int(conf["facts"]) > 0:
             try:
-                facts = [m.fact.claim for m in talk.brain.search(text, limit=int(conf["facts"]))]
+                matches = talk.brain.search(text, limit=int(conf["facts"]))
             except (GatewayError, RuntimeError):
-                facts = []  # a reply without recall beats no reply
+                matches = []  # a reply without recall beats no reply
+            facts = [m.fact.claim for m in matches]
+            if matches:
+                # The brain screen draws a thread from the agent to these facts.
+                cursor.execute(
+                    "insert into public.events (org_id, agent_id, type, payload) "
+                    "values (%s, %s, 'chat_recalled', %s)",
+                    (
+                        org_id,
+                        str(talker["id"]),
+                        json.dumps({"fact_ids": [str(m.fact.id) for m in matches]}),
+                    ),
+                )
         system = prompt + "\n\n" + _context(cursor, org_id, talker, conf, facts)
 
     role = talker["role_type"]
     try:
-        with acting_as(connection, user_id=user_id):
+        with (
+            in_session(f"chat-{said['conversation_id']}" if said["conversation_id"] else None),
+            acting_as(connection, user_id=user_id),
+        ):
             response = talk.gateway.complete(
                 on_text=on_text,
                 agent_id=talker["id"],

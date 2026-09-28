@@ -485,11 +485,22 @@ class ToolRuntime:
                             "call_id": str(call_id),
                             "latency_ms": latency_ms,
                             "overran": overran,
+                            # Which facts a read touched: the brain screen
+                            # draws its thread to them, not to the centre.
+                            **({"fact_ids": ids} if (ids := _fact_ids(output)) else {}),
                         }
                     ),
                 ),
             )
         return ToolResult(name, status, output, call_id)
+
+
+def _fact_ids(output: Any) -> list[str]:  # noqa: ANN401
+    """The ids of the facts a tool returned (`brain_search`'s shape), a few."""
+    facts = output.get("facts") if isinstance(output, dict) else None
+    if not isinstance(facts, list):
+        return []
+    return [str(f["id"]) for f in facts if isinstance(f, dict) and f.get("id")][:8]
 
 
 def _derived_key(run_id: UUID | str | None, name: str, payload: dict[str, Any]) -> str:

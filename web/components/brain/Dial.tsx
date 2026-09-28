@@ -23,7 +23,11 @@ export interface Thread {
   agentId: string;
   /** in: the agent writes to the brain; out: it reads from it. */
   way: 'in' | 'out';
+  /** The fact it wrote or read, when the event names one. */
+  factId?: string;
 }
+
+export type Locate = (factId: string) => { x: number; y: number; front: boolean } | null;
 
 interface Props {
   width: number;
@@ -40,6 +44,8 @@ interface Props {
   threads: Thread[];
   selected: string | null;
   onSelect: (agentName: string) => void;
+  /** Where a fact is on screen now (the globe's own projection). */
+  locate?: Locate;
 }
 
 const minutesOf = new Intl.DateTimeFormat('en-GB', {
@@ -61,6 +67,40 @@ function angleOf(minute: number): number {
 
 function at(cx: number, cy: number, r: number, angle: number): [number, number] {
   return [cx + Math.cos(angle) * r, cy + Math.sin(angle) * r];
+}
+
+/** With no fact named, a thread ends just inside the glass, a little along
+ * the orbit from its agent, never at the centre. */
+function rimSpot(cx: number, cy: number, radius: number, angle: number): { x: number; y: number } {
+  const [x, y] = at(cx, cy, radius * 0.82, angle + 0.35);
+  return { x, y };
+}
+
+/**
+ * A thread between an agent on the ring and a point on the globe, drawn as
+ * an arc that swings along the orbit on its way in (owner, 2026-09-27: "the
+ * calls should orbit in an arch, not a straight line"). It leaves the agent
+ * going round the ring, turning in toward the point; `way` sets which end
+ * the bead starts from.
+ */
+export function orbit(
+  cx: number,
+  cy: number,
+  agent: [number, number],
+  spot: { x: number; y: number },
+  way: 'in' | 'out',
+): string {
+  const ra = Math.hypot(agent[0] - cx, agent[1] - cy);
+  const rf = Math.hypot(spot.x - cx, spot.y - cy);
+  const ta = Math.atan2(agent[1] - cy, agent[0] - cx);
+  // Near the centre a point has no clear angle: go clockwise.
+  const tf = rf < 4 ? ta + 0.6 : Math.atan2(spot.y - cy, spot.x - cx);
+  let sweep = Math.atan2(Math.sin(tf - ta), Math.cos(tf - ta));
+  if (Math.abs(sweep) < 0.6) sweep = sweep < 0 ? -0.6 : 0.6;
+  const [kx, ky] = at(cx, cy, ra * 0.82 + rf * 0.18, ta + sweep * 0.65);
+  const [from, to] = way === 'in' ? [agent, [spot.x, spot.y]] : [[spot.x, spot.y], agent];
+  const f = (n: number) => n.toFixed(1);
+  return `M ${f(from[0]!)} ${f(from[1]!)} Q ${f(kx)} ${f(ky)} ${f(to[0]!)} ${f(to[1]!)}`;
 }
 
 function rank(agent: Agent): number {
@@ -133,6 +173,7 @@ export function Dial({
   threads,
   selected,
   onSelect,
+  locate,
 }: Props) {
   if (!width || !height || !radius) return null;
   const cx = width / 2;
@@ -242,13 +283,13 @@ export function Dial({
       {threads.map((t) => {
         const angle = anchor(t.agentId);
         if (angle === null) return null;
-        const [x, y] = at(cx, cy, ringR, angle);
-        const [ex, ey] = at(cx, cy, radius * 0.2, angle);
-        const [from, to] = t.way === 'in' ? [[x, y], [ex, ey]] : [[ex, ey], [x, y]];
+        const spot = t.factId && locate ? locate(t.factId) : null;
+        const d = orbit(cx, cy, at(cx, cy, ringR, angle), spot ?? rimSpot(cx, cy, radius, angle), t.way);
         return (
-          <g key={t.key} className={`thread ${t.way}`}>
-            <line x1={from![0]} y1={from![1]} x2={to![0]} y2={to![1]} className="thread-path" />
-            <line x1={from![0]} y1={from![1]} x2={to![0]} y2={to![1]} pathLength={100} className="thread-bead" />
+          <g key={t.key} className={`thread ${t.way}${spot && !spot.front ? ' behind' : ''}`}>
+            <path d={d} className="thread-path" />
+            <path d={d} pathLength={100} className="thread-bead" />
+            {spot ? <circle cx={spot.x} cy={spot.y} r={5} className="thread-end" /> : null}
           </g>
         );
       })}

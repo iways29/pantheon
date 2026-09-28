@@ -15,7 +15,7 @@ import psycopg
 import pytest
 
 from app.brain import Brain, HashingEmbedder
-from app.db import as_service_role
+from app.db import acting_as, as_service_role
 from app.gateway import Gateway, ModelResponse, ToolCall
 from tests.conftest_db import Tenants, admit
 from tests.test_gateway import TIERS, make_department
@@ -140,6 +140,24 @@ def test_small_talk_gets_an_answer_and_starts_nothing(
         cursor.execute("select count(*) as n from public.model_calls")
         assert cursor.fetchone()["n"] == 1, "one model call per message, logged"
     assert chat.remembered == [body["said"]["id"]], "sorted into memory after the reply"
+
+
+def test_a_reply_names_the_facts_it_recalled(
+    db: psycopg.Connection, tenants: Tenants, chat: Any
+) -> None:
+    """The brain screen draws the reply's thread to the facts it read."""
+    with acting_as(db, user_id=str(tenants.user_a)) as conn:
+        fact = Brain(conn, HashingEmbedder()).insert_fact(
+            org_id=tenants.org_a,
+            claim="The Unreal Lab backs founders early.",
+            admission=admit(conn, tenants.org_a),
+        )
+    chat.post("/chat/chief-of-staff", json={"text": "who do we back?"})
+
+    with db.cursor() as cursor:
+        cursor.execute("select payload from public.events where type = 'chat_recalled'")
+        (row,) = cursor.fetchall()
+    assert str(fact.id) in row["payload"]["fact_ids"]
 
 
 def test_the_agent_knows_who_it_is_and_the_owners_preferences(chat: Any) -> None:

@@ -612,6 +612,55 @@
   overflow: visible;
 }
 
+/* The dial's hand can be dragged to replay the day. */
+.hand-grip {
+  fill: transparent;
+  stroke: transparent;
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+}
+
+.hand-grip:hover,
+.hand-grip:focus-visible {
+  stroke: var(--gold);
+  stroke-opacity: 0.6;
+  outline: none;
+}
+
+/* The replay player, bottom right of the stage, clear of the key. */
+.replay-bar {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 999px;
+  max-width: calc(100% - 180px);
+}
+
+.replay-scrub {
+  width: 180px;
+  min-width: 80px;
+  flex: 1 1 auto;
+  accent-color: var(--gold);
+}
+
+.replay-time {
+  min-width: 40px;
+  color: var(--gold);
+  font-size: 13px;
+}
+
+.replay-speed {
+  height: 28px;
+  color: var(--ink2);
+  white-space: nowrap;
+}
+
 .dial-time {
   font-size: 11px;
   fill: var(--gold);

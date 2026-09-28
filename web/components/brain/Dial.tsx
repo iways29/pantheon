@@ -46,6 +46,12 @@ interface Props {
   onSelect: (agentName: string) => void;
   /** Where a fact is on screen now (the globe's own projection). */
   locate?: Locate;
+  /** The moment the hand shows while replaying (ms); null or absent: now. */
+  handAt?: number | null;
+  /** Midnight in New York (ms): minute 0 of the dial. */
+  dayStart?: number;
+  /** Dragging the hand replays the day from there (Events.dc.html). */
+  onScrub?: (at: number) => void;
 }
 
 const minutesOf = new Intl.DateTimeFormat('en-GB', {
@@ -174,13 +180,17 @@ export function Dial({
   selected,
   onSelect,
   locate,
+  handAt = null,
+  dayStart = 0,
+  onScrub,
 }: Props) {
   if (!width || !height || !radius) return null;
   const cx = width / 2;
   const cy = height / 2;
   const dialR = radius * 1.14;
   const ringR = radius * 1.36;
-  const now = minutes(new Date());
+  const today = minutes(new Date());
+  const now = handAt === null ? today : minutes(new Date(handAt));
   const { groups, seat, step } = ringLayout(agents, departments, open);
   // Workers lose their labels when neighbours sit closer than a label needs.
   const crowded = step * ringR < 46;
@@ -241,6 +251,38 @@ export function Dial({
         );
       })}
       <line x1={handIn[0]} y1={handIn[1]} x2={hand[0]} y2={hand[1]} stroke="var(--gold)" strokeWidth={2} strokeLinecap="round" />
+      {onScrub ? (
+        <circle
+          cx={hand[0]}
+          cy={hand[1]}
+          r={11}
+          className="hand-grip"
+          role="slider"
+          tabIndex={0}
+          aria-label="Replay the day: drag the hand"
+          aria-valuemin={0}
+          aria-valuemax={today}
+          aria-valuenow={now}
+          aria-valuetext={`${clock}${handAt === null ? ', now' : ''}`}
+          onPointerDown={(e) => {
+            (e.target as Element).setPointerCapture(e.pointerId);
+          }}
+          onPointerMove={(e) => {
+            if (!(e.target as Element).hasPointerCapture(e.pointerId)) return;
+            const box = (e.currentTarget.ownerSVGElement as SVGSVGElement).getBoundingClientRect();
+            const angle = Math.atan2(e.clientY - box.top - cy, e.clientX - box.left - cx);
+            const minute = Math.round(((((angle + Math.PI / 2) / (Math.PI * 2)) * 1440) % 1440 + 1440) % 1440);
+            // The future cannot be replayed: past now, the hand stops at now.
+            onScrub(dayStart + Math.min(minute, today) * 60000);
+          }}
+          onKeyDown={(e) => {
+            const by = { ArrowLeft: -10, ArrowDown: -10, ArrowRight: 10, ArrowUp: 10, PageDown: -60, PageUp: 60 }[e.key];
+            if (by === undefined) return;
+            e.preventDefault();
+            onScrub(dayStart + Math.max(0, Math.min(now + by, today)) * 60000);
+          }}
+        />
+      ) : null}
       <text x={handLabel[0]} y={handLabel[1]} className="dial-time" textAnchor="middle" dominantBaseline="middle">
         {clock}
       </text>

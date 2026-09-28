@@ -5,12 +5,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Dial, type Thread } from '@/components/brain/Dial';
 import { type BrainFilter, NO_FILTER, windowStart } from '@/components/brain/Filters';
 import { Minimap } from '@/components/brain/Minimap';
+import { ReplayBar, useReplay } from '@/components/brain/Replay';
 import { Globe, type GlobeHandle, type View } from '@/components/brain/Globe';
 import { AgentPanel, FactPanel } from '@/components/brain/Panels';
 import { Icon } from '@/components/Icon';
 import { FACT_MARK, Mark } from '@/components/Mark';
 import { api } from '@/lib/api';
 import { isKilled, useCompany } from '@/lib/company';
+import { previewDay } from '@/lib/fixtures';
 import { count, time } from '@/lib/format';
 import type { MapFact, PantheonEvent } from '@/lib/types';
 
@@ -57,7 +59,6 @@ export function BrainStage({ filter = NO_FILTER }: { filter?: BrainFilter }) {
   const [fact, setFact] = useState<string | null>(null);
   const [agent, setAgent] = useState<string | null>(null);
   const [threads, setThreads] = useState<Thread[]>([]);
-  const [moments, setMoments] = useState<string[]>([]);
   const [arrived, setArrived] = useState<MapFact[]>([]);
   const [busy, setBusy] = useState(false);
   const [view, setView] = useState<View>({ azimuth: 0, zoom: 1 });
@@ -82,14 +83,21 @@ export function BrainStage({ filter = NO_FILTER }: { filter?: BrainFilter }) {
     return () => observer.disconnect();
   }, []);
 
-  // Today's work so far, for the dial.
+  // Today's work so far: the dial's ticks, and what Replay plays again.
+  const dayStart = useMemo(() => Date.parse(startOfDay()), []);
+  const [day, setDay] = useState<PantheonEvent[]>([]);
+  useEffect(() => {
+    if (preview) setDay(previewDay(snapshot?.facts ?? [], snapshot?.agents ?? [], dayStart));
+  }, [preview, dayStart, snapshot?.facts, snapshot?.agents]);
   useEffect(() => {
     if (preview) return;
     api
-      .get<PantheonEvent[] | { at: string }[]>(`screen/events?since=${encodeURIComponent(startOfDay())}&limit=5000`)
-      .then((list) => setMoments(list.map((e) => ('at' in e ? e.at : (e as PantheonEvent).created_at))))
-      .catch(() => setMoments([]));
-  }, [preview]);
+      .get<{ id: string; type: string; at: string; agent_id: string | null; run_id: string | null; payload: Record<string, unknown> }[]>(
+        `screen/events?since=${encodeURIComponent(new Date(dayStart).toISOString())}&limit=5000`,
+      )
+      .then((list) => setDay(list.map(({ at, ...e }) => ({ ...e, created_at: at }))))
+      .catch(() => setDay([]));
+  }, [preview, dayStart]);
 
   // One thread per fact the event names (a few at most), else one to the glass.
   const thread = useCallback((agentId: string | null, way: Thread['way'], factIds: string[] = []) => {
@@ -101,49 +109,77 @@ export function BrainStage({ filter = NO_FILTER }: { filter?: BrainFilter }) {
     const keys = new Set(made.map((t) => t.key));
     setThreads((list) => [...list.filter((t) => t.agentId !== agentId), ...made]);
     setTimeout(() => setThreads((list) => list.filter((t) => !keys.has(t.key))), THREAD_MS);
+    // What an event touches glows, then fades (Events.dc.html).
+    for (const id of factIds.slice(0, THREADS_PER_EVENT)) globe.current?.flash(id);
   }, []);
 
-  // Every movement comes from one real event.
+  // Every movement comes from one real event: live, or replayed.
+  const show = useCallback(
+    (event: PantheonEvent, replayed: boolean) => {
+      const p = event.payload ?? {};
+      if (event.type === 'tool_called' && READS.has(String(p.tool))) thread(event.agent_id, 'out', ids(p.fact_ids));
+      // A chat reply reads the facts nearest the owner's message first.
+      if (event.type === 'chat_recalled') thread(event.agent_id, 'out', ids(p.fact_ids));
+      if (event.type === 'fact_write_decided') {
+        const id = typeof p.fact_id === 'string' ? p.fact_id : null;
+        thread(event.agent_id, 'in', id && p.outcome !== 'rejected' ? [id] : []);
+        // A replayed fact is already drawn; the preview has no API.
+        if (id && p.outcome !== 'rejected' && !preview && !replayed) {
+          api
+            .get<FactPlace>(`facts/${id}`)
+            .then((f) => {
+              if (!f.place) return;
+              setArrived((list) => [
+                ...list,
+                {
+                  id: f.id,
+                  claim: f.claim.slice(0, 160),
+                  status: f.status,
+                  kind: f.kind,
+                  public: f.public,
+                  at: f.at,
+                  x: f.place!.x,
+                  y: f.place!.y,
+                  z: f.place!.z,
+                  n: f.place!.neighbourhood_id,
+                  agent: event.agent_id,
+                },
+              ]);
+              setTimeout(() => globe.current?.flash(f.id), 50);
+            })
+            .catch(() => undefined);
+        }
+      }
+    },
+    [thread, preview],
+  );
+
+  const replay = useReplay(day, dayStart, (event) => show(event, true));
+  const replaying = replay.at !== null;
+  const replayingRef = useRef(false);
+  replayingRef.current = replaying;
+
   useEffect(
     () =>
       onEvent((event) => {
-        setMoments((list) => [...list, event.created_at]);
-        const p = event.payload ?? {};
-        if (event.type === 'tool_called' && READS.has(String(p.tool))) thread(event.agent_id, 'out', ids(p.fact_ids));
-        // A chat reply reads the facts nearest the owner's message first.
-        if (event.type === 'chat_recalled') thread(event.agent_id, 'out', ids(p.fact_ids));
-        if (event.type === 'fact_write_decided') {
-          const id = typeof p.fact_id === 'string' ? p.fact_id : null;
-          thread(event.agent_id, 'in', id && p.outcome !== 'rejected' ? [id] : []);
-          // The preview's sample writes name facts already drawn; no API there.
-          if (id && p.outcome !== 'rejected' && !preview) {
-            api
-              .get<FactPlace>(`facts/${id}`)
-              .then((f) => {
-                if (!f.place) return;
-                setArrived((list) => [
-                  ...list,
-                  {
-                    id: f.id,
-                    claim: f.claim.slice(0, 160),
-                    status: f.status,
-                    kind: f.kind,
-                    public: f.public,
-                    at: f.at,
-                    x: f.place!.x,
-                    y: f.place!.y,
-                    z: f.place!.z,
-                    n: f.place!.neighbourhood_id,
-                    agent: event.agent_id,
-                  },
-                ]);
-                setTimeout(() => globe.current?.flash(f.id), 50);
-              })
-              .catch(() => undefined);
-          }
-        }
+        setDay((list) => [...list, event]);
+        // While replaying, the live stream is kept but not drawn over the past.
+        if (!replayingRef.current) show(event, false);
       }),
-    [onEvent, thread, preview],
+    [onEvent, show],
+  );
+
+  // "Replay the day" in the pulse strip.
+  const startReplay = replay.start;
+  useEffect(() => {
+    const onReplay = () => startReplay();
+    window.addEventListener('pantheon:replay', onReplay);
+    return () => window.removeEventListener('pantheon:replay', onReplay);
+  }, [startReplay]);
+
+  const moments = useMemo(
+    () => day.filter((e) => !replaying || Date.parse(e.created_at) <= replay.at!).map((e) => e.created_at),
+    [day, replaying, replay.at],
   );
 
   const byStatus = (s: MapFact['status']) => facts.filter((f) => f.status === s).length;
@@ -175,10 +211,13 @@ export function BrainStage({ filter = NO_FILTER }: { filter?: BrainFilter }) {
   }
 
   // What a filter keeps bright; the rest of the brain is dimmed, not hidden.
+  // Replaying, a fact not yet made at the replayed minute is dimmed.
+  const replayMinute = replaying ? Math.floor(replay.at! / 60000) : null;
   const bright = useMemo(() => {
     if (filter.needsOnly) return new Set<string>();
     const since = windowStart(filter.window, pulse?.day_starts_at);
-    if (!filter.department && since === null) return null;
+    const until = replayMinute === null ? null : (replayMinute + 1) * 60000;
+    if (!filter.department && since === null && until === null) return null;
     const inDepartment = new Set(
       agents.filter((a) => a.department_id === filter.department).map((a) => a.id),
     );
@@ -186,9 +225,10 @@ export function BrainStage({ filter = NO_FILTER }: { filter?: BrainFilter }) {
       facts
         .filter((f) => !filter.department || (f.agent !== null && inDepartment.has(f.agent)))
         .filter((f) => since === null || Date.parse(f.at) >= since)
+        .filter((f) => until === null || Date.parse(f.at) < until)
         .map((f) => f.id),
     );
-  }, [filter, facts, agents, pulse?.day_starts_at]);
+  }, [filter, facts, agents, pulse?.day_starts_at, replayMinute]);
 
   const onView = useCallback((next: View) => {
     const now = performance.now();
@@ -239,6 +279,9 @@ export function BrainStage({ filter = NO_FILTER }: { filter?: BrainFilter }) {
         threads={threads}
         selected={agent}
         locate={(id) => globe.current?.locate(id) ?? null}
+        handAt={replay.at}
+        dayStart={dayStart}
+        onScrub={(at) => (replaying ? replay.seek(at) : replay.start(at))}
         onSelect={(name) => {
           setAgent(name);
           setFact(null);
@@ -315,6 +358,8 @@ export function BrainStage({ filter = NO_FILTER }: { filter?: BrainFilter }) {
           </div>
         ) : null}
       </div>
+
+      <ReplayBar replay={replay} count={day.length} />
 
       {fact ? <FactPanel id={fact} onClose={() => setFact(null)} onSelect={setFact} /> : null}
       {agent ? <AgentPanel name={agent} onClose={() => setAgent(null)} onTalk={talk} /> : null}

@@ -1,5 +1,6 @@
 'use client';
 
+import { Icon } from '@/components/Icon';
 import { isKilled, useCompany } from '@/lib/company';
 import { money, time } from '@/lib/format';
 
@@ -63,6 +64,15 @@ export function PulseStrip() {
         <span className={liveMark} aria-hidden="true" />
         {liveWords}
       </span>
+      {/* Main.dc.html: the day, played again on the brain. */}
+      <button
+        type="button"
+        className="btn sm glass replay-btn"
+        onClick={() => window.dispatchEvent(new CustomEvent('pantheon:replay'))}
+      >
+        <Icon name="replay" size={14} />
+        Replay the day
+      </button>
     </footer>
   );
 }

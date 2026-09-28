@@ -5,7 +5,7 @@
  * Companies and amounts are made up, as in the mockups.
  */
 
-import type { Agent, Approval, ChatMessage, McpTool, OrderCard, Snapshot, Talker } from '@/lib/types';
+import type { Agent, Approval, ChatMessage, McpTool, OrderCard, PantheonEvent, Snapshot, Talker } from '@/lib/types';
 
 export type PreviewState = 'rest' | 'busy' | 'needs' | 'paused' | 'killed';
 
@@ -322,4 +322,34 @@ function songOrder(): ChatMessage[] {
     { id: 'm5', role: 'owner', text: order.text, at: at('21:13'), order },
     { id: 'm6', role: 'agent', text: 'On it: Write company song. I will report back here.', at: at('21:13'), order },
   ];
+}
+
+/**
+ * A sample day for the preview's Replay: reads and writes naming real sample
+ * facts, spread from 06:30 to now, as the mornings run.
+ */
+export function previewDay(
+  facts: { id: string }[],
+  agents: { id: string }[],
+  dayStart: number,
+): PantheonEvent[] {
+  if (!facts.length || !agents.length) return [];
+  const now = Date.now() - 60 * 1000;
+  // From 06:30, or across the whole day so far when it is still early.
+  const from = Math.min(dayStart + 6.5 * 3600 * 1000, dayStart + (now - dayStart) * 0.1);
+  const to = Math.max(from + 60 * 1000, now);
+  const n = 90;
+  return Array.from({ length: n }, (_, i) => {
+    const write = i % 4 === 0;
+    const agent = agents[(i * 5) % agents.length]!;
+    const pick = (k: number) => facts[(i * 11 + k * 17) % facts.length]!.id;
+    return {
+      id: `day-${i}`,
+      type: write ? 'fact_write_decided' : 'tool_called',
+      created_at: new Date(from + ((to - from) * i) / n).toISOString(),
+      agent_id: agent.id,
+      run_id: null,
+      payload: write ? { outcome: 'duplicate', fact_id: pick(0) } : { tool: 'brain_search', fact_ids: [pick(0), pick(1)] },
+    };
+  });
 }

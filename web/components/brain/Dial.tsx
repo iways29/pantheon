@@ -56,7 +56,21 @@ interface Props {
   dayStart?: number;
   /** Dragging the hand replays the day from there (Events.dc.html). */
   onScrub?: (at: number) => void;
+  /** Facts an event touched lately, for the rim markers. */
+  marks?: Mark[];
+  /** Tapping a rim marker turns the view to its facts. */
+  onMark?: (factIds: string[]) => void;
 }
+
+export interface Mark {
+  factId: string;
+  way: 'in' | 'out';
+}
+
+/** Rim markers closer than this (radians) merge into one. */
+const MARK_MERGE = 0.3;
+/** At most this many markers: the busiest directions. */
+const MARK_MAX = 8;
 
 const minutesOf = new Intl.DateTimeFormat('en-GB', {
   hour: '2-digit',
@@ -187,6 +201,8 @@ export function Dial({
   handAt = null,
   dayStart = 0,
   onScrub,
+  marks = [],
+  onMark,
 }: Props) {
   if (!width || !height || !radius) return null;
   const cx = width / 2;
@@ -218,6 +234,27 @@ export function Dial({
     const g = groups.find((x) => x.department.id === agent?.department_id);
     return g ? g.from : null;
   }
+
+  // Rim markers (ScaleNotes.dc.html): recent activity the owner cannot see,
+  // off the stage or beyond the rim once zoomed in, as a chevron on the rim
+  // pointing to it. The ball is glass: a fact behind it is still in view.
+  const rimR = dialR - 16;
+  const rim: { angle: number; facts: string[]; way: 'in' | 'out' }[] = [];
+  for (const m of locate ? marks : []) {
+    const spot = locate!(m.factId);
+    if (!spot) continue;
+    const off = spot.x < 0 || spot.y < 0 || spot.x > width || spot.y > height;
+    const outside = Math.hypot(spot.x - cx, spot.y - cy) > rimR;
+    if (!off && !outside) continue;
+    const angle = Math.atan2(spot.y - cy, spot.x - cx);
+    const near = rim.find((r) => Math.abs(Math.atan2(Math.sin(r.angle - angle), Math.cos(r.angle - angle))) < MARK_MERGE);
+    if (near) {
+      near.facts.push(m.factId);
+      if (m.way === 'in') near.way = 'in';
+    } else rim.push({ angle, facts: [m.factId], way: m.way });
+  }
+
+  rim.sort((a, b) => b.facts.length - a.facts.length).splice(MARK_MAX);
 
   function label(angle: number) {
     const cos = Math.cos(angle);
@@ -353,6 +390,35 @@ export function Dial({
             <path d={d} className="thread-path" />
             <path d={d} pathLength={100} className="thread-bead" />
             {spot ? <circle cx={spot.x} cy={spot.y} r={5} className="thread-end" /> : null}
+          </g>
+        );
+      })}
+
+      {rim.map((r) => {
+        const [tx, ty] = at(cx, cy, rimR + 6, r.angle);
+        const [bx, by] = at(cx, cy, rimR - 3, r.angle);
+        const px = -Math.sin(r.angle) * 5;
+        const py = Math.cos(r.angle) * 5;
+        const n = r.facts.length;
+        return (
+          <g
+            key={`rim:${Math.round(r.angle * 100)}`}
+            className={`rim-mark ${r.way}`}
+            role="button"
+            tabIndex={0}
+            aria-label={`${n === 1 ? 'A fact' : `${n} facts`} touched out of view. Turn to ${n === 1 ? 'it' : 'them'}`}
+            onClick={() => onMark?.(r.facts)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onMark?.(r.facts);
+              }
+            }}
+          >
+            <circle cx={(tx + bx) / 2} cy={(ty + by) / 2} r={12} className="rim-hit" />
+            <polygon
+              points={`${tx.toFixed(1)},${ty.toFixed(1)} ${(bx + px).toFixed(1)},${(by + py).toFixed(1)} ${(bx - px).toFixed(1)},${(by - py).toFixed(1)}`}
+            />
           </g>
         );
       })}

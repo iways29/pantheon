@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { Dial, type Thread } from '@/components/brain/Dial';
+import { Dial, type Mark as RimMark, type Thread } from '@/components/brain/Dial';
 import { type BrainFilter, NO_FILTER, windowStart } from '@/components/brain/Filters';
 import { Minimap } from '@/components/brain/Minimap';
 import { ReplayBar, useReplay } from '@/components/brain/Replay';
@@ -20,6 +20,8 @@ import type { MapFact, PantheonEvent } from '@/lib/types';
 const THREAD_MS = 2600;
 /** Tools that read the brain: a thread runs out to the agent. */
 const READS = new Set(['brain_search', 'brain_recall', 'brain_read']);
+/** How long a fact out of view keeps its rim marker: as long as its glow. */
+const MARK_MS = 90_000;
 /** Threads drawn for one read: enough to show where, not a hairball. */
 const THREADS_PER_EVENT = 3;
 
@@ -69,6 +71,7 @@ export function BrainStage({ filter = NO_FILTER }: { filter?: BrainFilter }) {
   const [fact, setFact] = useState<string | null>(null);
   const [agent, setAgent] = useState<string | null>(null);
   const [threads, setThreads] = useState<Thread[]>([]);
+  const [marks, setMarks] = useState<RimMark[]>([]);
   const [arrived, setArrived] = useState<MapFact[]>([]);
   const [busy, setBusy] = useState(false);
   const [view, setView] = useState<View>({ azimuth: 0, zoom: 1 });
@@ -119,8 +122,15 @@ export function BrainStage({ filter = NO_FILTER }: { filter?: BrainFilter }) {
     const keys = new Set(made.map((t) => t.key));
     setThreads((list) => [...list.filter((t) => t.agentId !== agentId), ...made]);
     setTimeout(() => setThreads((list) => list.filter((t) => !keys.has(t.key))), THREAD_MS);
-    // What an event touches glows, then fades (Events.dc.html).
-    for (const id of factIds.slice(0, THREADS_PER_EVENT)) globe.current?.flash(id);
+    // What an event touches glows, then fades (Events.dc.html); out of view,
+    // it shows as a marker on the rim for as long as the glow lasts.
+    const touched = factIds.slice(0, THREADS_PER_EVENT);
+    for (const id of touched) globe.current?.flash(id);
+    if (touched.length) {
+      const fresh = new Set(touched);
+      setMarks((list) => [...list.filter((m) => !fresh.has(m.factId)), ...touched.map((factId) => ({ factId, way }))]);
+      setTimeout(() => setMarks((list) => list.filter((m) => !fresh.has(m.factId))), MARK_MS);
+    }
   }, []);
 
   // Every movement comes from one real event: live, or replayed.
@@ -348,6 +358,8 @@ export function BrainStage({ filter = NO_FILTER }: { filter?: BrainFilter }) {
         threads={pathThreads.length ? [...pathThreads, ...threads] : threads}
         selected={agent}
         locate={(id) => globe.current?.locate(id) ?? null}
+        marks={marks}
+        onMark={(factIds) => globe.current?.lookAt(factIds)}
         handAt={replay.at}
         dayStart={dayStart}
         onScrub={(at) => (replaying ? replay.seek(at) : replay.start(at))}

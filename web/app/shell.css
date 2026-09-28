@@ -768,6 +768,46 @@
   stroke: var(--gold);
 }
 
+/* Activity out of view: a chevron on the rim, pointing where it happened. */
+.rim-mark {
+  pointer-events: auto;
+  cursor: pointer;
+  animation: fade-slow 90s linear forwards;
+}
+
+.rim-mark polygon {
+  fill: var(--gold);
+}
+
+.rim-mark.out polygon {
+  fill: var(--ice);
+}
+
+.rim-hit {
+  fill: transparent;
+}
+
+.rim-mark:hover .rim-hit,
+.rim-mark:focus-visible .rim-hit {
+  fill: var(--glass2);
+  outline: none;
+}
+
+@keyframes fade-slow {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.25;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rim-mark {
+    animation: none;
+  }
+}
+
 /* An order being followed: its threads stay until the owner stops. */
 .thread.still {
   animation: none;

@@ -1094,24 +1094,12 @@
   -webkit-appearance: none;
   height: 100%;
   padding: 0 34px 0 14px;
+  border-radius: 999px;
   border: 0;
   background: transparent;
   color: var(--ink);
   font: 500 13px var(--font-body), sans-serif;
   cursor: pointer;
-}
-
-.select::after {
-  content: '';
-  position: absolute;
-  right: 14px;
-  top: 13px;
-  width: 6px;
-  height: 6px;
-  border-right: 1.5px solid var(--ink2);
-  border-bottom: 1.5px solid var(--ink2);
-  transform: rotate(45deg);
-  pointer-events: none;
 }
 
 .select option {
@@ -1316,7 +1304,7 @@
     inset 0 0 0 1px rgba(255, 255, 255, 0.1),
     inset 4px 0 7px -5px rgba(255, 130, 100, 0.5),
     inset -4px 0 7px -5px rgba(120, 170, 255, 0.6),
-    0 30px 80px rgba(0, 0, 0, 0.45),
+    0 0 70px rgba(0, 0, 0, 0.4),
     0 0 0 1px rgba(0, 0, 0, 0.28);
 }
 
@@ -1330,7 +1318,7 @@
     inset 0 0 0 1px rgba(20, 26, 46, 0.08),
     inset 4px 0 7px -5px rgba(255, 130, 100, 0.35),
     inset -4px 0 7px -5px rgba(80, 130, 255, 0.4),
-    0 30px 70px rgba(40, 50, 90, 0.18);
+    0 0 60px rgba(40, 50, 90, 0.14);
 }
 
 .lens > .lg-spec {
@@ -1402,4 +1390,28 @@
 
 .seat-glow {
   filter: blur(2px);
+}
+
+.topbar-center {
+  min-width: 0;
+}
+
+.filters-pop {
+  left: 0;
+  right: auto;
+  width: 260px;
+}
+
+.filters.stacked {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.filters.stacked .select,
+.filters.stacked .select select {
+  width: 100%;
+}
+
+.filters.stacked .btn {
+  justify-content: flex-start;
 }

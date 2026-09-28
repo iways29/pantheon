@@ -6,7 +6,11 @@
  * hidden, and the ring opens the department filtered to.
  */
 
+import { useEffect, useRef, useState } from 'react';
+
+import { Icon } from '@/components/Icon';
 import { departmentName } from '@/lib/format';
+import { useMedia } from '@/lib/useMedia';
 import type { Department } from '@/lib/types';
 
 export type Window = 'all' | 'today' | 'hour';
@@ -25,19 +29,63 @@ const WINDOWS: [Window, string][] = [
   ['hour', 'The last hour'],
 ];
 
-export function Filters({
-  filter,
-  onChange,
-  departments,
-  waiting,
-}: {
+interface Props {
   filter: BrainFilter;
   onChange: (next: BrainFilter) => void;
   departments: Department[];
   waiting: number;
-}) {
+}
+
+/** Inline on a wide screen; one Filters button when the top bar is tight. */
+export function Filters(props: Props) {
+  const tight = useMedia('(max-width: 1500px)');
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const { filter } = props;
+  const active = (filter.department ? 1 : 0) + (filter.window !== 'all' ? 1 : 0) + (filter.needsOnly ? 1 : 0);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (box.current && !box.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    window.addEventListener('mousedown', close);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('mousedown', close);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  if (!tight) return <Controls {...props} />;
   return (
-    <div className="filters" role="group" aria-label="Filters">
+    <div ref={box} style={{ position: 'relative' }}>
+      <button className="btn sm glass" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        Filters
+        {active ? <span className="num" style={{ color: 'var(--ice)' }}>{active}</span> : null}
+        {props.waiting ? (
+          <span className="num" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'var(--ice)' }}>
+            <span className="gl wait" aria-hidden="true" />
+            {props.waiting}
+          </span>
+        ) : null}
+        <Icon name="chevron" size={14} />
+      </button>
+      {open ? (
+        <div className="glass popover filters-pop">
+          <Controls {...props} stacked />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function Controls({ filter, onChange, departments, waiting, stacked = false }: Props & { stacked?: boolean }) {
+  return (
+    <div className={`filters${stacked ? ' stacked' : ''}`} role="group" aria-label="Filters">
       <label className="glass select">
         <span className="vh">Department</span>
         <select
@@ -51,6 +99,7 @@ export function Filters({
             </option>
           ))}
         </select>
+        <Icon name="chevron" size={14} style={{ position: 'absolute', right: 12, pointerEvents: 'none' }} />
       </label>
       <label className="glass select">
         <span className="vh">Time</span>
@@ -61,6 +110,7 @@ export function Filters({
             </option>
           ))}
         </select>
+        <Icon name="chevron" size={14} style={{ position: 'absolute', right: 12, pointerEvents: 'none' }} />
       </label>
       <button
         className="btn sm glass"

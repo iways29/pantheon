@@ -354,10 +354,14 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
       request();
     }
 
+    let last = { w: 0, h: 0 };
     function size() {
       const w = el!.clientWidth;
       const h = el!.clientHeight;
       if (!w || !h) return;
+      // A pixel or two of layout jitter must not make the ball twitch.
+      if (Math.abs(w - last.w) < 3 && Math.abs(h - last.h) < 3) return;
+      last = { w, h };
       renderer.setSize(w, h);
       camera.aspect = w / h;
       camera.updateProjectionMatrix();

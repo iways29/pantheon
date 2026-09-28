@@ -33,6 +33,9 @@ export interface GlobeHandle {
   /** Where a fact is on screen now, in the stage's CSS pixels; front is
    * false when it lies behind the ball's centre. Null if it is not drawn. */
   locate: (factId: string) => { x: number; y: number; front: boolean } | null;
+  /** Turn smoothly to face these facts ("Follow this order", a rim marker).
+   * The view only ever moves when the owner asks (ScaleNotes.dc.html). */
+  lookAt: (factIds: string[]) => void;
 }
 
 interface Props {
@@ -57,6 +60,8 @@ const CLAIMS_WITHIN = 1.35;
 const FOV = 45;
 /** The ball fills this much of the smaller side at rest. */
 const FILL = 0.33;
+/** Below this stage width the ring's names are hidden (the phone layout). */
+const PHONE_WIDTH = 480;
 
 const VERTEX = /* glsl */ `
   attribute float status;
@@ -180,6 +185,11 @@ const GLASS_FRAGMENT = /* glsl */ `
   }
 `;
 
+/** The points' gold: its own token where one is set (light theme), else --gold. */
+function pointGold(): string {
+  return getComputedStyle(document.documentElement).getPropertyValue('--gold-point').trim() ? '--gold-point' : '--gold';
+}
+
 function cssColor(name: string, fallback: string): THREE.Color {
   const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   try {
@@ -198,9 +208,11 @@ function heldPosition(i: number, n: number): [number, number, number] {
 /** The ball's radius on screen at rest: room left for the dial, the agent
  * ring outside it (1.36 × the radius) and the agents' names beside the ring. */
 export function restRadius(width: number, height: number): number {
+  // On a phone the agents' names are hidden: no room is kept for them.
+  const names = width < PHONE_WIDTH ? 24 : 110;
   return Math.max(
     60,
-    Math.min(Math.min(width, height) * FILL, (width / 2 - 110) / 1.36, (height / 2 - 40) / 1.36),
+    Math.min(Math.min(width, height) * FILL, (width / 2 - names) / 1.36, (height / 2 - 40) / 1.36),
   );
 }
 
@@ -340,7 +352,7 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
     function paint() {
       const dark = document.documentElement.dataset.theme !== 'light';
       const pm = points.material as THREE.ShaderMaterial;
-      pm.uniforms.gold!.value = cssColor('--gold', '#E8BC62');
+      pm.uniforms.gold!.value = cssColor(pointGold(), '#E8BC62');
       pm.uniforms.verm!.value = cssColor('--verm', '#FF8466');
       pm.uniforms.grey!.value = cssColor('--ink3', '#8189A0');
       pm.uniforms.ice!.value = cssColor('--ice', '#94BBFF');
@@ -348,7 +360,7 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
       pm.blending = dark ? THREE.AdditiveBlending : THREE.NormalBlending;
       pm.needsUpdate = true;
       const cm = clouds.material as THREE.ShaderMaterial;
-      cm.uniforms.gold!.value = cssColor('--gold', '#E8BC62');
+      cm.uniforms.gold!.value = cssColor(pointGold(), '#E8BC62');
       cm.blending = dark ? THREE.AdditiveBlending : THREE.NormalBlending;
       cm.needsUpdate = true;
       const gm = glass.material as THREE.ShaderMaterial;
@@ -720,6 +732,45 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
         w.lit.set(index, performance.now() / 1000);
         w.request();
       },
+      lookAt(factIds: string[]) {
+        const w = world.current;
+        if (!w) return;
+        const position = w.points.geometry.getAttribute('position') as THREE.BufferAttribute | undefined;
+        if (!position) return;
+        const centre = new THREE.Vector3();
+        let n = 0;
+        for (const id of factIds) {
+          const index = w.ids.indexOf(id);
+          if (index < 0) continue;
+          centre.add(new THREE.Vector3().fromBufferAttribute(position, index));
+          n += 1;
+        }
+        if (!n) return;
+        centre.divideScalar(n);
+        // Facts spread all round have no one side to face.
+        if (centre.lengthSq() < 0.01) return;
+        const distance = w.camera.position.length();
+        const from = w.camera.position.clone().normalize();
+        const to = centre.normalize();
+        const turn = new THREE.Quaternion().setFromUnitVectors(from, to);
+        const done = () => {
+          w.camera.position.copy(to).multiplyScalar(distance);
+          w.controls.update();
+          w.request();
+        };
+        if (prefersStill()) return done();
+        const t0 = performance.now();
+        const step = () => {
+          const t = Math.min(1, (performance.now() - t0) / 900);
+          const e = 1 - Math.pow(1 - t, 3);
+          const q = new THREE.Quaternion().slerp(turn, e);
+          w.camera.position.copy(from).applyQuaternion(q).multiplyScalar(distance);
+          w.controls.update();
+          w.request();
+          if (t < 1) requestAnimationFrame(step);
+        };
+        step();
+      },
       locate(factId: string) {
         const w = world.current;
         const el = host.current;
@@ -742,8 +793,66 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
     [],
   );
 
+  // The keyboard turns and zooms the ball as a drag or a pinch would.
+  function onKey(event: React.KeyboardEvent<HTMLDivElement>) {
+    const w = world.current;
+    if (!w) return;
+    const step = THREE.MathUtils.degToRad(event.shiftKey ? 45 : 15);
+    const turn: Record<string, [number, number]> = {
+      ArrowLeft: [-step, 0],
+      ArrowRight: [step, 0],
+      ArrowUp: [0, -step],
+      ArrowDown: [0, step],
+    };
+    if (turn[event.key]) {
+      const [azimuth, polar] = turn[event.key]!;
+      const at = new THREE.Spherical().setFromVector3(w.camera.position);
+      at.theta += azimuth;
+      at.phi = THREE.MathUtils.clamp(at.phi + polar, w.controls.minPolarAngle, w.controls.maxPolarAngle);
+      w.camera.position.setFromSpherical(at);
+      w.controls.update();
+      w.request();
+    } else if (event.key === '+' || event.key === '=') {
+      handleZoom(0.8);
+    } else if (event.key === '-' || event.key === '_') {
+      handleZoom(1.25);
+    } else if (event.key === '0') {
+      w.fit();
+    } else {
+      return;
+    }
+    event.preventDefault();
+  }
+
+  function handleZoom(factor: number) {
+    const w = world.current;
+    if (!w) return;
+    const offset = w.camera.position.clone().sub(w.controls.target);
+    offset.setLength(THREE.MathUtils.clamp(offset.length() * factor, w.controls.minDistance, w.controls.maxDistance));
+    w.camera.position.copy(w.controls.target).add(offset);
+    w.controls.update();
+    w.request();
+  }
+
+  const summary = `The brain: ${facts.length} facts${
+    neighbourhoods.length
+      ? ` in ${neighbourhoods.length} neighbourhoods: ${neighbourhoods
+          .slice(0, 12)
+          .map((h) => `${h.label} (${h.size})`)
+          .join(', ')}`
+      : ''
+  }. Arrow keys turn it, plus and minus zoom, 0 shows it all.`;
+
   return (
-    <div className="globe" ref={host}>
+    <div
+      className="globe"
+      ref={host}
+      tabIndex={0}
+      role="application"
+      aria-roledescription="globe"
+      aria-label={summary}
+      onKeyDown={onKey}
+    >
       <div className="lens" ref={lens} aria-hidden="true">
         <div className="lg-rim" />
         <div className="lg-body" />

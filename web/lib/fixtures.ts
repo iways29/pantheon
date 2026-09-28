@@ -5,7 +5,7 @@
  * Companies and amounts are made up, as in the mockups.
  */
 
-import type { Agent, Approval, ChatMessage, McpTool, OrderCard, Snapshot, Talker } from '@/lib/types';
+import type { Agent, Approval, ChatMessage, McpTool, OrderCard, PantheonEvent, Snapshot, Talker } from '@/lib/types';
 
 export type PreviewState = 'rest' | 'busy' | 'needs' | 'paused' | 'killed';
 
@@ -322,4 +322,62 @@ function songOrder(): ChatMessage[] {
     { id: 'm5', role: 'owner', text: order.text, at: at('21:13'), order },
     { id: 'm6', role: 'agent', text: 'On it: Write company song. I will report back here.', at: at('21:13'), order },
   ];
+}
+
+/**
+ * A sample day for the preview's Replay: reads and writes naming real sample
+ * facts, spread from 06:30 to now, as the mornings run.
+ */
+export function previewDay(
+  facts: { id: string }[],
+  agents: { id: string }[],
+  dayStart: number,
+): PantheonEvent[] {
+  if (!facts.length || !agents.length) return [];
+  const now = Date.now() - 60 * 1000;
+  // From 06:30, or across the whole day so far when it is still early.
+  const from = Math.min(dayStart + 6.5 * 3600 * 1000, dayStart + (now - dayStart) * 0.1);
+  const to = Math.max(from + 60 * 1000, now);
+  const n = 90;
+  return Array.from({ length: n }, (_, i) => {
+    const write = i % 4 === 0;
+    const agent = agents[(i * 5) % agents.length]!;
+    const pick = (k: number) => facts[(i * 11 + k * 17) % facts.length]!.id;
+    return {
+      id: `day-${i}`,
+      type: write ? 'fact_write_decided' : 'tool_called',
+      created_at: new Date(from + ((to - from) * i) / n).toISOString(),
+      agent_id: agent.id,
+      run_id: null,
+      payload: write ? { outcome: 'duplicate', fact_id: pick(0) } : { tool: 'brain_search', fact_ids: [pick(0), pick(1)] },
+    };
+  });
+}
+
+/** An order's path for the preview's "Follow this order": the Chief of Staff
+ * to a head to two workers, and a few sample facts they touched. */
+export function previewPath(
+  id: string,
+  facts: { id: string }[],
+  agents: { id: string; role: string; department_id: string | null }[],
+) {
+  const chief = agents.find((a) => a.role === 'chief_of_staff') ?? agents[0];
+  const head = agents.find((a) => a.role === 'head') ?? agents[1];
+  const workers = agents.filter((a) => a.role === 'worker' && a.department_id === head?.department_id).slice(0, 2);
+  const steps = [
+    { id: `${id}:0`, parent_id: null, agent_id: chief?.id ?? null, status: 'blocked' },
+    { id: `${id}:1`, parent_id: `${id}:0`, agent_id: head?.id ?? null, status: 'blocked' },
+    ...workers.map((w, i) => ({ id: `${id}:w${i}`, parent_id: `${id}:1`, agent_id: w.id, status: 'running' })),
+  ];
+  const doers = workers.length ? workers : [head];
+  const picked = facts.slice(40, 49);
+  return {
+    id,
+    steps,
+    facts: picked.map((f, i) => ({
+      fact_id: f.id,
+      way: (i % 3 === 0 ? 'in' : 'out') as 'in' | 'out',
+      agent_id: doers[i % doers.length]?.id ?? null,
+    })),
+  };
 }

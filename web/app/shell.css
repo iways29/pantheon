@@ -543,6 +543,13 @@
   inset: 0;
 }
 
+/* Focused from the keyboard: a ring round the stage, not a box on the canvas. */
+.globe:focus-visible {
+  outline: 2px solid var(--ice);
+  outline-offset: -4px;
+  border-radius: 12px;
+}
+
 .globe canvas {
   cursor: grab;
   touch-action: none;
@@ -610,6 +617,90 @@
   inset: 0;
   pointer-events: none;
   overflow: visible;
+}
+
+/* The dial's hand can be dragged to replay the day. */
+.hand-grip {
+  fill: transparent;
+  stroke: transparent;
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+}
+
+.hand-grip:hover,
+.hand-grip:focus-visible {
+  stroke: var(--gold);
+  stroke-opacity: 0.6;
+  outline: none;
+}
+
+/* Following an order: a quiet banner low in the middle, with a way out. */
+.follow-banner {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 6px 5px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  max-width: min(420px, calc(100% - 32px));
+  color: var(--ice);
+}
+
+.follow-banner .num {
+  white-space: nowrap;
+}
+
+.follow-banner b {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.replay-bar ~ .follow-banner {
+  bottom: 64px;
+}
+
+.follow-btn {
+  align-self: flex-start;
+  height: 26px;
+}
+
+/* The replay player, bottom right of the stage, clear of the key. */
+.replay-bar {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 999px;
+  max-width: calc(100% - 180px);
+}
+
+.replay-scrub {
+  width: 180px;
+  min-width: 80px;
+  flex: 1 1 auto;
+  accent-color: var(--gold);
+}
+
+.replay-time {
+  min-width: 40px;
+  color: var(--gold);
+  font-size: 13px;
+}
+
+.replay-speed {
+  height: 28px;
+  color: var(--ink2);
+  white-space: nowrap;
 }
 
 .dial-time {
@@ -682,6 +773,71 @@
 
 .thread.in .thread-end {
   stroke: var(--gold);
+}
+
+/* Activity out of view: a chevron on the rim, pointing where it happened. */
+.rim-mark {
+  pointer-events: auto;
+  cursor: pointer;
+  animation: fade-slow 90s linear forwards;
+}
+
+.rim-mark polygon {
+  fill: var(--gold);
+}
+
+.rim-mark.out polygon {
+  fill: var(--ice);
+}
+
+.rim-hit {
+  fill: transparent;
+}
+
+.rim-mark:hover .rim-hit,
+.rim-mark:focus-visible .rim-hit {
+  fill: var(--glass2);
+  outline: none;
+}
+
+@keyframes fade-slow {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.25;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rim-mark {
+    animation: none;
+  }
+}
+
+/* Reduced motion (Events.dc.html): a thread appears whole, no bead. */
+:root.rm .thread-bead {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thread-bead {
+    display: none;
+  }
+}
+
+/* An order being followed: its threads stay until the owner stops. */
+.thread.still {
+  animation: none;
+}
+
+.thread.still .thread-path {
+  stroke-opacity: 0.7;
+}
+
+.thread.handoff .thread-path,
+.thread.handoff .thread-bead {
+  stroke: var(--ice);
 }
 
 /* A fact behind the ball's centre: the thread reads as going round the back. */
@@ -975,6 +1131,11 @@
   gap: 12px;
 }
 
+/* Phone.dc.html: Pause and Kill side by side, even where .two stacks. */
+.phone-top .two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .phone-view {
   display: flex;
   flex-direction: column;
@@ -987,7 +1148,7 @@
 
 .phone-globe {
   position: relative;
-  height: 400px;
+  height: 340px;
 }
 
 .phone-globe .stage {
@@ -1003,7 +1164,9 @@
 .phone-globe .zoom .faint,
 .phone-globe .seat-name,
 .phone-globe .seat-role,
-.phone-globe .dial-time {
+.phone-globe .dial-time,
+.phone-globe .globe-labels,
+.phone-globe .zoom {
   display: none;
 }
 

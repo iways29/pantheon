@@ -454,8 +454,41 @@ def order_path(cursor: psycopg.Cursor, task_id: UUID) -> dict[str, Any] | None:
     return {
         "id": str(task_id),
         "steps": steps,
+        "facts": _order_facts(cursor, [s["id"] for s in steps]),
         "cost_usd": round(sum(s["cost_usd"] for s in steps), 6),
     }
+
+
+#: Facts drawn for one order: enough to show where it worked, not every read.
+_ORDER_FACTS = 40
+
+
+def _order_facts(cursor: psycopg.Cursor, task_ids: list[str]) -> list[dict[str, Any]]:
+    """The facts an order's runs read or wrote, once each, in order: the brain
+    screen draws "Follow this order" to them (ScaleNotes.dc.html)."""
+    cursor.execute(
+        """
+        select e.type, e.agent_id, e.payload from public.events e
+          join public.runs r on r.id = e.run_id
+         where r.task_id = any(%s::uuid[])
+           and e.type in ('tool_called', 'fact_write_decided')
+         order by e.created_at, e.id limit 2000
+        """,
+        (task_ids,),
+    )
+    seen: dict[str, dict[str, Any]] = {}
+    for r in cursor.fetchall():
+        p = r["payload"] or {}
+        agent = str(r["agent_id"]) if r["agent_id"] else None
+        if r["type"] == "fact_write_decided":
+            fact_id = p.get("fact_id")
+            if fact_id and p.get("outcome") != "rejected":
+                # A write outranks a read of the same fact.
+                seen[str(fact_id)] = {"fact_id": str(fact_id), "way": "in", "agent_id": agent}
+        else:
+            for read in p.get("fact_ids") or []:
+                seen.setdefault(str(read), {"fact_id": str(read), "way": "out", "agent_id": agent})
+    return list(seen.values())[:_ORDER_FACTS]
 
 
 # --- Events for replay ------------------------------------------------------------------

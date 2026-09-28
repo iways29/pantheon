@@ -53,8 +53,10 @@ export function NeedsYou({
           Needs you
         </h2>
         <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span className="num" style={{ fontSize: 13, color: 'var(--ice)' }}>
+          {/* Said aloud when it changes: a new decision waits, or one is done. */}
+          <span className="num" role="status" aria-live="polite" style={{ fontSize: 13, color: 'var(--ice)' }}>
             {total ? `${total} waiting` : 'none'}
+            <span className="vh">{total ? ` for you in Needs you` : ' waiting for you'}</span>
           </span>
           {onCollapse ? (
             <button className="btn ibtn sm glass" aria-label="Fold Needs you away" onClick={onCollapse}>

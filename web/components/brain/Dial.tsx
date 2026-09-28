@@ -25,6 +25,10 @@ export interface Thread {
   way: 'in' | 'out';
   /** The fact it wrote or read, when the event names one. */
   factId?: string;
+  /** A hand-off: the thread runs to this agent instead of the brain. */
+  toAgentId?: string;
+  /** Part of an order being followed: stays drawn, does not fade. */
+  still?: boolean;
 }
 
 export type Locate = (factId: string) => { x: number; y: number; front: boolean } | null;
@@ -46,7 +50,27 @@ interface Props {
   onSelect: (agentName: string) => void;
   /** Where a fact is on screen now (the globe's own projection). */
   locate?: Locate;
+  /** The moment the hand shows while replaying (ms); null or absent: now. */
+  handAt?: number | null;
+  /** Midnight in New York (ms): minute 0 of the dial. */
+  dayStart?: number;
+  /** Dragging the hand replays the day from there (Events.dc.html). */
+  onScrub?: (at: number) => void;
+  /** Facts an event touched lately, for the rim markers. */
+  marks?: Mark[];
+  /** Tapping a rim marker turns the view to its facts. */
+  onMark?: (factIds: string[]) => void;
 }
+
+export interface Mark {
+  factId: string;
+  way: 'in' | 'out';
+}
+
+/** Rim markers closer than this (radians) merge into one. */
+const MARK_MERGE = 0.3;
+/** At most this many markers: the busiest directions. */
+const MARK_MAX = 8;
 
 const minutesOf = new Intl.DateTimeFormat('en-GB', {
   hour: '2-digit',
@@ -174,13 +198,19 @@ export function Dial({
   selected,
   onSelect,
   locate,
+  handAt = null,
+  dayStart = 0,
+  onScrub,
+  marks = [],
+  onMark,
 }: Props) {
   if (!width || !height || !radius) return null;
   const cx = width / 2;
   const cy = height / 2;
   const dialR = radius * 1.14;
   const ringR = radius * 1.36;
-  const now = minutes(new Date());
+  const today = minutes(new Date());
+  const now = handAt === null ? today : minutes(new Date(handAt));
   const { groups, seat, step } = ringLayout(agents, departments, open);
   // Workers lose their labels when neighbours sit closer than a label needs.
   const crowded = step * ringR < 46;
@@ -204,6 +234,27 @@ export function Dial({
     const g = groups.find((x) => x.department.id === agent?.department_id);
     return g ? g.from : null;
   }
+
+  // Rim markers (ScaleNotes.dc.html): recent activity the owner cannot see,
+  // off the stage or beyond the rim once zoomed in, as a chevron on the rim
+  // pointing to it. The ball is glass: a fact behind it is still in view.
+  const rimR = dialR - 16;
+  const rim: { angle: number; facts: string[]; way: 'in' | 'out' }[] = [];
+  for (const m of locate ? marks : []) {
+    const spot = locate!(m.factId);
+    if (!spot) continue;
+    const off = spot.x < 0 || spot.y < 0 || spot.x > width || spot.y > height;
+    const outside = Math.hypot(spot.x - cx, spot.y - cy) > rimR;
+    if (!off && !outside) continue;
+    const angle = Math.atan2(spot.y - cy, spot.x - cx);
+    const near = rim.find((r) => Math.abs(Math.atan2(Math.sin(r.angle - angle), Math.cos(r.angle - angle))) < MARK_MERGE);
+    if (near) {
+      near.facts.push(m.factId);
+      if (m.way === 'in') near.way = 'in';
+    } else rim.push({ angle, facts: [m.factId], way: m.way });
+  }
+
+  rim.sort((a, b) => b.facts.length - a.facts.length).splice(MARK_MAX);
 
   function label(angle: number) {
     const cos = Math.cos(angle);
@@ -241,6 +292,38 @@ export function Dial({
         );
       })}
       <line x1={handIn[0]} y1={handIn[1]} x2={hand[0]} y2={hand[1]} stroke="var(--gold)" strokeWidth={2} strokeLinecap="round" />
+      {onScrub ? (
+        <circle
+          cx={hand[0]}
+          cy={hand[1]}
+          r={11}
+          className="hand-grip"
+          role="slider"
+          tabIndex={0}
+          aria-label="Replay the day: drag the hand"
+          aria-valuemin={0}
+          aria-valuemax={today}
+          aria-valuenow={now}
+          aria-valuetext={`${clock}${handAt === null ? ', now' : ''}`}
+          onPointerDown={(e) => {
+            (e.target as Element).setPointerCapture(e.pointerId);
+          }}
+          onPointerMove={(e) => {
+            if (!(e.target as Element).hasPointerCapture(e.pointerId)) return;
+            const box = (e.currentTarget.ownerSVGElement as SVGSVGElement).getBoundingClientRect();
+            const angle = Math.atan2(e.clientY - box.top - cy, e.clientX - box.left - cx);
+            const minute = Math.round(((((angle + Math.PI / 2) / (Math.PI * 2)) * 1440) % 1440 + 1440) % 1440);
+            // The future cannot be replayed: past now, the hand stops at now.
+            onScrub(dayStart + Math.min(minute, today) * 60000);
+          }}
+          onKeyDown={(e) => {
+            const by = { ArrowLeft: -10, ArrowDown: -10, ArrowRight: 10, ArrowUp: 10, PageDown: -60, PageUp: 60 }[e.key];
+            if (by === undefined) return;
+            e.preventDefault();
+            onScrub(dayStart + Math.max(0, Math.min(now + by, today)) * 60000);
+          }}
+        />
+      ) : null}
       <text x={handLabel[0]} y={handLabel[1]} className="dial-time" textAnchor="middle" dominantBaseline="middle">
         {clock}
       </text>
@@ -283,13 +366,59 @@ export function Dial({
       {threads.map((t) => {
         const angle = anchor(t.agentId);
         if (angle === null) return null;
+        const still = t.still ? ' still' : '';
+        if (t.toAgentId) {
+          // A hand-off between two seats: an ice thread bowed in toward the brain.
+          const other = anchor(t.toAgentId);
+          if (other === null || other === angle) return null;
+          const [x1, y1] = at(cx, cy, ringR, angle);
+          const [x2, y2] = at(cx, cy, ringR, other);
+          const kx = cx + ((x1 + x2) / 2 - cx) * 0.45;
+          const ky = cy + ((y1 + y2) / 2 - cy) * 0.45;
+          const d = `M ${x1.toFixed(1)} ${y1.toFixed(1)} Q ${kx.toFixed(1)} ${ky.toFixed(1)} ${x2.toFixed(1)} ${y2.toFixed(1)}`;
+          return (
+            <g key={t.key} className={`thread handoff${still}`}>
+              <path d={d} className="thread-path" />
+              <path d={d} pathLength={100} className="thread-bead" />
+            </g>
+          );
+        }
         const spot = t.factId && locate ? locate(t.factId) : null;
         const d = orbit(cx, cy, at(cx, cy, ringR, angle), spot ?? rimSpot(cx, cy, radius, angle), t.way);
         return (
-          <g key={t.key} className={`thread ${t.way}${spot && !spot.front ? ' behind' : ''}`}>
+          <g key={t.key} className={`thread ${t.way}${spot && !spot.front ? ' behind' : ''}${still}`}>
             <path d={d} className="thread-path" />
             <path d={d} pathLength={100} className="thread-bead" />
             {spot ? <circle cx={spot.x} cy={spot.y} r={5} className="thread-end" /> : null}
+          </g>
+        );
+      })}
+
+      {rim.map((r) => {
+        const [tx, ty] = at(cx, cy, rimR + 6, r.angle);
+        const [bx, by] = at(cx, cy, rimR - 3, r.angle);
+        const px = -Math.sin(r.angle) * 5;
+        const py = Math.cos(r.angle) * 5;
+        const n = r.facts.length;
+        return (
+          <g
+            key={`rim:${Math.round(r.angle * 100)}`}
+            className={`rim-mark ${r.way}`}
+            role="button"
+            tabIndex={0}
+            aria-label={`${n === 1 ? 'A fact' : `${n} facts`} touched out of view. Turn to ${n === 1 ? 'it' : 'them'}`}
+            onClick={() => onMark?.(r.facts)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onMark?.(r.facts);
+              }
+            }}
+          >
+            <circle cx={(tx + bx) / 2} cy={(ty + by) / 2} r={12} className="rim-hit" />
+            <polygon
+              points={`${tx.toFixed(1)},${ty.toFixed(1)} ${(bx + px).toFixed(1)},${(by + py).toFixed(1)} ${(bx - px).toFixed(1)},${(by - py).toFixed(1)}`}
+            />
           </g>
         );
       })}

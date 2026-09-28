@@ -165,6 +165,15 @@ apply from scratch on plain Postgres (guard anything needing `pg_cron`,
    PR #47 (the globe, streamed chat, decision cards, phone screens): migration
    applied 2026-09-27. After it merges: `scripts.brain layout --reset` (the
    owner's go) redraws the map as a globe.
+   PRs #48 to #51 (2026-09-27): conversations, song-order fixes (a lead's
+   latest word stands, the chat shows the piece, New York dates, the editor
+   gets the draft to fix), threads that orbit to the facts they touch,
+   Langfuse sessions per chat and order. Live with the owner's go: writer and
+   editor run caps 250k tokens; Chief of Staff chat prompt v2.
+   Last Step 10 PR (2026-09-28): Replay the day, "Follow this order", rim
+   markers, an accessibility pass and the design check
+   (`docs/reports/step10-design-check.md`). Step 10 is then done; Step 11 (the
+   Control Center) is next.
 4. After five unattended mornings: the Step 8.1 Milestone report. Stop.
 
 ## Switching on Step 9 (done 2026-09-27; kept for reference)

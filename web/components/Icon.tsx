@@ -50,6 +50,13 @@ const PATHS = {
   expand: <path d="M9.5 2.5h4v4M13.5 2.5L9 7M6.5 13.5h-4v-4M2.5 13.5L7 9" />,
   shrink: <path d="M13.5 6.5h-4v-4M9.5 6.5L14 2M2.5 9.5h4v4M6.5 9.5L2 14" />,
   minus: <path d="M3.5 8h9" />,
+  plus: <path d="M8 3.5v9M3.5 8h9" />,
+  history: (
+    <>
+      <path d="M2.8 8a5.2 5.2 0 1 0 1.6-3.8" />
+      <path d="M2.5 2.8v2.6h2.6M8 5.2V8l2 1.3" />
+    </>
+  ),
   fact: (
     <>
       <circle cx="8" cy="8" r="2.5" />

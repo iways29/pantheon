@@ -16,12 +16,14 @@ import hmac
 from typing import Annotated
 from uuid import UUID
 
+import psycopg
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
 from app.agents.runs import RunBusy, RunNotFound, Runtime, advance_run
 from app.config import Settings, get_settings
+from app.db import as_service_role, connect
 from app.gateway.factory import systemone_transport_from, tier_map_from, transport_from
 from app.knowledge.wiring import agent_services
 from app.mail import mailer_from
@@ -104,6 +106,7 @@ def advance(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such run") from None
     except RunBusy as busy:
         return AdvanceResult(run_id=run_id, status="busy", detail=str(busy))
+    start_next(runtime.dsn)
     return AdvanceResult(
         run_id=run_id,
         status=result.status,
@@ -111,3 +114,15 @@ def advance(
         steps_taken=result.steps_taken,
         cost_usd=float(result.cost_usd),
     )
+
+
+def start_next(dsn: str) -> None:
+    """Start what this run handed on, or the parent it woke, now: not at the
+    scheduler's next minute. A chain of hand-offs took a minute a hop (owner,
+    2026-09-27: a short song took eight minutes). Best effort: the minute
+    tick still catches anything this misses."""
+    try:
+        with connect(dsn) as connection, as_service_role(connection) as conn:
+            conn.execute("select public.start_now()")
+    except psycopg.Error:
+        pass

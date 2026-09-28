@@ -1415,3 +1415,111 @@
 .filters.stacked .btn {
   justify-content: flex-start;
 }
+
+/* Menus that float over content must read on their own: nearly solid, with a
+   strong blur, even inside a glass panel (where nested glass goes flat). */
+.who-menu,
+.filters-pop,
+.popover {
+  background: rgba(16, 22, 44, 0.94) !important;
+  -webkit-backdrop-filter: blur(30px) saturate(160%) !important;
+  backdrop-filter: blur(30px) saturate(160%) !important;
+  box-shadow:
+    inset 0 1px 0 var(--hi),
+    0 20px 50px rgba(0, 0, 0, 0.5) !important;
+}
+
+:root[data-theme='light'] .who-menu,
+:root[data-theme='light'] .filters-pop,
+:root[data-theme='light'] .popover {
+  background: rgba(252, 253, 255, 0.96) !important;
+  box-shadow:
+    inset 0 1px 0 #fff,
+    0 20px 50px rgba(40, 50, 90, 0.18) !important;
+}
+
+.history-menu {
+  left: auto;
+  right: 14px;
+  width: 280px;
+}
+
+.who-option[aria-current='true'] {
+  background: var(--surf2);
+}
+
+.clamp1 {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.past-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 16px;
+  font-size: 12.5px;
+  border-bottom: 1px solid var(--line);
+}
+
+.past-banner .chip {
+  margin: 0;
+}
+
+.welcome {
+  display: grid;
+  gap: 6px;
+  color: var(--ink2);
+}
+
+.welcome-hi {
+  font-size: 20px;
+  color: var(--ink);
+}
+
+/* The chat header holds a title and four small buttons on one line. */
+.chat-head {
+  gap: 10px;
+}
+
+.chat-head .head-buttons {
+  gap: 4px;
+}
+
+.chat-head .head-buttons .btn.ibtn.sm {
+  width: 28px;
+  height: 28px;
+}
+
+.who-button {
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.who-button .disp {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Folded panels stay in the page, out of the layout. */
+.body > [hidden] {
+  display: none !important;
+}
+
+.chat-slot {
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+}
+
+.chat-slot > .chat {
+  flex: 1;
+}
+
+.body.chat-max .chat-slot {
+  width: min(920px, 100%);
+  justify-self: center;
+}

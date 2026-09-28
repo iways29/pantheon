@@ -8,7 +8,7 @@ import { api, stream } from '@/lib/api';
 import { useCompany } from '@/lib/company';
 import { previewThread, previewTalkers } from '@/lib/fixtures';
 import { agentName, departmentName, money, when } from '@/lib/format';
-import type { ChatMessage, OrderCard, OrderQuestion, Talker } from '@/lib/types';
+import type { ChatMessage, Conversation, OrderCard, OrderQuestion, Talker } from '@/lib/types';
 
 /** Events after which a thread may have moved on. */
 const THREAD_EVENTS = new Set([
@@ -44,6 +44,12 @@ export function Chat({ mode = 'open', onMode }: { mode?: PanelMode; onMode?: (mo
   const [waiting, setWaiting] = useState<string | null>(null);
   const [streamed, setStreamed] = useState('');
   const [menu, setMenu] = useState(false);
+  /** The conversation on screen: null for the latest. */
+  const [conversation, setConversation] = useState<string | null>(null);
+  /** "New chat": an empty view; the conversation is made by the first message. */
+  const [fresh, setFresh] = useState(false);
+  const [history, setHistory] = useState<Conversation[] | null>(null);
+  const [latestId, setLatestId] = useState<string | null>(null);
   const box = useRef<HTMLTextAreaElement>(null);
   const picker = useRef<HTMLDivElement>(null);
 
@@ -86,6 +92,8 @@ export function Chat({ mode = 'open', onMode }: { mode?: PanelMode; onMode?: (mo
     const onTalk = (event: Event) => {
       const name = (event as CustomEvent<string>).detail;
       setWho(name);
+      setConversation(null);
+      setFresh(false);
       setMenu(false);
       box.current?.focus();
     };
@@ -95,16 +103,21 @@ export function Chat({ mode = 'open', onMode }: { mode?: PanelMode; onMode?: (mo
 
   const load = useCallback(async () => {
     if (!who) return;
+    if (fresh) {
+      setThread([]);
+      return;
+    }
     if (preview) {
       setThread(previewThread(who, preview));
       return;
     }
     try {
-      setThread(await api.get<ChatMessage[]>(`chat/${encodeURIComponent(who)}?limit=60`));
+      const which = conversation ? `&conversation=${conversation}` : '';
+      setThread(await api.get<ChatMessage[]>(`chat/${encodeURIComponent(who)}?limit=60${which}`));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, [who, preview]);
+  }, [who, preview, fresh, conversation]);
 
   useEffect(() => {
     setThread(null);
@@ -140,9 +153,22 @@ export function Chat({ mode = 'open', onMode }: { mode?: PanelMode; onMode?: (mo
       let failed: string | null = null;
       await stream(
         `chat/${encodeURIComponent(who)}/stream`,
-        { text: said, key: crypto.randomUUID() },
+        {
+          text: said,
+          key: crypto.randomUUID(),
+          new: fresh,
+          conversation_id: fresh ? null : conversation,
+        },
         (kind, data) => {
           if (kind === 'delta') setStreamed((so) => so + (data as { text: string }).text);
+          if (kind === 'done') {
+            // Now on the conversation this message landed in (new, or started
+            // after a quiet gap).
+            const landed = (data as { said: ChatMessage }).said.conversation_id;
+            setFresh(false);
+            setConversation(landed ?? null);
+            setLatestId(landed ?? null);
+          }
           if (kind === 'error') failed = String((data as { detail: unknown }).detail);
         },
       );
@@ -182,6 +208,36 @@ export function Chat({ mode = 'open', onMode }: { mode?: PanelMode; onMode?: (mo
     }
   }
 
+  /** "New chat": a fresh view. Already fresh, or nothing said yet: nothing to do. */
+  function newChat() {
+    setHistory(null);
+    if (fresh || !thread || thread.length === 0) return;
+    setFresh(true);
+    setConversation(null);
+    setThread([]);
+    box.current?.focus();
+  }
+
+  async function toggleHistory() {
+    if (history !== null) {
+      setHistory(null);
+      return;
+    }
+    setMenu(false);
+    if (preview || !who) {
+      setHistory([]);
+      return;
+    }
+    try {
+      const list = await api.get<Conversation[]>(`chat/${encodeURIComponent(who)}/conversations`);
+      setHistory(list);
+      setLatestId(list[0]?.id ?? null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  const shown = fresh ? null : (conversation ?? thread?.[0]?.conversation_id ?? null);
   const talker = talkers.find((t) => t.name === who);
   const agent = agents.find((a) => a.name === who);
 
@@ -211,6 +267,20 @@ export function Chat({ mode = 'open', onMode }: { mode?: PanelMode; onMode?: (mo
                 : ''}
           </span>
         </div>
+        <div className="head-buttons">
+          <button className="btn ibtn sm glass" aria-label="New chat" title="New chat" onClick={newChat}>
+            <Icon name="plus" size={14} />
+          </button>
+          <button
+            className="btn ibtn sm glass"
+            aria-label="Past chats"
+            title="Past chats"
+            aria-expanded={history !== null}
+            onClick={() => void toggleHistory()}
+          >
+            <Icon name="history" size={14} />
+          </button>
+        </div>
         {onMode ? (
           <div className="head-buttons">
             <button
@@ -238,6 +308,9 @@ export function Chat({ mode = 'open', onMode }: { mode?: PanelMode; onMode?: (mo
                     onClick={() => {
                       setWho(t.name);
                       setMenu(false);
+                      setConversation(null);
+                      setFresh(false);
+                      setHistory(null);
                     }}
                   >
                     {state ? <Mark kind={AGENT_MARK[state]} /> : <span className="gl idle" />}
@@ -254,16 +327,47 @@ export function Chat({ mode = 'open', onMode }: { mode?: PanelMode; onMode?: (mo
             })}
           </ul>
         ) : null}
+        {history !== null ? (
+          <ul className="glass who-menu history-menu" aria-label="Past chats">
+            {history.length === 0 ? (
+              <li className="faint" style={{ padding: '10px 12px', fontSize: 13 }}>
+                No past chats yet.
+              </li>
+            ) : null}
+            {history.map((c) => (
+              <li key={c.id}>
+                <button
+                  className="who-option"
+                  aria-current={c.id === shown ? 'true' : undefined}
+                  onClick={() => {
+                    setConversation(c.id);
+                    setFresh(false);
+                    setHistory(null);
+                  }}
+                >
+                  <span style={{ display: 'grid', minWidth: 0 }}>
+                    <span className="clamp1">{c.title}</span>
+                    <span className="faint" style={{ fontSize: 12 }}>
+                      {when(c.last_at)} · {c.messages} messages
+                    </span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </div>
+      {!fresh && conversation && latestId && conversation !== latestId ? (
+        <div className="past-banner">
+          <span className="faint">A past chat. Writing here carries it on.</span>
+          <button className="chip" onClick={() => setConversation(null)}>
+            Back to the latest
+          </button>
+        </div>
+      ) : null}
 
       <div ref={log} role="log" aria-label="Messages" aria-live="polite" className="chat-log">
-        {thread && thread.length === 0 && !waiting ? (
-          <p className="faint" style={{ fontSize: 13, textAlign: 'center' }}>
-            {talker?.role === 'head'
-              ? `Ask ${agentName(talker.name)} anything about ${departmentName(talker.department)}, or give it work.`
-              : 'Ask anything, or say what you want done.'}
-          </p>
-        ) : null}
+        {thread && thread.length === 0 && !waiting && talker ? <Welcome talker={talker} /> : null}
         {thread?.map((m) => (
           <div key={m.id} className="msg-group">
             <div className={`msg ${m.role === 'owner' ? 'you' : 'cos'}`}>
@@ -397,7 +501,28 @@ function Card({
           </div>
         </div>
       ) : null}
-      {order.status === 'done' && order.result ? (
+      {order.waiting?.length ? (
+        <div className="order-q">
+          {order.waiting.map((w) => (
+            <div key={w.approval_id} className="row-between" style={{ alignItems: 'center' }}>
+              <span style={{ fontSize: 13 }}>
+                <span style={{ color: 'var(--ice)' }}>
+                  {w.kind === 'draft_review' ? 'A draft waits for your yes' : 'Waits for your yes'}
+                </span>
+                <br />
+                {w.title}
+              </span>
+              <button
+                className="btn sm glass"
+                onClick={() => window.dispatchEvent(new CustomEvent('pantheon:approval', { detail: w.approval_id }))}
+              >
+                Open
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {order.status === 'done' && order.result && !order.waiting?.length ? (
         <p className="clamp" style={{ fontSize: 13, lineHeight: 1.45 }}>
           {order.result}
         </p>
@@ -408,3 +533,38 @@ function Card({
     </div>
   );
 }
+
+/**
+ * What an empty chat opens with: a greeting and a line on today, from what the
+ * screen already knows. Not stored, no model call.
+ */
+function Welcome({ talker }: { talker: Talker }) {
+  const { pulse, agents } = useCompany();
+  const hour = Number(
+    new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hourCycle: 'h23', timeZone: 'America/New_York' }).format(
+      new Date(),
+    ),
+  );
+  const greeting = hour < 5 ? 'Still up' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  let today: string;
+  let offer: string;
+  if (talker.role === 'chief_of_staff') {
+    const waiting = pulse?.needs_you_total ?? 0;
+    today = `${waiting ? `${waiting} ${waiting === 1 ? 'thing waits' : 'things wait'} for you` : 'Nothing waits for you'}, and ${money(pulse?.spend_usd ?? 0)} of today’s ${money(pulse?.budget_usd ?? 0)} is spent.`;
+    offer = 'Ask me anything about the company, or tell me what you want done and I’ll hand it to the right department.';
+  } else {
+    const team = agents.filter((a) => a.department === talker.department);
+    const busy = team.filter((a) => a.state === 'working').length;
+    today = `${departmentName(talker.department)} has ${team.length} ${team.length === 1 ? 'agent' : 'agents'}${busy ? `, ${busy} at work now` : ', all quiet now'}.`;
+    offer = `Ask me about ${departmentName(talker.department)}’s work, or give me something to do.`;
+  }
+  return (
+    <div className="msg cos welcome" role="note">
+      <span className="disp welcome-hi">{greeting}.</span>
+      <span>
+        {today} {offer}
+      </span>
+    </div>
+  );
+}
+

@@ -241,6 +241,7 @@ def test_the_chat_lists_orders_with_their_route_and_cost(api: Any, world: World)
     assert order["text"] == "Find three founders, please"
     assert order["routed"][0]["department"] == "research"
     assert order["cost_usd"] == pytest.approx(0.06)
+    assert [w["kind"] for w in order["waiting"]] == ["send_email"], "what the work waits on"
 
 
 def test_an_orders_path_is_its_whole_tree(api: Any, world: World) -> None:

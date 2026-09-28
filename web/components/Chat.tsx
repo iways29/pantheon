@@ -51,6 +51,7 @@ export function Chat({ mode = 'open', onMode }: { mode?: PanelMode; onMode?: (mo
   const [history, setHistory] = useState<Conversation[] | null>(null);
   const [latestId, setLatestId] = useState<string | null>(null);
   const box = useRef<HTMLTextAreaElement>(null);
+  const sentAt = useRef(0);
   const picker = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -119,8 +120,12 @@ export function Chat({ mode = 'open', onMode }: { mode?: PanelMode; onMode?: (mo
     }
   }, [who, preview, fresh, conversation]);
 
+  // Blank the thread only when the talker changes: a message landing in a
+  // new conversation must not flash the chat empty.
+  const loadedFor = useRef<string | null>(null);
   useEffect(() => {
-    setThread(null);
+    if (loadedFor.current !== who) setThread(null);
+    loadedFor.current = who;
     void load();
     return onEvent((event) => {
       if (THREAD_EVENTS.has(event.type)) void load();
@@ -145,6 +150,9 @@ export function Chat({ mode = 'open', onMode }: { mode?: PanelMode; onMode?: (mo
     const said = text.trim();
     if (!said || waiting || !who) return;
     setWaiting(said);
+    // A reload from the live stream can bring this message in before the
+    // reply's "done": from then on the saved copy is shown, not the bubble.
+    sentAt.current = Date.now() - 5000;
     setStreamed('');
     setText('');
     setError(null);
@@ -162,9 +170,16 @@ export function Chat({ mode = 'open', onMode }: { mode?: PanelMode; onMode?: (mo
         (kind, data) => {
           if (kind === 'delta') setStreamed((so) => so + (data as { text: string }).text);
           if (kind === 'done') {
+            // The two messages are saved: show them now and drop the bubbles.
+            // The stream stays open a few seconds more while the message is
+            // sorted into memory; waiting for its end showed both at once.
+            const { said: saved, reply } = data as { said: ChatMessage; reply: ChatMessage };
+            setThread((list) => [...(list ?? []).filter((m) => m.id !== saved.id && m.id !== reply.id), saved, reply]);
+            setWaiting(null);
+            setStreamed('');
             // Now on the conversation this message landed in (new, or started
             // after a quiet gap).
-            const landed = (data as { said: ChatMessage }).said.conversation_id;
+            const landed = saved.conversation_id;
             setFresh(false);
             setConversation(landed ?? null);
             setLatestId(landed ?? null);
@@ -377,7 +392,7 @@ export function Chat({ mode = 'open', onMode }: { mode?: PanelMode; onMode?: (mo
             {m.role === 'agent' && m.order ? <Card order={m.order} onAnswer={answer} /> : null}
           </div>
         ))}
-        {waiting ? (
+        {waiting && !thread?.some((m) => m.role === 'owner' && m.text === waiting && Date.parse(m.at) >= sentAt.current) ? (
           <>
             <div className="msg you">
               <span style={{ whiteSpace: 'pre-wrap' }}>{waiting}</span>

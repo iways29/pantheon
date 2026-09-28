@@ -389,11 +389,32 @@
 }
 
 .piece-body {
-  max-height: 320px;
-  overflow-y: auto;
+  max-height: 260px;
+  overflow: hidden;
   white-space: pre-wrap;
   line-height: 1.5;
   font-size: 13px;
+  mask-image: linear-gradient(to bottom, #000 80%, transparent);
+}
+
+.piece-body.open {
+  max-height: none;
+  mask-image: none;
+}
+
+/* A line the fact check held back: marked in place, not listed in red. */
+.piece-body mark.stopped {
+  background: none;
+  color: inherit;
+  text-decoration: underline wavy var(--verm);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.piece-note {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink2);
 }
 
 .text-link {
@@ -1249,6 +1270,12 @@
   display: grid;
   gap: 8px;
   justify-items: start;
+}
+
+/* With Needs you folded, its button takes the bottom-left corner: the key
+   sits above it rather than under it. */
+.body.no-needs .key {
+  bottom: 68px;
 }
 
 .key-body {

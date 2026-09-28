@@ -51,6 +51,7 @@ export function Chat({ mode = 'open', onMode }: { mode?: PanelMode; onMode?: (mo
   const [history, setHistory] = useState<Conversation[] | null>(null);
   const [latestId, setLatestId] = useState<string | null>(null);
   const box = useRef<HTMLTextAreaElement>(null);
+  const sentAt = useRef(0);
   const picker = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -119,8 +120,12 @@ export function Chat({ mode = 'open', onMode }: { mode?: PanelMode; onMode?: (mo
     }
   }, [who, preview, fresh, conversation]);
 
+  // Blank the thread only when the talker changes: a message landing in a
+  // new conversation must not flash the chat empty.
+  const loadedFor = useRef<string | null>(null);
   useEffect(() => {
-    setThread(null);
+    if (loadedFor.current !== who) setThread(null);
+    loadedFor.current = who;
     void load();
     return onEvent((event) => {
       if (THREAD_EVENTS.has(event.type)) void load();
@@ -145,6 +150,9 @@ export function Chat({ mode = 'open', onMode }: { mode?: PanelMode; onMode?: (mo
     const said = text.trim();
     if (!said || waiting || !who) return;
     setWaiting(said);
+    // A reload from the live stream can bring this message in before the
+    // reply's "done": from then on the saved copy is shown, not the bubble.
+    sentAt.current = Date.now() - 5000;
     setStreamed('');
     setText('');
     setError(null);
@@ -162,9 +170,16 @@ export function Chat({ mode = 'open', onMode }: { mode?: PanelMode; onMode?: (mo
         (kind, data) => {
           if (kind === 'delta') setStreamed((so) => so + (data as { text: string }).text);
           if (kind === 'done') {
+            // The two messages are saved: show them now and drop the bubbles.
+            // The stream stays open a few seconds more while the message is
+            // sorted into memory; waiting for its end showed both at once.
+            const { said: saved, reply } = data as { said: ChatMessage; reply: ChatMessage };
+            setThread((list) => [...(list ?? []).filter((m) => m.id !== saved.id && m.id !== reply.id), saved, reply]);
+            setWaiting(null);
+            setStreamed('');
             // Now on the conversation this message landed in (new, or started
             // after a quiet gap).
-            const landed = (data as { said: ChatMessage }).said.conversation_id;
+            const landed = saved.conversation_id;
             setFresh(false);
             setConversation(landed ?? null);
             setLatestId(landed ?? null);
@@ -377,7 +392,7 @@ export function Chat({ mode = 'open', onMode }: { mode?: PanelMode; onMode?: (mo
             {m.role === 'agent' && m.order ? <Card order={m.order} onAnswer={answer} /> : null}
           </div>
         ))}
-        {waiting ? (
+        {waiting && !thread?.some((m) => m.role === 'owner' && m.text === waiting && Date.parse(m.at) >= sentAt.current) ? (
           <>
             <div className="msg you">
               <span style={{ whiteSpace: 'pre-wrap' }}>{waiting}</span>
@@ -542,8 +557,26 @@ const PIECE_WORDS: Record<string, string> = {
   published: 'Published',
 };
 
-/** What the work made, in full: the owner reads the song, not its id. */
+/** Why a check stopped a line, in the owner's words. */
+function why(reason: string): string {
+  const r = reason.toLowerCase();
+  if (r.includes('public facts') || r.includes('support')) return 'not backed by the company’s public facts';
+  if (r.includes('banned')) return 'uses a banned word';
+  if (r.includes('voice')) return 'off-voice';
+  return r;
+}
+
+/**
+ * What the work made, in full: the owner reads the song, not its id. Lines a
+ * check stopped are marked in the text itself, with one sentence saying why,
+ * instead of a red list under it (owner, 2026-09-27).
+ */
 function Piece({ piece }: { piece: OrderPiece }) {
+  const [open, setOpen] = useState(false);
+  const body = piece.body.replace(/\*\*(.+?)\*\*/g, '$1');
+  const stopped = piece.stopped.filter((line) => line.sentence);
+  const reasons = [...new Set(stopped.map((line) => why(line.reason)))];
+  const marked = (line: string) => stopped.some((s) => line.includes(s.sentence.replace(/[.!?]+$/, '')));
   return (
     <div className="order-q piece">
       <span className="faint" style={{ fontSize: 12 }}>
@@ -551,16 +584,31 @@ function Piece({ piece }: { piece: OrderPiece }) {
         {piece.channel && piece.channel !== 'other' ? ` · ${piece.channel}` : ''}
       </span>
       {piece.title ? <span style={{ fontWeight: 500 }}>{piece.title}</span> : null}
-      {/* Drafts carry light markdown ("**Verse 1**"); the stars are dropped. */}
-      <div className="piece-body">{piece.body.replace(/\*\*(.+?)\*\*/g, '$1')}</div>
-      {piece.stopped.length ? (
-        <div style={{ display: 'grid', gap: 4 }}>
-          {piece.stopped.map((line) => (
-            <span key={line.sentence + line.reason} style={{ fontSize: 12, color: 'var(--verm)' }}>
-              “{line.sentence}”: {line.reason.toLowerCase()}
+      {stopped.length ? (
+        <p className="piece-note">
+          The fact check held back {stopped.length === 1 ? 'one line' : `${stopped.length} lines`} (marked below):{' '}
+          {reasons.join('; ')}. Nothing was published.
+        </p>
+      ) : null}
+      <div className={`piece-body${open ? ' open' : ''}`}>
+        {body.split('\n').map((line, i) =>
+          line.trim() && marked(line) ? (
+            <mark key={i} className="stopped" title="Held back by the fact check">
+              {line}
+              {'\n'}
+            </mark>
+          ) : (
+            <span key={i}>
+              {line}
+              {'\n'}
             </span>
-          ))}
-        </div>
+          ),
+        )}
+      </div>
+      {body.length > 600 || body.split('\n').length > 10 ? (
+        <button type="button" className="text-link" aria-expanded={open} onClick={() => setOpen(!open)}>
+          {open ? 'Show less' : 'Read it all'}
+        </button>
       ) : null}
     </div>
   );

@@ -211,6 +211,23 @@ def test_an_unsupported_claim_blocks_the_draft_and_names_the_sentence(desk: Desk
     assert rows(desk.db, "select 1 from public.approvals where action_type = 'draft_review'") == []
 
 
+def test_a_blocked_draft_comes_back_with_its_text_and_facts_to_fix(desk: Desk) -> None:
+    """The editor was told to fix drafts it could not read (2026-09-27)."""
+    from app.tools import ToolContext
+    from app.tools.builtin import _draft_for_fixing
+
+    saved = write(desk, "Mumba.ai has 40,000 users. Think in branches.", facts=[desk.public_fact])
+    with acting_as(desk.db, user_id=str(desk.tenants.user_a)) as conn:
+        ctx = ToolContext(
+            connection=conn, org_id=desk.tenants.org_a, agent_id=desk.agent, agent_name="editor"
+        )
+        draft = _draft_for_fixing(ctx, saved.draft_id)
+
+    assert draft["body"] == "Mumba.ai has 40,000 users. Think in branches."
+    assert draft["fact_ids"] == [str(desk.public_fact)]
+    assert (draft["channel"], draft["format"]) == ("x", "post")
+
+
 def test_banned_words_and_devanagari_are_blocked_in_code(desk: Desk) -> None:
     saved = write(desk, "A revolutionary canvas, Harvey Specter style. कर्म")
     result = run_checks(desk, saved.draft_id, ScriptedJev(scores=GOOD_VOICE))

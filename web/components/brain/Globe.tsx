@@ -256,7 +256,10 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
     controls.maxDistance = 8;
     controls.zoomSpeed = 0.9;
     controls.rotateSpeed = 0.6;
-    controls.screenSpacePanning = true;
+    // The ball stays in the dial (ScaleNotes: "the dial and the agent ring
+    // stay fixed"): it turns and zooms, never slides. Panning was also what
+    // made a pinch drift on a phone.
+    controls.enablePan = false;
 
     const glass = new THREE.Mesh(
       new THREE.SphereGeometry(1, 96, 64),

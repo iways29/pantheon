@@ -356,6 +356,7 @@ def _card(cursor: psycopg.Cursor, t: dict[str, Any]) -> dict[str, Any]:
         for r in cursor.fetchall()
     ]
     return {
+        "pieces": _pieces(cursor, t["id"]),
         "id": str(t["id"]),
         "title": t["title"],
         "text": t["instructions"] or t["title"],
@@ -369,6 +370,41 @@ def _card(cursor: psycopg.Cursor, t: dict[str, Any]) -> dict[str, Any]:
         "questions": questions,
         "cost_usd": _tree_cost(cursor, t["id"]),
     }
+
+
+def _pieces(cursor: psycopg.Cursor, root_id: UUID | str) -> list[dict[str, Any]]:
+    """What the work made, in full: the owner asked for a song and was shown
+    a draft id (2026-09-27). The latest version of each draft in the tree,
+    with what any check stopped."""
+    cursor.execute(
+        """
+        select d.id, d.title, d.status, d.channel, d.format, d.body, d.checks
+          from public.drafts d join public.tasks tk on tk.id = d.task_id
+         where (tk.id = %s or tk.root_task_id = %s)
+           and not exists (select 1 from public.drafts n where n.revises = d.id)
+         order by d.created_at desc limit 3
+        """,
+        (str(root_id), str(root_id)),
+    )
+    pieces = []
+    for r in cursor.fetchall():
+        stopped: list[dict[str, str]] = []
+        for c in (r["checks"] or {}).get("blocking", []):
+            line = {"sentence": str(c.get("sentence") or ""), "reason": str(c.get("reason") or "")}
+            if line not in stopped:
+                stopped.append(line)
+        pieces.append(
+            {
+                "id": str(r["id"]),
+                "title": r["title"],
+                "status": r["status"],
+                "channel": r["channel"],
+                "format": r["format"],
+                "body": (r["body"] or "")[:6000],
+                "stopped": stopped[:5],
+            }
+        )
+    return pieces
 
 
 def order_path(cursor: psycopg.Cursor, task_id: UUID) -> dict[str, Any] | None:

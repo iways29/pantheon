@@ -388,6 +388,30 @@
   border-top: 1px solid var(--line);
 }
 
+.piece-body {
+  max-height: 320px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  line-height: 1.5;
+  font-size: 13px;
+}
+
+.text-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ice);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.text-link:focus-visible {
+  outline: 2px solid var(--ice);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 .typing {
   display: inline-flex;
   gap: 5px;
@@ -605,9 +629,10 @@
 }
 
 .thread-path {
+  fill: none;
   stroke: var(--ice);
-  stroke-opacity: 0.35;
-  stroke-width: 1;
+  stroke-opacity: 0.55;
+  stroke-width: 1.2;
 }
 
 .thread.in .thread-path {
@@ -615,6 +640,7 @@
 }
 
 .thread-bead {
+  fill: none;
   stroke: var(--ice);
   stroke-width: 3;
   stroke-linecap: round;
@@ -624,6 +650,22 @@
 
 .thread.in .thread-bead {
   stroke: var(--gold);
+}
+
+/* Where the thread lands: the fact itself. */
+.thread-end {
+  fill: none;
+  stroke: var(--ice);
+  stroke-width: 1.5;
+}
+
+.thread.in .thread-end {
+  stroke: var(--gold);
+}
+
+/* A fact behind the ball's centre: the thread reads as going round the back. */
+.thread.behind .thread-path {
+  stroke-dasharray: 3 4;
 }
 
 @keyframes travel {

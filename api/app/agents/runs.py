@@ -61,7 +61,7 @@ from app.gateway import (
     UpstreamError,
 )
 from app.judge import Judge
-from app.tracing import Tracer
+from app.tracing import Tracer, in_session
 
 #: Gateway refusals that pause a run until the condition is lifted.
 _PAUSING_REFUSALS = {
@@ -359,6 +359,7 @@ def _execute(runtime: Runtime, connection: psycopg.Connection, run: _Run, deadli
         summarise = _output
     steps = run.steps_taken
     with (
+        in_session(_session_id(connection, run)),
         runtime.tracer.agent_run(
             run_id=str(run.id),
             agent_name=f"{run.runner}-agent",
@@ -629,6 +630,7 @@ def _record_step(
 
 def _finish(connection: psycopg.Connection, run: _Run, stop: _Stop) -> None:
     with as_service_role(connection) as conn, conn.cursor() as cursor:
+        _latest_word(cursor, run, stop)
         cursor.execute(
             """
             update public.runs
@@ -697,6 +699,62 @@ def _lifecycle_event(
 ) -> None:
     with as_service_role(connection) as conn, conn.cursor() as cursor:
         _event(cursor, run.org_id, run.id, run.agent_id, event_type, payload)
+
+
+def _session_id(connection: psycopg.Connection, run: _Run) -> str | None:
+    """The Langfuse session a run joins: the chat conversation its order came
+    from, else its order (the root task). A run with no task has none."""
+    if run.task_id is None:
+        return None
+    with as_service_role(connection) as conn, conn.cursor() as cursor:
+        cursor.execute(
+            """
+            select coalesce(t.root_task_id, t.id) as root,
+                   (select m.conversation_id from public.chat_messages m
+                     where m.task_id = coalesce(t.root_task_id, t.id)
+                       and m.conversation_id is not null
+                     limit 1) as conversation
+              from public.tasks t where t.id = %s
+            """,
+            (str(run.task_id),),
+        )
+        row = cursor.fetchone()
+    if row is None:
+        return None
+    return f"chat-{row['conversation']}" if row["conversation"] else f"order-{row['root']}"
+
+
+def _latest_word(cursor: psycopg.Cursor, run: _Run, stop: _Stop) -> None:
+    """A head woken by its team's results has the last word on its task.
+
+    The task keeps the first result it was given, so a head that reported
+    "the retry is queued" and was woken again kept that stale line: the owner
+    was told no song existed when one did (2026-09-27). A deep run that ends
+    without calling `report_result` now puts its final message on the task,
+    over any summary from an earlier run; details reported earlier stay.
+    """
+    summary = (stop.output or {}).get("summary")
+    if (
+        stop.status != "succeeded"
+        or stop.reason == "escalated"
+        or run.task_id is None
+        or run.runner != "deep"
+        or not isinstance(summary, str)
+        or not summary.strip()
+    ):
+        return
+    cursor.execute(
+        "select 1 from public.tool_calls where run_id = %s and tool = 'report_result' "
+        "and status = 'ok' limit 1",
+        (str(run.id),),
+    )
+    if cursor.fetchone() is not None:
+        return  # this run reported its own result; that one stands
+    cursor.execute(
+        "update public.tasks set result = coalesce(result, '{}'::jsonb) || %s::jsonb "
+        "where id = %s and status in ('running', 'queued')",
+        (json.dumps({"summary": summary}), str(run.task_id)),
+    )
 
 
 def _event(

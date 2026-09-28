@@ -244,6 +244,37 @@ def test_the_chat_lists_orders_with_their_route_and_cost(api: Any, world: World)
     assert [w["kind"] for w in order["waiting"]] == ["send_email"], "what the work waits on"
 
 
+def test_an_order_shows_the_piece_it_made_in_full(
+    db: psycopg.Connection, tenants: Tenants, api: Any, world: World
+) -> None:
+    """The owner asked for a song and was shown a draft id (2026-09-27)."""
+    stop = {"sentence": "You remain in the lead.", "reason": "Not in the brain's public facts"}
+    with as_service_role(db) as conn, conn.cursor() as cursor:
+        cursor.execute(
+            "insert into public.drafts (org_id, task_id, channel, format, title, body, "
+            "status, idempotency_key) values (%s, %s, 'other', 'song', 'First go', "
+            "'Old verse', 'blocked', 'd1') returning id",
+            (str(tenants.org_a), str(world.lead_task)),
+        )
+        first = cursor.fetchone()["id"]
+        cursor.execute(
+            "insert into public.drafts (org_id, task_id, revises, channel, format, title, body, "
+            "status, checks, idempotency_key) values (%s, %s, %s, 'other', 'song', "
+            "'The Charioteer', 'Verse one', 'blocked', %s, 'd2')",
+            (
+                str(tenants.org_a),
+                str(world.worker_task),
+                str(first),
+                psycopg.types.json.Jsonb({"blocking": [stop, stop]}),
+            ),
+        )
+
+    (order,) = api().get("/orders").json()
+
+    assert [(p["title"], p["body"]) for p in order["pieces"]] == [("The Charioteer", "Verse one")]
+    assert order["pieces"][0]["stopped"] == [stop], "once per sentence, only the latest version"
+
+
 def test_an_orders_path_is_its_whole_tree(api: Any, world: World) -> None:
     path = api().get(f"/orders/{world.order}/path").json()
 

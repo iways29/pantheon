@@ -301,6 +301,15 @@ def test_the_owners_question_joins_the_next_morning_once(dsn: str, lab: Lab) -> 
             "values (%s, 'research:morning-brief', 'Who is building AI for legal work?')",
             (str(lab.org_id),),
         )
+    # Asked the evening before the fixed morning, whatever the real clock says:
+    # a morning takes only what was asked before it (this failed once the real
+    # date passed MORNING, 2026-09-28).
+    with connect(dsn) as connection, as_service_role(connection) as conn:
+        conn.execute(
+            "update public.routine_requests set created_at = %s::timestamptz - interval '12 hours' "
+            "where org_id = %s",
+            (MORNING, str(lab.org_id)),
+        )
 
     (task_id,) = fire(dsn)
 

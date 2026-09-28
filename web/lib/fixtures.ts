@@ -308,8 +308,12 @@ function songOrder(): ChatMessage[] {
         body:
           '**Verse 1**\nAt the edge of the field,\nBefore the company, before the deck,\nOne choice carries weight.\n' +
           'The founder holds the bow.\n\n**Chorus**\nYou choose the road.\nYou remain in the lead.\n' +
-          'We bring architecture, people and hours,\nIntroductions and launch help for the need.',
-        stopped: [{ sentence: 'You remain in the lead.', reason: "Not in the brain's public facts" }],
+          'We bring architecture, people and hours,\nIntroductions and launch help for the need.\n\n' +
+          '**Verse 2**\nAn enterprise buyer joins the room.\nAn operator tests the plan.\nThe founder leads. The studio serves.',
+        stopped: [
+          { sentence: 'You remain in the lead.', reason: "Not in the brain's public facts" },
+          { sentence: 'An operator tests the plan.', reason: "Not in the brain's public facts" },
+        ],
       },
     ],
     cost_usd: 0.05,

@@ -557,8 +557,26 @@ const PIECE_WORDS: Record<string, string> = {
   published: 'Published',
 };
 
-/** What the work made, in full: the owner reads the song, not its id. */
+/** Why a check stopped a line, in the owner's words. */
+function why(reason: string): string {
+  const r = reason.toLowerCase();
+  if (r.includes('public facts') || r.includes('support')) return 'not backed by the company’s public facts';
+  if (r.includes('banned')) return 'uses a banned word';
+  if (r.includes('voice')) return 'off-voice';
+  return r;
+}
+
+/**
+ * What the work made, in full: the owner reads the song, not its id. Lines a
+ * check stopped are marked in the text itself, with one sentence saying why,
+ * instead of a red list under it (owner, 2026-09-27).
+ */
 function Piece({ piece }: { piece: OrderPiece }) {
+  const [open, setOpen] = useState(false);
+  const body = piece.body.replace(/\*\*(.+?)\*\*/g, '$1');
+  const stopped = piece.stopped.filter((line) => line.sentence);
+  const reasons = [...new Set(stopped.map((line) => why(line.reason)))];
+  const marked = (line: string) => stopped.some((s) => line.includes(s.sentence.replace(/[.!?]+$/, '')));
   return (
     <div className="order-q piece">
       <span className="faint" style={{ fontSize: 12 }}>
@@ -566,16 +584,31 @@ function Piece({ piece }: { piece: OrderPiece }) {
         {piece.channel && piece.channel !== 'other' ? ` · ${piece.channel}` : ''}
       </span>
       {piece.title ? <span style={{ fontWeight: 500 }}>{piece.title}</span> : null}
-      {/* Drafts carry light markdown ("**Verse 1**"); the stars are dropped. */}
-      <div className="piece-body">{piece.body.replace(/\*\*(.+?)\*\*/g, '$1')}</div>
-      {piece.stopped.length ? (
-        <div style={{ display: 'grid', gap: 4 }}>
-          {piece.stopped.map((line) => (
-            <span key={line.sentence + line.reason} style={{ fontSize: 12, color: 'var(--verm)' }}>
-              “{line.sentence}”: {line.reason.toLowerCase()}
+      {stopped.length ? (
+        <p className="piece-note">
+          The fact check held back {stopped.length === 1 ? 'one line' : `${stopped.length} lines`} (marked below):{' '}
+          {reasons.join('; ')}. Nothing was published.
+        </p>
+      ) : null}
+      <div className={`piece-body${open ? ' open' : ''}`}>
+        {body.split('\n').map((line, i) =>
+          line.trim() && marked(line) ? (
+            <mark key={i} className="stopped" title="Held back by the fact check">
+              {line}
+              {'\n'}
+            </mark>
+          ) : (
+            <span key={i}>
+              {line}
+              {'\n'}
             </span>
-          ))}
-        </div>
+          ),
+        )}
+      </div>
+      {body.length > 600 || body.split('\n').length > 10 ? (
+        <button type="button" className="text-link" aria-expanded={open} onClick={() => setOpen(!open)}>
+          {open ? 'Show less' : 'Read it all'}
+        </button>
       ) : null}
     </div>
   );

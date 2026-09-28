@@ -135,15 +135,22 @@ export function BrainStage({ filter = NO_FILTER }: { filter?: BrainFilter }) {
 
   const byStatus = (s: MapFact['status']) => facts.filter((f) => f.status === s).length;
 
-  // Open on the ring: the Executive Office, the department filtered to, and
-  // any the owner opened. Nothing opens or closes by itself.
+  // Open on the ring: what the owner opened, and the department filtered to.
+  // Nothing opens or closes by itself.
+  // The Executive Office starts open; after that the owner opens and closes.
+  const started = useRef(false);
+  useEffect(() => {
+    const executive = departments.find((d) => d.name === 'executive');
+    if (executive && !started.current) {
+      started.current = true;
+      setOpened((prev) => new Set(prev).add(executive.id));
+    }
+  }, [departments]);
   const open = useMemo(() => {
     const set = new Set(opened);
-    const executive = departments.find((d) => d.name === 'executive');
-    if (executive) set.add(executive.id);
     if (filter.department) set.add(filter.department);
     return set;
-  }, [opened, departments, filter.department]);
+  }, [opened, filter.department]);
 
   function toggle(id: string) {
     setOpened((prev) => {

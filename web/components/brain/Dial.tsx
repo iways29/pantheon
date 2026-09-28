@@ -216,7 +216,7 @@ export function Dial({
           return (
             <g key={g.department.id}>
               <path d={`M ${x1} ${y1} A ${ringR} ${ringR} 0 ${large} 1 ${x2} ${y2}`} fill="none" stroke="var(--line)" strokeWidth={1.2} />
-              {g.department.name !== 'executive' ? (
+              {
                 <g
                   className="seat hub-close"
                   role="button"
@@ -233,7 +233,7 @@ export function Dial({
                   <circle cx={bx} cy={by} r={8} className="hub-close-dot" />
                   <line x1={bx - 3.5} y1={by} x2={bx + 3.5} y2={by} stroke="var(--ink2)" strokeWidth={1.4} />
                 </g>
-              ) : null}
+              }
             </g>
           );
         })}
@@ -285,8 +285,15 @@ export function Dial({
               }}
             >
               <circle cx={x} cy={y} r={20} className="seat-hit" />
-              {waiting ? <circle cx={x} cy={y} r={17} fill="var(--iceS)" stroke="var(--ice)" strokeOpacity={0.6} /> : null}
-              <circle cx={x} cy={y} r={12} fill="var(--bg)" stroke={working ? 'var(--gold)' : 'var(--ink3)'} strokeWidth={working ? 1.8 : 1.2} />
+              {waiting ? <circle cx={x} cy={y} r={16} fill="var(--iceS)" className="seat-breathe" /> : null}
+              <circle
+                cx={x}
+                cy={y}
+                r={12}
+                className={`hub-core${working ? ' busy' : ''}`}
+                stroke={working ? 'var(--gold)' : 'var(--ink2)'}
+                strokeWidth={1.5}
+              />
               <text x={x} y={y} className="hub-count" textAnchor="middle" dominantBaseline="central">
                 {g.agents.length}
               </text>
@@ -335,7 +342,7 @@ export function Dial({
             >
               <title>{name}</title>
               <circle cx={x} cy={y} r={16} className="seat-hit" />
-              {lead ? <circle cx={x} cy={y} r={11} fill="none" stroke="var(--ink3)" /> : null}
+              {lead ? <circle cx={x} cy={y} r={11} fill="none" stroke="var(--ink3)" strokeOpacity={0.7} /> : null}
               <SeatMark x={x} y={y} state={agent.state} />
               <text x={lx} y={ly} className="seat-name" textAnchor={label(angle)} dominantBaseline="middle">
                 {name}
@@ -352,19 +359,34 @@ export function Dial({
   );
 }
 
-/** The state's shape, in SVG: never colour alone. */
+/** The state's shape, in SVG: never colour alone. At work, a thin gold arc
+ * circles the agent; waiting, a blue halo breathes (Field.dc.html). */
 function SeatMark({ x, y, state }: { x: number; y: number; state: Agent['state'] }) {
   switch (state) {
     case 'working':
       return (
         <>
-          <circle cx={x} cy={y} r={9} fill="var(--goldS)" />
-          <circle cx={x} cy={y} r={5.5} fill="var(--gold)" />
+          <circle cx={x} cy={y} r={8} fill="var(--goldS)" className="seat-glow" />
+          <circle cx={x} cy={y} r={5} fill="var(--gold)" />
+          <circle
+            cx={x}
+            cy={y}
+            r={11}
+            fill="none"
+            stroke="var(--gold)"
+            strokeWidth={1.5}
+            strokeDasharray="17 52"
+            strokeLinecap="round"
+            className="seat-spin"
+          />
         </>
       );
     case 'waiting':
       return (
-        <rect x={x - 5} y={y - 5} width={10} height={10} rx={1.5} transform={`rotate(45 ${x} ${y})`} fill="var(--iceS)" stroke="var(--ice)" strokeWidth={1.5} />
+        <>
+          <circle cx={x} cy={y} r={12} fill="var(--iceS)" className="seat-breathe" />
+          <rect x={x - 5} y={y - 5} width={10} height={10} rx={1.5} transform={`rotate(45 ${x} ${y})`} fill="var(--iceS)" stroke="var(--ice)" strokeWidth={1.5} />
+        </>
       );
     case 'paused':
       return (
@@ -376,7 +398,7 @@ function SeatMark({ x, y, state }: { x: number; y: number; state: Agent['state']
     case 'stopped':
       return <rect x={x - 5} y={y - 5} width={10} height={10} rx={1} fill="none" stroke="var(--ink3)" strokeWidth={1.5} />;
     default:
-      return <circle cx={x} cy={y} r={5} fill="var(--bg)" stroke="var(--ink2)" strokeWidth={1.5} />;
+      return <circle cx={x} cy={y} r={5} fill="none" stroke="var(--ink2)" strokeWidth={1.5} />;
   }
 }
 

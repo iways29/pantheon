@@ -63,6 +63,7 @@ const VERTEX = /* glsl */ `
   uniform float pixelRatio;
   uniform float scale;
   uniform float pointFade;
+  uniform float depthNear;
   varying float vAlpha;
   varying float vStatus;
   varying float vGlow;
@@ -74,6 +75,8 @@ const VERTEX = /* glsl */ `
     float size = (base * scale + glow * 7.0 + picked * 8.0) * 3.0 / max(-mv.z, 0.05);
     // Zoomed out only what needs the owner stays a point; a filter dims the rest.
     vAlpha = (status > 2.5 ? 1.0 : pointFade) * (dim > 0.5 ? 0.14 : 1.0);
+    // Depth: facts at the back of the globe read fainter than those in front.
+    vAlpha *= clamp(1.35 - (-mv.z - depthNear) * 0.55, 0.4, 1.0);
     gl_PointSize = clamp(size, 2.0, 72.0) * pixelRatio;
     vStatus = status;
     vGlow = glow;
@@ -211,6 +214,7 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
 ) {
   const host = useRef<HTMLDivElement>(null);
   const labels = useRef<HTMLDivElement>(null);
+  const lens = useRef<HTMLDivElement>(null);
   const tip = useRef<HTMLDivElement>(null);
   // Everything three.js, kept across renders.
   const world = useRef<{
@@ -285,6 +289,7 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
           pixelRatio: { value: renderer.getPixelRatio() },
           scale: { value: 1 },
           pointFade: { value: 1 },
+          depthNear: { value: 2 },
           gold: { value: new THREE.Color() },
           verm: { value: new THREE.Color() },
           grey: { value: new THREE.Color() },
@@ -341,8 +346,8 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
       // Dark: blue glass the points glow through. Light: pearl, lit at the rim.
       gm.uniforms.rim!.value = dark ? new THREE.Color('#c9d8ff') : new THREE.Color('#9fb6e8');
       gm.uniforms.fill!.value = dark ? new THREE.Color('#2a3766') : new THREE.Color('#ffffff');
-      gm.uniforms.fillAlpha!.value = dark ? 0.08 : 0.42;
-      gm.uniforms.rimAlpha!.value = dark ? 0.6 : 0.55;
+      gm.uniforms.fillAlpha!.value = dark ? 0.07 : 0.34;
+      gm.uniforms.rimAlpha!.value = dark ? 0.35 : 0.4;
       // Dark glass is drawn over the points (they glow through it); the pale
       // light glass under them, or it would wash them out.
       glass.renderOrder = dark ? 2 : -1;
@@ -408,6 +413,9 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
       (points.material as THREE.ShaderMaterial).uniforms.pointFade!.value = pointFade;
       (clouds.material as THREE.ShaderMaterial).uniforms.fade!.value = 1 - pointFade * 0.55;
       latest.current.onView?.({ azimuth: Math.atan2(camera.position.x, camera.position.z), zoom });
+      const fromCentre = camera.position.length();
+      (points.material as THREE.ShaderMaterial).uniforms.depthNear!.value = Math.max(fromCentre - 1, 0);
+      placeLens(w0, h0, fromCentre);
       // Glow fades over GLOW_SECONDS; the loop runs only while something glows.
       const glow = geometry.getAttribute('glow') as THREE.BufferAttribute | undefined;
       let glowing = false;
@@ -428,6 +436,28 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
       renderer.render(scene, camera);
       overlay();
       if (moved || glowing) request();
+    }
+
+    // The lens glass (Field.dc.html): the rim refracts, blurring what lies
+    // under it; a lit body and two highlights. Drawn over the canvas, sized
+    // to the ball on screen; gone once the owner is inside.
+    const centre = new THREE.Vector3();
+    function placeLens(w: number, h: number, fromCentre: number) {
+      const box = lens.current;
+      if (!box) return;
+      if (fromCentre < 1.08) {
+        box.style.display = 'none';
+        return;
+      }
+      centre.set(0, 0, 0).project(camera);
+      const half = THREE.MathUtils.degToRad(FOV / 2);
+      const r = (h / 2) / (Math.sqrt(fromCentre * fromCentre - 1) * Math.tan(half));
+      const x = (centre.x * 0.5 + 0.5) * w;
+      const y = (-centre.y * 0.5 + 0.5) * h;
+      box.style.display = 'block';
+      box.style.left = `${(x - r).toFixed(1)}px`;
+      box.style.top = `${(y - r).toFixed(1)}px`;
+      box.style.width = box.style.height = `${(2 * r).toFixed(1)}px`;
     }
 
     // Names of neighbourhoods, and close up the nearest claims, as HTML.
@@ -678,6 +708,12 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
 
   return (
     <div className="globe" ref={host}>
+      <div className="lens" ref={lens} aria-hidden="true">
+        <div className="lg-rim" />
+        <div className="lg-body" />
+        <div className="lg-spec" />
+        <div className="lg-spec b" />
+      </div>
       <div className="globe-labels" ref={labels} aria-hidden="true" />
       <div className="globe-tip" ref={tip} hidden role="tooltip" />
     </div>

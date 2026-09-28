@@ -170,4 +170,3 @@ def test_a_neighbourhood_of_the_owners_words_is_from_you(
     with db.cursor() as cursor:
         cursor.execute("select label from brain_neighbourhoods where id = %s", (hood,))
         assert cursor.fetchone()["label"] == "From you"
-

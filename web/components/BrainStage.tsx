@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Dial, type Thread } from '@/components/brain/Dial';
-import { Globe, type GlobeHandle } from '@/components/brain/Globe';
+import { type BrainFilter, NO_FILTER, windowStart } from '@/components/brain/Filters';
+import { Minimap } from '@/components/brain/Minimap';
+import { Globe, type GlobeHandle, type View } from '@/components/brain/Globe';
 import { AgentPanel, FactPanel } from '@/components/brain/Panels';
 import { Icon } from '@/components/Icon';
 import { FACT_MARK, Mark } from '@/components/Mark';
@@ -40,7 +42,7 @@ interface FactPlace {
  * The brain's stage: the globe, the dial and agent ring around it, the
  * panels for a fact or an agent, and the paused and stopped veils.
  */
-export function BrainStage() {
+export function BrainStage({ filter = NO_FILTER }: { filter?: BrainFilter }) {
   const { snapshot, agents, departments, status, pulse, setPause, onEvent, preview } = useCompany();
   const globe = useRef<GlobeHandle>(null);
   const stage = useRef<HTMLElement>(null);
@@ -52,6 +54,10 @@ export function BrainStage() {
   const [moments, setMoments] = useState<string[]>([]);
   const [arrived, setArrived] = useState<MapFact[]>([]);
   const [busy, setBusy] = useState(false);
+  const [view, setView] = useState<View>({ azimuth: 0, zoom: 1 });
+  const lastView = useRef(0);
+  const [opened, setOpened] = useState<Set<string>>(new Set());
+  const [key, setKey] = useState(false);
 
   const facts = useMemo(() => {
     const known = new Set((snapshot?.facts ?? []).map((f) => f.id));
@@ -129,6 +135,55 @@ export function BrainStage() {
 
   const byStatus = (s: MapFact['status']) => facts.filter((f) => f.status === s).length;
 
+  // Open on the ring: what the owner opened, and the department filtered to.
+  // Nothing opens or closes by itself.
+  // The Executive Office starts open; after that the owner opens and closes.
+  const started = useRef(false);
+  useEffect(() => {
+    const executive = departments.find((d) => d.name === 'executive');
+    if (executive && !started.current) {
+      started.current = true;
+      setOpened((prev) => new Set(prev).add(executive.id));
+    }
+  }, [departments]);
+  const open = useMemo(() => {
+    const set = new Set(opened);
+    if (filter.department) set.add(filter.department);
+    return set;
+  }, [opened, filter.department]);
+
+  function toggle(id: string) {
+    setOpened((prev) => {
+      const next = new Set(prev);
+      if (open.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  // What a filter keeps bright; the rest of the brain is dimmed, not hidden.
+  const bright = useMemo(() => {
+    if (filter.needsOnly) return new Set<string>();
+    const since = windowStart(filter.window, pulse?.day_starts_at);
+    if (!filter.department && since === null) return null;
+    const inDepartment = new Set(
+      agents.filter((a) => a.department_id === filter.department).map((a) => a.id),
+    );
+    return new Set(
+      facts
+        .filter((f) => !filter.department || (f.agent !== null && inDepartment.has(f.agent)))
+        .filter((f) => since === null || Date.parse(f.at) >= since)
+        .map((f) => f.id),
+    );
+  }, [filter, facts, agents, pulse?.day_starts_at]);
+
+  const onView = useCallback((next: View) => {
+    const now = performance.now();
+    if (now - lastView.current < 120) return;
+    lastView.current = now;
+    setView(next);
+  }, []);
+
   async function resume() {
     setBusy(true);
     try {
@@ -156,6 +211,8 @@ export function BrainStage() {
           if (id) setAgent(null);
         }}
         onRadius={setRadius}
+        bright={bright}
+        onView={onView}
       />
       <Dial
         width={box.width}
@@ -163,6 +220,8 @@ export function BrainStage() {
         radius={radius}
         agents={agents}
         departments={departments}
+        open={open}
+        onToggle={toggle}
         moments={moments}
         threads={threads}
         selected={agent}
@@ -199,7 +258,17 @@ export function BrainStage() {
         </button>
       </div>
 
-      <div className="glass legend" style={{ left: 16, gridTemplateColumns: '12px auto auto' }}>
+      <Minimap facts={facts} azimuth={view.azimuth} zoom={view.zoom} onFit={() => globe.current?.fitAll()} />
+
+      <div className="key">
+        <button className="btn sm glass" aria-expanded={key} onClick={() => setKey((v) => !v)}>
+          <span className="gl f-act" aria-hidden="true" />
+          Key
+          <Icon name="chevron" size={14} style={{ transform: key ? 'rotate(180deg)' : undefined }} />
+        </button>
+        {key ? (
+          <div className="glass key-body">
+      <div className="legend-grid" style={{ gridTemplateColumns: '12px auto auto' }}>
         <Mark kind={FACT_MARK.active} />
         <span>Active</span>
         <span className="faint num" style={{ textAlign: 'right' }}>{byStatus('active')}</span>
@@ -214,7 +283,7 @@ export function BrainStage() {
         <span className="faint num" style={{ textAlign: 'right' }}>{held.length}</span>
       </div>
 
-      <div className="glass legend" style={{ right: 16, gridTemplateColumns: '12px auto' }}>
+      <div className="legend-grid" style={{ gridTemplateColumns: '12px auto' }}>
         <Mark kind="idle" />
         <span>Idle</span>
         <Mark kind="work" />
@@ -225,6 +294,12 @@ export function BrainStage() {
         <span>Paused</span>
         <Mark kind="stop" />
         <span>Stopped</span>
+        <span className="hubmini" aria-hidden="true" />
+        <span>Closed department</span>
+      </div>
+
+          </div>
+        ) : null}
       </div>
 
       {fact ? <FactPanel id={fact} onClose={() => setFact(null)} onSelect={setFact} /> : null}

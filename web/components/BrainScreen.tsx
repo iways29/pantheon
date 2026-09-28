@@ -4,11 +4,14 @@ import { useState } from 'react';
 
 import { ApprovalCard } from '@/components/ApprovalCard';
 import { BrainStage } from '@/components/BrainStage';
-import { Chat } from '@/components/Chat';
+import { Chat, type PanelMode } from '@/components/Chat';
+import { type BrainFilter, Filters, NO_FILTER } from '@/components/brain/Filters';
+import { AGENT_MARK, Mark } from '@/components/Mark';
 import { Header } from '@/components/Header';
 import { Icon, Logo } from '@/components/Icon';
 import { KillDialog } from '@/components/KillDialog';
 import { NeedsYou } from '@/components/NeedsYou';
+import { OrderPath } from '@/components/OrderPath';
 import { PulseStrip } from '@/components/PulseStrip';
 import { isKilled, useCompany } from '@/lib/company';
 import { money, time } from '@/lib/format';
@@ -27,23 +30,49 @@ export function BrainScreen() {
 }
 
 function DeskScreen({ onOpen, card }: { onOpen: (a: Approval) => void; card: React.ReactNode }) {
-  const { error } = useCompany();
+  const { error, departments, pulse, agents } = useCompany();
+  const [filter, setFilter] = useState<BrainFilter>(NO_FILTER);
+  const [chat, setChat] = useState<PanelMode>('open');
+  const [needs, setNeeds] = useState<'open' | 'min'>('open');
+  const waiting = pulse?.needs_you_total ?? 0;
+  const chief = agents.find((a) => a.role === 'chief_of_staff');
+  const layout = `body${needs === 'min' ? ' no-needs' : ''}${chat === 'min' ? ' no-chat' : ''}${chat === 'max' ? ' chat-max' : ''}`;
+
   return (
     <div className="screen">
-      <Header tab="brain" />
-      <div className="body">
-        <aside className="glass panel" aria-label="Needs you" style={{ padding: '18px 16px' }}>
-          <NeedsYou onOpen={onOpen} />
-          {error ? (
-            <p role="alert" style={{ marginTop: 'auto', color: 'var(--verm)', fontSize: 13 }}>
-              {error}
-            </p>
-          ) : null}
-        </aside>
-        <BrainStage />
-        <Chat />
+      <Header
+        tab="brain"
+        center={<Filters filter={filter} onChange={setFilter} departments={departments} waiting={waiting} />}
+      />
+      <div className={layout}>
+        {needs === 'open' && chat !== 'max' ? (
+          <aside className="glass panel needs-panel" aria-label="Needs you" style={{ padding: '18px 16px' }}>
+            <NeedsYou onOpen={onOpen} onCollapse={() => setNeeds('min')} />
+            <OrderPath />
+            {error ? (
+              <p role="alert" style={{ marginTop: 'auto', color: 'var(--verm)', fontSize: 13 }}>
+                {error}
+              </p>
+            ) : null}
+          </aside>
+        ) : null}
+        {chat !== 'max' ? <BrainStage filter={filter} /> : null}
+        {chat !== 'min' ? <Chat mode={chat} onMode={setChat} /> : null}
       </div>
       <PulseStrip />
+      {needs === 'min' ? (
+        <button className="glass bubble bubble-left" onClick={() => setNeeds('open')} aria-label={`Needs you, ${waiting} waiting. Open`}>
+          <span className="gl wait" aria-hidden="true" />
+          Needs you
+          {waiting ? <span className="num bubble-count">{waiting}</span> : null}
+        </button>
+      ) : null}
+      {chat === 'min' ? (
+        <button className="glass bubble bubble-right" onClick={() => setChat('open')} aria-label="Open the chat">
+          {chief ? <Mark kind={AGENT_MARK[chief.state]} /> : <Icon name="chat" size={16} />}
+          Chat
+        </button>
+      ) : null}
       {card}
     </div>
   );

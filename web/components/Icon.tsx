@@ -48,6 +48,8 @@ const PATHS = {
   ),
   send: <path d="M8 13V3M4 7l4-4 4 4" />,
   expand: <path d="M9.5 2.5h4v4M13.5 2.5L9 7M6.5 13.5h-4v-4M2.5 13.5L7 9" />,
+  shrink: <path d="M13.5 6.5h-4v-4M9.5 6.5L14 2M2.5 9.5h4v4M6.5 9.5L2 14" />,
+  minus: <path d="M3.5 8h9" />,
   fact: (
     <>
       <circle cx="8" cy="8" r="2.5" />

@@ -33,7 +33,9 @@ function title(talker: Talker): string {
  * Answers come back in seconds; asking for work starts it at once, and the
  * work's card follows it here: its route, any question, its result and cost.
  */
-export function Chat() {
+export type PanelMode = 'open' | 'max' | 'min';
+
+export function Chat({ mode = 'open', onMode }: { mode?: PanelMode; onMode?: (mode: PanelMode) => void } = {}) {
   const { agents, onEvent, preview } = useCompany();
   const [talkers, setTalkers] = useState<Talker[]>([]);
   const [who, setWho] = useState<string | null>(null);
@@ -185,12 +187,20 @@ export function Chat() {
 
   return (
     <aside className="glass panel chat" aria-label="Chat">
-      <div className="chat-head">
+      <div className="chat-head" ref={picker}>
         {agent ? <Mark kind={AGENT_MARK[agent.state]} size={12} /> : null}
         <div style={{ display: 'grid', gap: 2, flexGrow: 1, minWidth: 0 }}>
-          <h2 className="disp" style={{ fontSize: 18 }}>
-            {talker ? title(talker) : 'Chat'}
-          </h2>
+          <button
+            className="who-button"
+            aria-haspopup="listbox"
+            aria-expanded={menu}
+            aria-label={`Talking with ${talker ? title(talker) : 'nobody yet'}. Change`}
+            onClick={() => setMenu((v) => !v)}
+            disabled={talkers.length < 2}
+          >
+            <span className="disp">{talker ? title(talker) : 'Chat'}</span>
+            {talkers.length > 1 ? <Icon name="chevron" size={16} /> : null}
+          </button>
           <span className="faint" style={{ fontSize: 12 }}>
             {waiting
               ? 'Thinking'
@@ -201,50 +211,50 @@ export function Chat() {
                 : ''}
           </span>
         </div>
-      </div>
-      {talkers.length > 1 ? (
-        <div className="chat-who" ref={picker}>
-          <button
-            className="btn sm glass who-button"
-            aria-haspopup="listbox"
-            aria-expanded={menu}
-            onClick={() => setMenu((v) => !v)}
-          >
-            <span className="faint">Talk with</span>
-            {talker ? title(talker) : 'Choose'}
-            <Icon name="chevron" size={14} />
-          </button>
-          {menu ? (
-            <ul className="glass who-menu" role="listbox" aria-label="Talk with">
-              {talkers.map((t) => {
-                const state = agents.find((a) => a.name === t.name)?.state;
-                return (
-                  <li key={t.name}>
-                    <button
-                      role="option"
-                      aria-selected={t.name === who}
-                      className="who-option"
-                      onClick={() => {
-                        setWho(t.name);
-                        setMenu(false);
-                      }}
-                    >
-                      {state ? <Mark kind={AGENT_MARK[state]} /> : <span className="gl idle" />}
-                      <span style={{ display: 'grid' }}>
-                        <span>{title(t)}</span>
-                        <span className="faint" style={{ fontSize: 12 }}>
-                          {agentName(t.name)}
-                          {t.last ? ` · ${when(t.last.at)}` : ''}
-                        </span>
+        {onMode ? (
+          <div className="head-buttons">
+            <button
+              className="btn ibtn sm glass"
+              aria-label={mode === 'max' ? 'Back to the brain' : 'Make the chat bigger'}
+              onClick={() => onMode(mode === 'max' ? 'open' : 'max')}
+            >
+              <Icon name={mode === 'max' ? 'shrink' : 'expand'} size={14} />
+            </button>
+            <button className="btn ibtn sm glass" aria-label="Fold the chat away" onClick={() => onMode('min')}>
+              <Icon name="minus" size={14} />
+            </button>
+          </div>
+        ) : null}
+        {menu ? (
+          <ul className="glass who-menu" role="listbox" aria-label="Talk with">
+            {talkers.map((t) => {
+              const state = agents.find((a) => a.name === t.name)?.state;
+              return (
+                <li key={t.name}>
+                  <button
+                    role="option"
+                    aria-selected={t.name === who}
+                    className="who-option"
+                    onClick={() => {
+                      setWho(t.name);
+                      setMenu(false);
+                    }}
+                  >
+                    {state ? <Mark kind={AGENT_MARK[state]} /> : <span className="gl idle" />}
+                    <span style={{ display: 'grid' }}>
+                      <span>{title(t)}</span>
+                      <span className="faint" style={{ fontSize: 12 }}>
+                        {agentName(t.name)}
+                        {t.last ? ` · ${when(t.last.at)}` : ''}
                       </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : null}
-        </div>
-      ) : null}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+      </div>
 
       <div ref={log} role="log" aria-label="Messages" aria-live="polite" className="chat-log">
         {thread && thread.length === 0 && !waiting ? (
@@ -256,7 +266,7 @@ export function Chat() {
         ) : null}
         {thread?.map((m) => (
           <div key={m.id} className="msg-group">
-            <div className={`msg ${m.role === 'owner' ? 'you' : 'cos g2'}`}>
+            <div className={`msg ${m.role === 'owner' ? 'you' : 'cos'}`}>
               <span style={{ whiteSpace: 'pre-wrap' }}>{m.text}</span>
               <div className="num msg-time">{when(m.at)}</div>
             </div>
@@ -269,11 +279,11 @@ export function Chat() {
               <span style={{ whiteSpace: 'pre-wrap' }}>{waiting}</span>
             </div>
             {streamed ? (
-              <div className="msg cos g2" aria-busy="true">
+              <div className="msg cos" aria-busy="true">
                 <span style={{ whiteSpace: 'pre-wrap' }}>{streamed}</span>
               </div>
             ) : (
-              <div className="msg cos g2 typing" role="status" aria-label="Thinking">
+              <div className="msg cos typing" role="status" aria-label="Thinking">
                 <span />
                 <span />
                 <span />

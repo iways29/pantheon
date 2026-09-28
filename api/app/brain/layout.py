@@ -279,7 +279,17 @@ def relabel(cursor: psycopg.Cursor, neighbourhood_id: UUID) -> str:
         (str(neighbourhood_id),),
     )
     top = cursor.fetchone()
-    if top is not None:
+    cursor.execute(
+        "select count(*) filter (where f.source = 'owner') as own, count(*) as n "
+        "from public.fact_positions p join public.facts f on f.id = p.fact_id "
+        "where p.neighbourhood_id = %s",
+        (str(neighbourhood_id),),
+    )
+    mix = cursor.fetchone()
+    if mix["n"] and mix["own"] * 2 > mix["n"]:
+        # Mostly the owner's own words (ADR 034): what the owner said, asked, prefers.
+        label, source = OWNER_LABEL, "claim"
+    elif top is not None:
         label, source = top["name"][:60], "entity"
     else:
         cursor.execute(
@@ -295,6 +305,9 @@ def relabel(cursor: psycopg.Cursor, neighbourhood_id: UUID) -> str:
     )
     return label
 
+
+#: The starting name of a neighbourhood made mostly of the owner's own words.
+OWNER_LABEL = "From you"
 
 #: Words a name never ends on ("Product features and").
 SMALL_WORDS = frozenset(
@@ -319,9 +332,9 @@ def unnamed(cursor: psycopg.Cursor, org_id: UUID | str, limit: int) -> list[dict
     cursor.execute(
         "select n.id, count(p.fact_id) as size from public.brain_neighbourhoods n "
         "join public.fact_positions p on p.neighbourhood_id = n.id "
-        "where n.org_id = %s and n.label_source <> 'model' "
+        "where n.org_id = %s and n.label_source <> 'model' and n.label <> %s "
         "group by n.id order by size desc, n.id limit %s",
-        (str(org_id), limit),
+        (str(org_id), OWNER_LABEL, limit),
     )
     out = []
     for row in cursor.fetchall():

@@ -260,6 +260,9 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
     // stay fixed"): it turns and zooms, never slides. Panning was also what
     // made a pinch drift on a phone.
     controls.enablePan = false;
+    // Stop just short of the poles, where the view would flip.
+    controls.minPolarAngle = 0.12;
+    controls.maxPolarAngle = Math.PI - 0.12;
 
     const glass = new THREE.Mesh(
       new THREE.SphereGeometry(1, 96, 64),
@@ -411,6 +414,8 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
 
     function draw() {
       frame = 0;
+      // The ball's centre is pinned: whatever the input, it never leaves the dial.
+      if (controls.target.lengthSq() > 0) controls.target.set(0, 0, 0);
       const moved = controls.update();
       const w0 = el!.clientWidth || 800;
       const h0 = el!.clientHeight || 600;

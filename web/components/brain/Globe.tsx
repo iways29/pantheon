@@ -18,6 +18,13 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { prefersStill } from '@/lib/display';
 import type { HeldClaim, MapFact, Neighbourhood } from '@/lib/types';
 
+export interface View {
+  /** Around the vertical axis, in radians. */
+  azimuth: number;
+  /** How far in: 1 at rest, larger closer. */
+  zoom: number;
+}
+
 export interface GlobeHandle {
   zoom: (factor: number) => void;
   fitAll: () => void;
@@ -33,6 +40,10 @@ interface Props {
   onSelect: (factId: string | null) => void;
   /** The ball's radius on screen at rest, in CSS pixels, told to the dial. */
   onRadius?: (radius: number) => void;
+  /** Facts shown bright (a filter); the rest are dimmed. Null: all bright. */
+  bright?: Set<string> | null;
+  /** Where the owner is looking, for the minimap. */
+  onView?: (view: View) => void;
 }
 
 const STATUS = { active: 0, disputed: 1, superseded: 2, held: 3 } as const;
@@ -48,7 +59,11 @@ const VERTEX = /* glsl */ `
   attribute float status;
   attribute float glow;
   attribute float picked;
+  attribute float dim;
   uniform float pixelRatio;
+  uniform float scale;
+  uniform float pointFade;
+  varying float vAlpha;
   varying float vStatus;
   varying float vGlow;
   varying float vPicked;
@@ -56,7 +71,9 @@ const VERTEX = /* glsl */ `
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
     gl_Position = projectionMatrix * mv;
     float base = status > 2.5 ? 9.0 : (status > 1.5 ? 6.0 : 7.0);
-    float size = (base + glow * 7.0 + picked * 8.0) * 3.0 / max(-mv.z, 0.05);
+    float size = (base * scale + glow * 7.0 + picked * 8.0) * 3.0 / max(-mv.z, 0.05);
+    // Zoomed out only what needs the owner stays a point; a filter dims the rest.
+    vAlpha = (status > 2.5 ? 1.0 : pointFade) * (dim > 0.5 ? 0.14 : 1.0);
     gl_PointSize = clamp(size, 2.0, 72.0) * pixelRatio;
     vStatus = status;
     vGlow = glow;
@@ -73,6 +90,7 @@ const FRAGMENT = /* glsl */ `
   varying float vStatus;
   varying float vGlow;
   varying float vPicked;
+  varying float vAlpha;
   void main() {
     vec2 c = gl_PointCoord * 2.0 - 1.0;
     float r = length(c);
@@ -101,8 +119,31 @@ const FRAGMENT = /* glsl */ `
       a = max(a, (1.0 - smoothstep(0.03, 0.09, abs(r - 0.95))));
       col = mix(col, ice, step(0.85, r));
     }
+    a *= vAlpha;
     if (a < 0.02) discard;
     gl_FragColor = vec4(col, a);
+  }
+`;
+
+/** A neighbourhood's soft glow: bigger for more facts. */
+const CLOUD_VERTEX = /* glsl */ `
+  attribute float size;
+  uniform float pixelRatio;
+  void main() {
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    gl_Position = projectionMatrix * mv;
+    gl_PointSize = clamp(size * 140.0 / max(-mv.z, 0.05), 4.0, 900.0) * pixelRatio;
+  }
+`;
+
+const CLOUD_FRAGMENT = /* glsl */ `
+  uniform vec3 gold;
+  uniform float fade;
+  void main() {
+    float r = length(gl_PointCoord * 2.0 - 1.0);
+    float a = exp(-r * r * 4.0) * fade * 0.28;
+    if (a < 0.005) discard;
+    gl_FragColor = vec4(gold, a);
   }
 `;
 
@@ -165,7 +206,7 @@ function restDistance(width: number, height: number): number {
 }
 
 export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
-  { facts, held, neighbourhoods, selected, onSelect, onRadius },
+  { facts, held, neighbourhoods, selected, onSelect, onRadius, bright = null, onView },
   handle,
 ) {
   const host = useRef<HTMLDivElement>(null);
@@ -178,6 +219,7 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
     camera: THREE.PerspectiveCamera;
     controls: OrbitControls;
     points: THREE.Points;
+    clouds: THREE.Points;
     glass: THREE.Mesh;
     ids: string[];
     claims: string[];
@@ -185,8 +227,8 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
     request: () => void;
     fit: () => void;
   } | null>(null);
-  const latest = useRef({ facts, held, neighbourhoods, selected, onSelect, onRadius });
-  latest.current = { facts, held, neighbourhoods, selected, onSelect, onRadius };
+  const latest = useRef({ facts, held, neighbourhoods, selected, onSelect, onRadius, onView });
+  latest.current = { facts, held, neighbourhoods, selected, onSelect, onRadius, onView };
 
   // The scene, made once.
   useEffect(() => {
@@ -241,6 +283,8 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
         depthWrite: false,
         uniforms: {
           pixelRatio: { value: renderer.getPixelRatio() },
+          scale: { value: 1 },
+          pointFade: { value: 1 },
           gold: { value: new THREE.Color() },
           verm: { value: new THREE.Color() },
           grey: { value: new THREE.Color() },
@@ -251,6 +295,24 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
     );
     points.renderOrder = 1;
     scene.add(points);
+
+    const clouds = new THREE.Points(
+      new THREE.BufferGeometry(),
+      new THREE.ShaderMaterial({
+        vertexShader: CLOUD_VERTEX,
+        fragmentShader: CLOUD_FRAGMENT,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        uniforms: {
+          pixelRatio: { value: renderer.getPixelRatio() },
+          gold: { value: new THREE.Color() },
+          fade: { value: 0.4 },
+        },
+      }),
+    );
+    clouds.renderOrder = 0;
+    scene.add(clouds);
 
     let frame = 0;
     let touched = false;
@@ -268,14 +330,22 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
       pm.uniforms.verm!.value = cssColor('--verm', '#FF8466');
       pm.uniforms.grey!.value = cssColor('--ink3', '#8189A0');
       pm.uniforms.ice!.value = cssColor('--ice', '#94BBFF');
-      pm.uniforms.halo!.value = dark ? 1 : 0.35;
+      pm.uniforms.halo!.value = dark ? 1 : 0.55;
       pm.blending = dark ? THREE.AdditiveBlending : THREE.NormalBlending;
       pm.needsUpdate = true;
+      const cm = clouds.material as THREE.ShaderMaterial;
+      cm.uniforms.gold!.value = cssColor('--gold', '#E8BC62');
+      cm.blending = dark ? THREE.AdditiveBlending : THREE.NormalBlending;
+      cm.needsUpdate = true;
       const gm = glass.material as THREE.ShaderMaterial;
-      gm.uniforms.rim!.value = dark ? new THREE.Color('#dfe8ff') : new THREE.Color('#ffffff');
-      gm.uniforms.fill!.value = dark ? new THREE.Color('#18203c') : new THREE.Color('#ffffff');
-      gm.uniforms.fillAlpha!.value = dark ? 0.16 : 0.34;
-      gm.uniforms.rimAlpha!.value = dark ? 0.55 : 0.85;
+      // Dark: blue glass the points glow through. Light: pearl, lit at the rim.
+      gm.uniforms.rim!.value = dark ? new THREE.Color('#c9d8ff') : new THREE.Color('#9fb6e8');
+      gm.uniforms.fill!.value = dark ? new THREE.Color('#2a3766') : new THREE.Color('#ffffff');
+      gm.uniforms.fillAlpha!.value = dark ? 0.08 : 0.42;
+      gm.uniforms.rimAlpha!.value = dark ? 0.6 : 0.55;
+      // Dark glass is drawn over the points (they glow through it); the pale
+      // light glass under them, or it would wash them out.
+      glass.renderOrder = dark ? 2 : -1;
       request();
     }
 
@@ -330,6 +400,14 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
     function draw() {
       frame = 0;
       const moved = controls.update();
+      const w0 = el!.clientWidth || 800;
+      const h0 = el!.clientHeight || 600;
+      const zoom = restDistance(w0, h0) / Math.max(camera.position.distanceTo(controls.target), 0.01);
+      // Levels of detail (ScaleNotes): clouds with counts, points, claims.
+      const pointFade = THREE.MathUtils.clamp((zoom - 0.55) / 0.25, 0, 1);
+      (points.material as THREE.ShaderMaterial).uniforms.pointFade!.value = pointFade;
+      (clouds.material as THREE.ShaderMaterial).uniforms.fade!.value = 1 - pointFade * 0.55;
+      latest.current.onView?.({ azimuth: Math.atan2(camera.position.x, camera.position.z), zoom });
       // Glow fades over GLOW_SECONDS; the loop runs only while something glows.
       const glow = geometry.getAttribute('glow') as THREE.BufferAttribute | undefined;
       let glowing = false;
@@ -359,6 +437,7 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
       const w = el!.clientWidth;
       const h = el!.clientHeight;
       const distance = camera.position.distanceTo(controls.target);
+      const zoom = restDistance(w, h) / Math.max(distance, 0.01);
       const { neighbourhoods: hoods, facts: all } = latest.current;
       const nodes: string[] = [];
       toCamera.copy(camera.position).normalize();
@@ -369,8 +448,9 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
         if (project.z > 1) continue;
         const x = (project.x * 0.5 + 0.5) * w;
         const y = (-project.y * 0.5 + 0.5) * h;
+        const counted = zoom < 0.8 ? `<small>${n.size} ${n.size === 1 ? 'fact' : 'facts'}</small>` : '';
         nodes.push(
-          `<span class="hood${behind ? ' behind' : ''}" style="transform:translate(${x.toFixed(1)}px,${y.toFixed(1)}px)">${escape(n.label)}</span>`,
+          `<span class="hood${behind ? ' behind' : ''}" style="transform:translate(${x.toFixed(1)}px,${y.toFixed(1)}px)">${escape(n.label)}${counted}</span>`,
         );
       }
       if (distance < CLAIMS_WITHIN) {
@@ -467,6 +547,7 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
       camera,
       controls,
       points,
+      clouds,
       glass,
       ids: [],
       claims: [],
@@ -488,6 +569,8 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
       geometry.dispose();
       (points.material as THREE.Material).dispose();
       glass.geometry.dispose();
+      clouds.geometry.dispose();
+      (clouds.material as THREE.Material).dispose();
       (glass.material as THREE.Material).dispose();
       renderer.dispose();
       renderer.domElement.remove();
@@ -505,11 +588,13 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
     const status = new Float32Array(n);
     const glow = new Float32Array(n);
     const picked = new Float32Array(n);
+    const dim = new Float32Array(n);
     const ids: string[] = [];
     const claims: string[] = [];
     placed.forEach((f, i) => {
       position.set([f.x!, f.y!, f.z ?? 0], i * 3);
       status[i] = STATUS[f.status] ?? 0;
+      dim[i] = bright && !bright.has(f.id) ? 1 : 0;
       ids.push(f.id);
       claims.push(f.claim);
     });
@@ -525,12 +610,31 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
     g.setAttribute('status', new THREE.BufferAttribute(status, 1));
     g.setAttribute('glow', new THREE.BufferAttribute(glow, 1));
     g.setAttribute('picked', new THREE.BufferAttribute(picked, 1));
+    g.setAttribute('dim', new THREE.BufferAttribute(dim, 1));
+    // Fewer facts, bigger points: a young brain still reads; 10,000 stay fine.
+    (w.points.material as THREE.ShaderMaterial).uniforms.scale!.value = THREE.MathUtils.clamp(
+      2.3 - Math.log10(Math.max(placed.length, 1)) * 0.38,
+      0.75,
+      2,
+    );
+    const cg = w.clouds.geometry;
+    cg.setAttribute(
+      'position',
+      new THREE.BufferAttribute(new Float32Array(neighbourhoods.flatMap((h) => [h.x, h.y, h.z ?? 0])), 3),
+    );
+    cg.setAttribute(
+      'size',
+      new THREE.BufferAttribute(
+        new Float32Array(neighbourhoods.map((h) => 0.12 + Math.sqrt(Math.max(h.size, 1)) * 0.035)),
+        1,
+      ),
+    );
     g.computeBoundingSphere();
     w.ids = ids;
     w.claims = claims;
     w.lit.clear();
     w.request();
-  }, [facts, held]);
+  }, [facts, held, neighbourhoods, bright]);
 
   // The selected fact wears a ring.
   useEffect(() => {

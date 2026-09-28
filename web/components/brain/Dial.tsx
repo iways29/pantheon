@@ -1,10 +1,18 @@
 'use client';
 
 /**
- * The instrument around the globe (Field.dc.html): a 24-hour dial with the
- * hour now and a tick for each moment of today's work, and the agents on a
- * ring outside it, grouped by department, each wearing its state's shape.
- * When an agent reads the brain a thread runs out to it; when it writes, in.
+ * The instrument around the globe (Field.dc.html, ScaleNotes.dc.html): a
+ * 24-hour dial with the hour now and a tick for each moment of today's work,
+ * and the agents on a ring outside it.
+ *
+ * Departments open and close. A closed department is one hub: its agent
+ * count, a dot per agent in its state's shape, a gold ring when anyone works
+ * and a blue halo when someone needs the owner. Tapping a hub opens it in
+ * place; a small close button sits at the start of its arc. The Executive
+ * Office and any department filtered to are open; nothing opens or closes by
+ * itself. When space runs out, workers lose their labels (heads and anyone
+ * waiting keep them); hover or focus shows the name. A thread to an agent in
+ * a closed department ends at its hub.
  */
 
 import type { Agent, Department } from '@/lib/types';
@@ -24,6 +32,9 @@ interface Props {
   radius: number;
   agents: Agent[];
   departments: Department[];
+  /** Departments shown open on the ring. */
+  open: Set<string>;
+  onToggle: (departmentId: string) => void;
   /** Times of today's events (ISO), for the dial's ticks. */
   moments: string[];
   threads: Thread[];
@@ -52,36 +63,6 @@ function at(cx: number, cy: number, r: number, angle: number): [number, number] 
   return [cx + Math.cos(angle) * r, cy + Math.sin(angle) * r];
 }
 
-/** Where each agent sits: departments share the ring, the executive on top. */
-export function ringLayout(agents: Agent[], departments: Department[]) {
-  const order = [...departments].sort((a, b) =>
-    a.name === 'executive' ? -1 : b.name === 'executive' ? 1 : a.name.localeCompare(b.name),
-  );
-  const groups = order
-    .map((d) => ({
-      department: d,
-      agents: agents
-        .filter((a) => a.department_id === d.id)
-        .sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name)),
-    }))
-    .filter((g) => g.agents.length);
-  const slots = groups.reduce((n, g) => n + g.agents.length + 1, 0) || 1;
-  const step = (Math.PI * 2) / slots;
-  let cursor = -Math.PI / 2 - ((groups[0]?.agents.length ?? 1) - 1) * step * 0.5;
-  const placed = new Map<string, { angle: number; group: number }>();
-  const arcs: { name: string; from: number; to: number; mid: number }[] = [];
-  groups.forEach((g, gi) => {
-    const from = cursor;
-    // The head in the middle of its department's arc.
-    const seats = middleOut(g.agents);
-    seats.forEach((agent, i) => placed.set(agent.id, { angle: from + i * step, group: gi }));
-    const to = from + (g.agents.length - 1) * step;
-    arcs.push({ name: g.department.name, from, to, mid: (from + to) / 2 });
-    cursor = to + step * 2;
-  });
-  return { placed, arcs };
-}
-
 function rank(agent: Agent): number {
   return agent.role === 'chief_of_staff' ? 0 : agent.role === 'head' ? 1 : 2;
 }
@@ -93,12 +74,61 @@ function middleOut<T>(list: T[]): T[] {
   return [...rest.slice(0, half), first as T, ...rest.slice(half)];
 }
 
+interface Group {
+  department: Department;
+  agents: Agent[];
+  open: boolean;
+  /** The hub's angle (closed) or the arc's start and end (open). */
+  from: number;
+  to: number;
+}
+
+/** Where each department and agent sits: the executive on top. */
+export function ringLayout(agents: Agent[], departments: Department[], open: Set<string>) {
+  const order = [...departments].sort((a, b) =>
+    a.name === 'executive' ? -1 : b.name === 'executive' ? 1 : a.name.localeCompare(b.name),
+  );
+  const groups: Group[] = order
+    .map((d) => ({
+      department: d,
+      agents: middleOut(
+        agents
+          .filter((a) => a.department_id === d.id)
+          .sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name)),
+      ),
+      open: open.has(d.id),
+      from: 0,
+      to: 0,
+    }))
+    .filter((g) => g.agents.length);
+  // A closed department takes one seat, an open one a seat per agent; a gap
+  // of one seat between departments.
+  const seats = groups.reduce((n, g) => n + (g.open ? g.agents.length : 1) + 1, 0) || 1;
+  const step = (Math.PI * 2) / seats;
+  const firstWidth = groups[0] ? (groups[0].open ? groups[0].agents.length : 1) : 1;
+  let cursor = -Math.PI / 2 - ((firstWidth - 1) * step) / 2;
+  const seat = new Map<string, number>();
+  for (const g of groups) {
+    g.from = cursor;
+    if (g.open) {
+      g.agents.forEach((a, i) => seat.set(a.id, cursor + i * step));
+      g.to = cursor + (g.agents.length - 1) * step;
+    } else {
+      g.to = cursor;
+    }
+    cursor = g.to + step * 2;
+  }
+  return { groups, seat, step };
+}
+
 export function Dial({
   width,
   height,
   radius,
   agents,
   departments,
+  open,
+  onToggle,
   moments,
   threads,
   selected,
@@ -110,9 +140,10 @@ export function Dial({
   const dialR = radius * 1.14;
   const ringR = radius * 1.36;
   const now = minutes(new Date());
-  const { placed, arcs } = ringLayout(agents, departments);
+  const { groups, seat, step } = ringLayout(agents, departments, open);
+  // Workers lose their labels when neighbours sit closer than a label needs.
+  const crowded = step * ringR < 46;
 
-  // Today's work, in ten-minute buckets: a longer tick for a busier moment.
   const buckets = new Map<number, number>();
   for (const iso of moments) {
     const bucket = Math.floor(minutes(new Date(iso)) / 10);
@@ -124,8 +155,22 @@ export function Dial({
   const handLabel = at(cx, cy, dialR + 24, angleOf(now));
   const clock = `${String(Math.floor(now / 60)).padStart(2, '0')}:${String(now % 60).padStart(2, '0')}`;
 
+  /** Where a thread to this agent ends: its seat, or its department's hub. */
+  function anchor(agentId: string): number | null {
+    const own = seat.get(agentId);
+    if (own !== undefined) return own;
+    const agent = agents.find((a) => a.id === agentId);
+    const g = groups.find((x) => x.department.id === agent?.department_id);
+    return g ? g.from : null;
+  }
+
+  function label(angle: number) {
+    const cos = Math.cos(angle);
+    return cos > 0.2 ? 'start' : cos < -0.2 ? 'end' : 'middle';
+  }
+
   return (
-    <svg className="dial" width={width} height={height} aria-hidden={false} role="group" aria-label="Agents around the brain">
+    <svg className="dial" width={width} height={height} role="group" aria-label="Agents around the brain">
       {/* The hours. */}
       <circle cx={cx} cy={cy} r={dialR} fill="none" stroke="var(--line)" />
       {Array.from({ length: 96 }, (_, i) => {
@@ -146,107 +191,163 @@ export function Dial({
           />
         );
       })}
-      {/* Today's work. */}
       {[...buckets].map(([bucket, n]) => {
         const a = angleOf(bucket * 10 + 5);
         const [x1, y1] = at(cx, cy, dialR + 3, a);
         const [x2, y2] = at(cx, cy, dialR + 3 + Math.min(12, 3 + n * 1.5), a);
-        return <line key={bucket} x1={x1} y1={y1} x2={x2} y2={y2} stroke="var(--gold)" strokeOpacity={0.55} strokeWidth={1.5} />;
+        return (
+          <line key={bucket} x1={x1} y1={y1} x2={x2} y2={y2} stroke="var(--gold)" strokeOpacity={0.55} strokeWidth={1.5} />
+        );
       })}
       <line x1={handIn[0]} y1={handIn[1]} x2={hand[0]} y2={hand[1]} stroke="var(--gold)" strokeWidth={2} strokeLinecap="round" />
       <text x={handLabel[0]} y={handLabel[1]} className="dial-time" textAnchor="middle" dominantBaseline="middle">
         {clock}
       </text>
 
-      {/* Departments. */}
-      {arcs.map((arc) => {
-        const pad = 0.12;
-        const [x1, y1] = at(cx, cy, ringR, arc.from - pad);
-        const [x2, y2] = at(cx, cy, ringR, arc.to + pad);
-        const large = arc.to - arc.from + 2 * pad > Math.PI ? 1 : 0;
-        return (
-          <path
-            key={arc.name}
-            d={`M ${x1} ${y1} A ${ringR} ${ringR} 0 ${large} 1 ${x2} ${y2}`}
-            fill="none"
-            stroke="var(--line)"
-            strokeWidth={1.2}
-          />
-        );
-      })}
+      {/* Open departments: an arc, and a small close button at its start. */}
+      {groups
+        .filter((g) => g.open)
+        .map((g) => {
+          const pad = Math.min(0.12, step * 0.45);
+          const [x1, y1] = at(cx, cy, ringR, g.from - pad);
+          const [x2, y2] = at(cx, cy, ringR, g.to + pad);
+          const large = g.to - g.from + 2 * pad > Math.PI ? 1 : 0;
+          const [bx, by] = at(cx, cy, ringR - 22, g.from - pad);
+          return (
+            <g key={g.department.id}>
+              <path d={`M ${x1} ${y1} A ${ringR} ${ringR} 0 ${large} 1 ${x2} ${y2}`} fill="none" stroke="var(--line)" strokeWidth={1.2} />
+              {g.department.name !== 'executive' ? (
+                <g
+                  className="seat hub-close"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Close ${departmentName(g.department.name)}`}
+                  onClick={() => onToggle(g.department.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onToggle(g.department.id);
+                    }
+                  }}
+                >
+                  <circle cx={bx} cy={by} r={8} className="hub-close-dot" />
+                  <line x1={bx - 3.5} y1={by} x2={bx + 3.5} y2={by} stroke="var(--ink2)" strokeWidth={1.4} />
+                </g>
+              ) : null}
+            </g>
+          );
+        })}
 
-      {/* Threads between the brain and an agent. */}
+      {/* Threads between the brain and an agent (or its closed hub). */}
       {threads.map((t) => {
-        const seat = placed.get(t.agentId);
-        if (!seat) return null;
-        const [x, y] = at(cx, cy, ringR, seat.angle);
-        const [ex, ey] = at(cx, cy, radius * 0.2, seat.angle);
+        const angle = anchor(t.agentId);
+        if (angle === null) return null;
+        const [x, y] = at(cx, cy, ringR, angle);
+        const [ex, ey] = at(cx, cy, radius * 0.2, angle);
         const [from, to] = t.way === 'in' ? [[x, y], [ex, ey]] : [[ex, ey], [x, y]];
         return (
           <g key={t.key} className={`thread ${t.way}`}>
             <line x1={from![0]} y1={from![1]} x2={to![0]} y2={to![1]} className="thread-path" />
-            <line
-              x1={from![0]}
-              y1={from![1]}
-              x2={to![0]}
-              y2={to![1]}
-              pathLength={100}
-              className="thread-bead"
-            />
+            <line x1={from![0]} y1={from![1]} x2={to![0]} y2={to![1]} pathLength={100} className="thread-bead" />
           </g>
         );
       })}
 
-      {/* The agents. */}
-      {agents.map((agent) => {
-        const seat = placed.get(agent.id);
-        if (!seat) return null;
-        const [x, y] = at(cx, cy, ringR, seat.angle);
-        const [lx, ly] = at(cx, cy, ringR + 18, seat.angle);
-        const right = Math.cos(seat.angle) > 0.2;
-        const left = Math.cos(seat.angle) < -0.2;
-        const lead = agent.role !== 'worker';
-        return (
-          <g
-            key={agent.id}
-            className={`seat${selected === agent.name ? ' picked' : ''}`}
-            role="button"
-            tabIndex={0}
-            aria-label={`${agentName(agent.name)}, ${agent.state}`}
-            onClick={() => onSelect(agent.name)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                onSelect(agent.name);
-              }
-            }}
-          >
-            <circle cx={x} cy={y} r={16} className="seat-hit" />
-            {lead ? <circle cx={x} cy={y} r={11} fill="none" stroke="var(--ink3)" /> : null}
-            <SeatMark x={x} y={y} state={agent.state} />
-            <text
-              x={lx}
-              y={ly}
-              className="seat-name"
-              textAnchor={right ? 'start' : left ? 'end' : 'middle'}
-              dominantBaseline="middle"
+      {/* Closed departments: one hub each. */}
+      {groups
+        .filter((g) => !g.open)
+        .map((g) => {
+          const [x, y] = at(cx, cy, ringR, g.from);
+          const [lx, ly] = at(cx, cy, ringR + 26, g.from);
+          const working = g.agents.filter((a) => a.state === 'working').length;
+          const waiting = g.agents.filter((a) => a.state === 'waiting').length;
+          const summary = waiting
+            ? `${waiting} waiting`
+            : working
+              ? `${working} at work`
+              : g.agents.every((a) => a.state === 'stopped')
+                ? 'switched off'
+                : 'all idle';
+          const name = departmentName(g.department.name);
+          return (
+            <g
+              key={g.department.id}
+              className="seat hub"
+              role="button"
+              tabIndex={0}
+              aria-label={`${name}: ${g.agents.length} agents, ${summary}. Open`}
+              onClick={() => onToggle(g.department.id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onToggle(g.department.id);
+                }
+              }}
             >
-              {agentName(agent.name)}
-            </text>
-            {lead ? (
-              <text
-                x={lx}
-                y={ly + 13}
-                className="seat-role"
-                textAnchor={right ? 'start' : left ? 'end' : 'middle'}
-                dominantBaseline="middle"
-              >
-                {agent.role === 'chief_of_staff' ? 'Chief of Staff' : `${departmentName(agent.department)} head`}
+              <circle cx={x} cy={y} r={20} className="seat-hit" />
+              {waiting ? <circle cx={x} cy={y} r={17} fill="var(--iceS)" stroke="var(--ice)" strokeOpacity={0.6} /> : null}
+              <circle cx={x} cy={y} r={12} fill="var(--bg)" stroke={working ? 'var(--gold)' : 'var(--ink3)'} strokeWidth={working ? 1.8 : 1.2} />
+              <text x={x} y={y} className="hub-count" textAnchor="middle" dominantBaseline="central">
+                {g.agents.length}
               </text>
-            ) : null}
-          </g>
-        );
-      })}
+              {g.agents.slice(0, 16).map((a, i) => {
+                const angle = (i / Math.min(g.agents.length, 16)) * Math.PI * 2 - Math.PI / 2;
+                const [dx, dy] = [x + Math.cos(angle) * 16, y + Math.sin(angle) * 16];
+                return <MiniMark key={a.id} x={dx} y={dy} state={a.state} />;
+              })}
+              <text x={lx} y={ly} className="seat-name" textAnchor={label(g.from)} dominantBaseline="middle">
+                {name}
+              </text>
+              <text x={lx} y={ly + 13} className="seat-role" textAnchor={label(g.from)} dominantBaseline="middle">
+                {summary}
+              </text>
+            </g>
+          );
+        })}
+
+      {/* Agents of open departments. */}
+      {groups
+        .filter((g) => g.open)
+        .flatMap((g) => g.agents)
+        .map((agent) => {
+          const angle = seat.get(agent.id);
+          if (angle === undefined) return null;
+          const [x, y] = at(cx, cy, ringR, angle);
+          const [lx, ly] = at(cx, cy, ringR + 18, angle);
+          const lead = agent.role !== 'worker';
+          const named = !crowded || lead || agent.state === 'waiting';
+          const name = agentName(agent.name);
+          const role = agent.role === 'chief_of_staff' ? 'Chief of Staff' : lead ? `${departmentName(agent.department)} head` : '';
+          return (
+            <g
+              key={agent.id}
+              className={`seat${selected === agent.name ? ' picked' : ''}${named ? '' : ' quiet'}`}
+              role="button"
+              tabIndex={0}
+              aria-label={`${name}, ${agent.state}`}
+              onClick={() => onSelect(agent.name)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onSelect(agent.name);
+                }
+              }}
+            >
+              <title>{name}</title>
+              <circle cx={x} cy={y} r={16} className="seat-hit" />
+              {lead ? <circle cx={x} cy={y} r={11} fill="none" stroke="var(--ink3)" /> : null}
+              <SeatMark x={x} y={y} state={agent.state} />
+              <text x={lx} y={ly} className="seat-name" textAnchor={label(angle)} dominantBaseline="middle">
+                {name}
+              </text>
+              {role && role.toLowerCase() !== name.toLowerCase() ? (
+                <text x={lx} y={ly + 13} className="seat-role" textAnchor={label(angle)} dominantBaseline="middle">
+                  {role}
+                </text>
+              ) : null}
+            </g>
+          );
+        })}
     </svg>
   );
 }
@@ -263,17 +364,7 @@ function SeatMark({ x, y, state }: { x: number; y: number; state: Agent['state']
       );
     case 'waiting':
       return (
-        <rect
-          x={x - 5}
-          y={y - 5}
-          width={10}
-          height={10}
-          rx={1.5}
-          transform={`rotate(45 ${x} ${y})`}
-          fill="var(--iceS)"
-          stroke="var(--ice)"
-          strokeWidth={1.5}
-        />
+        <rect x={x - 5} y={y - 5} width={10} height={10} rx={1.5} transform={`rotate(45 ${x} ${y})`} fill="var(--iceS)" stroke="var(--ice)" strokeWidth={1.5} />
       );
     case 'paused':
       return (
@@ -287,4 +378,14 @@ function SeatMark({ x, y, state }: { x: number; y: number; state: Agent['state']
     default:
       return <circle cx={x} cy={y} r={5} fill="var(--bg)" stroke="var(--ink2)" strokeWidth={1.5} />;
   }
+}
+
+/** One agent inside a closed hub: a tiny version of its state's shape. */
+function MiniMark({ x, y, state }: { x: number; y: number; state: Agent['state'] }) {
+  if (state === 'working') return <circle cx={x} cy={y} r={2.2} fill="var(--gold)" />;
+  if (state === 'waiting')
+    return <rect x={x - 2} y={y - 2} width={4} height={4} transform={`rotate(45 ${x} ${y})`} fill="none" stroke="var(--ice)" strokeWidth={1.1} />;
+  if (state === 'stopped' || state === 'paused')
+    return <rect x={x - 1.8} y={y - 1.8} width={3.6} height={3.6} fill="none" stroke="var(--ink3)" strokeWidth={1} />;
+  return <circle cx={x} cy={y} r={1.8} fill="none" stroke="var(--ink3)" strokeWidth={1} />;
 }

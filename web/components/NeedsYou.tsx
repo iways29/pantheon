@@ -29,11 +29,14 @@ export function NeedsYou({
   onOpen,
   limit,
   onMore,
+  onCollapse,
 }: {
   onOpen?: (approval: Approval) => void;
   /** Show at most this many, with a way to the rest. */
   limit?: number;
   onMore?: () => void;
+  /** Fold the list away to a small bubble. */
+  onCollapse?: () => void;
 }) {
   const { approvals, changedTools } = useCompany();
   const cap = limit ?? Infinity;
@@ -49,8 +52,15 @@ export function NeedsYou({
         <h2 id="needs-h" className="disp" style={{ fontSize: 20 }}>
           Needs you
         </h2>
-        <span className="num" style={{ fontSize: 13, color: 'var(--ice)' }}>
-          {total ? `${total} waiting` : 'none'}
+        <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span className="num" style={{ fontSize: 13, color: 'var(--ice)' }}>
+            {total ? `${total} waiting` : 'none'}
+          </span>
+          {onCollapse ? (
+            <button className="btn ibtn sm glass" aria-label="Fold Needs you away" onClick={onCollapse}>
+              <Icon name="minus" size={14} />
+            </button>
+          ) : null}
         </span>
       </div>
       {total === 0 ? (

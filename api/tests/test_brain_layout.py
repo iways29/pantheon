@@ -152,3 +152,22 @@ def test_a_cut_name_does_not_end_on_a_small_word(
         first = layout.unnamed(cursor, tenants.org_a, 1)[0]["id"]
         assert layout.name(cursor, first, "Product features and pricing") == "Product features"
         assert layout.name(cursor, first, "The and of") is None
+
+
+def test_a_neighbourhood_of_the_owners_words_is_from_you(
+    db: psycopg.Connection, tenants: Tenants, seeded: object
+) -> None:
+    with acting_as(db, user_id=str(tenants.user_a)) as conn:
+        brain = Brain(conn, HashingEmbedder())
+        fact = brain.insert_fact(
+            org_id=tenants.org_a,
+            claim="On 27 September 2026 the owner asked about: quantum telescopes and moons",
+            admission=admit(db, tenants.org_a),
+            source="owner",
+        )
+    _, hood, how = _positions(db)[fact.id]
+    assert how == "edge"
+    with db.cursor() as cursor:
+        cursor.execute("select label from brain_neighbourhoods where id = %s", (hood,))
+        assert cursor.fetchone()["label"] == "From you"
+

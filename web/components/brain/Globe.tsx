@@ -60,6 +60,8 @@ const CLAIMS_WITHIN = 1.35;
 const FOV = 45;
 /** The ball fills this much of the smaller side at rest. */
 const FILL = 0.33;
+/** Below this stage width the ring's names are hidden (the phone layout). */
+const PHONE_WIDTH = 480;
 
 const VERTEX = /* glsl */ `
   attribute float status;
@@ -183,6 +185,11 @@ const GLASS_FRAGMENT = /* glsl */ `
   }
 `;
 
+/** The points' gold: its own token where one is set (light theme), else --gold. */
+function pointGold(): string {
+  return getComputedStyle(document.documentElement).getPropertyValue('--gold-point').trim() ? '--gold-point' : '--gold';
+}
+
 function cssColor(name: string, fallback: string): THREE.Color {
   const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   try {
@@ -201,9 +208,11 @@ function heldPosition(i: number, n: number): [number, number, number] {
 /** The ball's radius on screen at rest: room left for the dial, the agent
  * ring outside it (1.36 × the radius) and the agents' names beside the ring. */
 export function restRadius(width: number, height: number): number {
+  // On a phone the agents' names are hidden: no room is kept for them.
+  const names = width < PHONE_WIDTH ? 24 : 110;
   return Math.max(
     60,
-    Math.min(Math.min(width, height) * FILL, (width / 2 - 110) / 1.36, (height / 2 - 40) / 1.36),
+    Math.min(Math.min(width, height) * FILL, (width / 2 - names) / 1.36, (height / 2 - 40) / 1.36),
   );
 }
 
@@ -343,7 +352,7 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
     function paint() {
       const dark = document.documentElement.dataset.theme !== 'light';
       const pm = points.material as THREE.ShaderMaterial;
-      pm.uniforms.gold!.value = cssColor('--gold', '#E8BC62');
+      pm.uniforms.gold!.value = cssColor(pointGold(), '#E8BC62');
       pm.uniforms.verm!.value = cssColor('--verm', '#FF8466');
       pm.uniforms.grey!.value = cssColor('--ink3', '#8189A0');
       pm.uniforms.ice!.value = cssColor('--ice', '#94BBFF');
@@ -351,7 +360,7 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
       pm.blending = dark ? THREE.AdditiveBlending : THREE.NormalBlending;
       pm.needsUpdate = true;
       const cm = clouds.material as THREE.ShaderMaterial;
-      cm.uniforms.gold!.value = cssColor('--gold', '#E8BC62');
+      cm.uniforms.gold!.value = cssColor(pointGold(), '#E8BC62');
       cm.blending = dark ? THREE.AdditiveBlending : THREE.NormalBlending;
       cm.needsUpdate = true;
       const gm = glass.material as THREE.ShaderMaterial;

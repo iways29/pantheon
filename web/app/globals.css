@@ -45,6 +45,8 @@
   --ink3: #566079;
   /* 5.1:1 on the page: gold text (the dial's time) stays readable. */
   --gold: #855a0c;
+  /* The globe's points keep the design's warmer gold: marks, not text. */
+  --gold-point: #96650f;
   --goldS: rgba(133, 90, 12, 0.12);
   --ice: #2c5bc8;
   --iceS: rgba(44, 91, 200, 0.12);

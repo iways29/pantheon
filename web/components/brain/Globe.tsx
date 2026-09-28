@@ -417,6 +417,8 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
       // The ball's centre is pinned: whatever the input, it never leaves the dial.
       if (controls.target.lengthSq() > 0) controls.target.set(0, 0, 0);
       const moved = controls.update();
+      // Labels are placed with this frame's camera, not the last one's.
+      camera.updateMatrixWorld();
       const w0 = el!.clientWidth || 800;
       const h0 = el!.clientHeight || 600;
       const zoom = restDistance(w0, h0) / Math.max(camera.position.distanceTo(controls.target), 0.01);
@@ -453,7 +455,6 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
     // The lens glass (Field.dc.html): the rim refracts, blurring what lies
     // under it; a lit body and two highlights. Drawn over the canvas, sized
     // to the ball on screen; gone once the owner is inside.
-    const centre = new THREE.Vector3();
     function placeLens(w: number, h: number, fromCentre: number) {
       const box = lens.current;
       if (!box) return;
@@ -461,11 +462,13 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
         box.style.display = 'none';
         return;
       }
-      centre.set(0, 0, 0).project(camera);
+      // The camera always looks at the pinned centre, so the ball sits in the
+      // middle of the stage; only its size changes. (Projecting the centre
+      // used last frame's camera and made the glass trail a fast drag.)
       const half = THREE.MathUtils.degToRad(FOV / 2);
-      const r = (h / 2) / (Math.sqrt(fromCentre * fromCentre - 1) * Math.tan(half));
-      const x = (centre.x * 0.5 + 0.5) * w;
-      const y = (-centre.y * 0.5 + 0.5) * h;
+      const r = h / 2 / (Math.sqrt(fromCentre * fromCentre - 1) * Math.tan(half));
+      const x = w / 2;
+      const y = h / 2;
       box.style.display = 'block';
       box.style.left = `${(x - r).toFixed(1)}px`;
       box.style.top = `${(y - r).toFixed(1)}px`;

@@ -278,5 +278,44 @@ export function previewThread(who: string, state: PreviewState): ChatMessage[] {
       order,
     },
     { id: 'm4', role: 'agent', text: 'On it: I have handed it to Research.', at: at('14:02'), order },
+    ...(state === 'rest' ? songOrder() : []),
+  ];
+}
+
+/** An order that made a piece: the chat shows it in full (2026-09-27). */
+function songOrder(): ChatMessage[] {
+  const order: OrderCard = {
+    id: 'o3',
+    title: 'Write company song',
+    text: 'understand the company knowledge and build me a song',
+    status: 'done',
+    result:
+      'content-lead: I picked “The Charioteer at the Edge of the Field” from three ideas and the writer drafted it. ' +
+      'The claim check stopped two lines as not in the public facts, so it is not ready to publish; ' +
+      'the song itself is above. Nothing has been published.',
+    error: null,
+    at: at('21:13'),
+    finished_at: at('21:23'),
+    routed: [{ department: 'marketing', head: 'marketing-head', at: at('21:13') }],
+    questions: [],
+    pieces: [
+      {
+        id: 'p1',
+        title: 'The Charioteer at the Edge of the Field',
+        status: 'blocked',
+        channel: 'other',
+        format: 'company_song',
+        body:
+          '**Verse 1**\nAt the edge of the field,\nBefore the company, before the deck,\nOne choice carries weight.\n' +
+          'The founder holds the bow.\n\n**Chorus**\nYou choose the road.\nYou remain in the lead.\n' +
+          'We bring architecture, people and hours,\nIntroductions and launch help for the need.',
+        stopped: [{ sentence: 'You remain in the lead.', reason: "Not in the brain's public facts" }],
+      },
+    ],
+    cost_usd: 0.05,
+  };
+  return [
+    { id: 'm5', role: 'owner', text: order.text, at: at('21:13'), order },
+    { id: 'm6', role: 'agent', text: 'On it: Write company song. I will report back here.', at: at('21:13'), order },
   ];
 }

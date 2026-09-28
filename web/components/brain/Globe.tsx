@@ -30,6 +30,9 @@ export interface GlobeHandle {
   fitAll: () => void;
   /** Light a fact for a while: a real event touched it. */
   flash: (factId: string) => void;
+  /** Where a fact is on screen now, in the stage's CSS pixels; front is
+   * false when it lies behind the ball's centre. Null if it is not drawn. */
+  locate: (factId: string) => { x: number; y: number; front: boolean } | null;
 }
 
 interface Props {
@@ -716,6 +719,24 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
         if (index < 0) return;
         w.lit.set(index, performance.now() / 1000);
         w.request();
+      },
+      locate(factId: string) {
+        const w = world.current;
+        const el = host.current;
+        if (!w || !el) return null;
+        const index = w.ids.indexOf(factId);
+        const position = w.points.geometry.getAttribute('position') as THREE.BufferAttribute | undefined;
+        if (index < 0 || !position) return null;
+        const point = new THREE.Vector3().fromBufferAttribute(position, index);
+        // Behind the centre, as seen from the camera.
+        const front = point.dot(w.camera.position) >= 0;
+        point.project(w.camera);
+        if (point.z > 1) return null;
+        return {
+          x: ((point.x + 1) / 2) * el.clientWidth,
+          y: ((1 - point.y) / 2) * el.clientHeight,
+          front,
+        };
       },
     }),
     [],

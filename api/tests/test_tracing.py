@@ -232,3 +232,21 @@ def test_a_call_inside_an_open_observation_nests_under_it(langfuse: Langfuse, sp
     assert child.context.trace_id == by_name["run-agent"].context.trace_id
     assert child.parent is not None and child.parent.span_id == by_name["run-agent"].context.span_id
     assert root.trace_id != langfuse.create_trace_id(seed="run-3")
+
+
+def test_a_session_groups_every_call_opened_inside_it(langfuse: Langfuse, spans: Any) -> None:
+    """One chat conversation, or one order, is one Langfuse session."""
+    from app.tracing import in_session
+
+    with in_session("chat-abc"):
+        call_in_run(langfuse, "run-s1")
+        call_in_run(langfuse, "run-s2")
+    call_in_run(langfuse, "run-s3")
+    with in_session(None):
+        call_in_run(langfuse, "run-s4")
+
+    sessions = {
+        attrs(s)["langfuse.observation.metadata.run_id"]: attrs(s).get("session.id")
+        for s in spans()
+    }
+    assert sessions == {"run-s1": "chat-abc", "run-s2": "chat-abc", "run-s3": None, "run-s4": None}

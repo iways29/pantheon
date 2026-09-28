@@ -178,7 +178,21 @@ export interface OrderCard {
   questions: OrderQuestion[];
   /** What the work waits on the owner for (a draft, an email, an action). */
   waiting?: { approval_id: string; kind: string; title: string }[];
+  /** What the work made, in full (drafts anywhere in the order). */
+  pieces?: OrderPiece[];
   cost_usd: number;
+}
+
+/** A piece an order made: the latest version of a draft. */
+export interface OrderPiece {
+  id: string;
+  title: string | null;
+  status: string;
+  channel: string;
+  format: string;
+  body: string;
+  /** Sentences a check stopped, and why. */
+  stopped: { sentence: string; reason: string }[];
 }
 
 /** A past chat with one agent (GET /chat/{agent}/conversations). */

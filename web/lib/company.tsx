@@ -196,6 +196,37 @@ export function CompanyProvider({
     };
   }, [patch, settleSoon, preview]);
 
+  // The preview has no live stream: a sample one, a read or a write every few
+  // seconds naming real sample facts, so the brain's threads can be checked.
+  const sample = useRef(state);
+  sample.current = state;
+  useEffect(() => {
+    if (!preview || preview === 'killed') return;
+    let n = 0;
+    const timer = setInterval(() => {
+      const { snapshot } = sample.current;
+      const facts = snapshot?.facts ?? [];
+      const agents = snapshot?.agents ?? [];
+      if (!facts.length || !agents.length) return;
+      n += 1;
+      const agent = agents[n % agents.length]!;
+      const pick = (k: number) => facts[(n * 7 + k * 13) % facts.length]!.id;
+      const write = n % 3 === 0;
+      const event: PantheonEvent = {
+        id: `sample-${n}`,
+        type: write ? 'fact_write_decided' : 'tool_called',
+        created_at: new Date().toISOString(),
+        agent_id: agent.id,
+        run_id: null,
+        payload: write
+          ? { outcome: 'duplicate', fact_id: pick(0) }
+          : { tool: 'brain_search', fact_ids: [pick(0), pick(1)] },
+      };
+      for (const listener of listeners.current) listener(event);
+    }, 3500);
+    return () => clearInterval(timer);
+  }, [preview]);
+
   // Spend moves with model calls, which are not animated: a slow refresh.
   useEffect(() => {
     if (preview) return;

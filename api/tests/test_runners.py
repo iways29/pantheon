@@ -284,3 +284,60 @@ def test_a_digest_agent_without_its_brief_prompt_fails_clearly(dsn: str, team: T
 
     assert (result.status, result.stop_reason) == ("failed", "prompt_missing")
     assert status(dsn, task.id) == "failed"
+
+
+@dataclass
+class StaleHead(ScriptedTeam):
+    """A head that reports "not ready yet" before its team is done, then,
+    woken with the result, only says so in its final message (2026-09-27)."""
+
+    def complete(self, *, model: str, messages: list[dict[str, Any]], **kw: Any) -> ModelResponse:
+        system = " ".join(m["content"] or "" for m in messages if m["role"] == "system")
+        user = next(m["content"] for m in messages if m["role"] == "user")
+        done = [m for m in messages if m["role"] == "tool"]
+        if "You lead a small team" not in system:
+            if not done:
+                return self._tool("w2", "report_result", {"summary": "The song is written."})
+            return self._say("w2", "Done.")
+        if "Results from your sub-tasks" in user:
+            return self._say("head-2", "Boss, the song is ready: here it is.")
+        if not done:
+            return self._tool(
+                "head-1",
+                "create_task",
+                {"assign_to": "w2", "title": "Write the song", "instructions": "Write it."},
+            )
+        if len(done) == 1:
+            return self._tool(
+                "head-1",
+                "report_result",
+                {"summary": "The song is not ready yet.", "details": {"selected": "Charioteer"}},
+            )
+        return self._say("head-1", "Waiting on the writer.")
+
+
+def test_a_woken_head_has_the_last_word_on_its_task(dsn: str, team: Team) -> None:
+    rt = runtime(dsn, StaleHead())
+    with connect(dsn) as connection:
+        task = order(
+            connection,
+            user_id=team.user_id,
+            org_id=team.org_id,
+            agent="lead",
+            title="Write a company song",
+            instructions="Build me a song.",
+        )
+    (head_run,) = tick(dsn)
+    assert advance_run(rt, head_run, deadline_seconds=60).status == "succeeded"
+    (worker_run,) = tick(dsn)
+    assert advance_run(rt, worker_run, deadline_seconds=60).status == "succeeded"
+    (second,) = tick(dsn)
+    assert advance_run(rt, second, deadline_seconds=60).status == "succeeded"
+    assert status(dsn, task.id) == "done"
+
+    with connect(dsn) as connection, as_service_role(connection) as conn:
+        result = conn.execute(
+            "select result from public.tasks where id = %s", (str(task.id),)
+        ).fetchone()["result"]
+    # The final word replaces the stale summary; details reported earlier stay.
+    assert result == {"summary": "Boss, the song is ready: here it is.", "selected": "Charioteer"}

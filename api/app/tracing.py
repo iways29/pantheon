@@ -19,6 +19,8 @@ Trace shape, per Langfuse's best-practices guide:
 - a call the gateway refuses is a `guardrail` named `enforce-call-gates`, so
   a budget or kill-switch block is visible beside the calls that did run.
 - department and tier are tags, for cost breakdowns in dashboards.
+- a chat conversation, or an order outside the chat, is a session
+  (`in_session`), so one request's traces are read together.
 - names are stable and never include a model, so swapping models (ADR 003)
   does not break filters or evaluators.
 
@@ -29,7 +31,7 @@ at export would also work, but not sending the data at all cannot fail open.
 
 import os
 from collections.abc import Iterator
-from contextlib import AbstractContextManager, contextmanager
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 from typing import Any, Protocol
 
 from langfuse import Langfuse, LangfuseGeneration, LangfuseSpan, propagate_attributes
@@ -323,6 +325,21 @@ class LangfuseTracer:
         if run_id is None:
             return None, default
         return {"trace_id": self._langfuse.create_trace_id(seed=run_id)}, "agent-run"
+
+
+def in_session(session_id: str | None) -> AbstractContextManager[None]:
+    """Group traces into a Langfuse session: every trace opened inside
+    carries the id (https://langfuse.com/docs/observability/features/sessions).
+
+    Sessions (owner, 2026-09-27): one chat conversation is one session, and
+    every agent run an order from it starts joins it, so the owner's message,
+    the reply and all the work it set off read as one story. An order not
+    from the chat (a morning routine) is its own session, `order-<root id>`.
+    Harmless when tracing is off: it only sets OpenTelemetry context.
+    """
+    if not session_id:
+        return nullcontext()
+    return propagate_attributes(session_id=session_id[:200])
 
 
 def tracer_from(settings: Settings) -> Tracer:

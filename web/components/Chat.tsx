@@ -8,7 +8,7 @@ import { api, stream } from '@/lib/api';
 import { useCompany } from '@/lib/company';
 import { previewThread, previewTalkers } from '@/lib/fixtures';
 import { agentName, departmentName, money, when } from '@/lib/format';
-import type { ChatMessage, Conversation, OrderCard, OrderQuestion, Talker } from '@/lib/types';
+import type { ChatMessage, Conversation, OrderCard, OrderPiece, OrderQuestion, Talker } from '@/lib/types';
 
 /** Events after which a thread may have moved on. */
 const THREAD_EVENTS = new Set([
@@ -522,13 +522,63 @@ function Card({
           ))}
         </div>
       ) : null}
+      {order.pieces?.map((piece) => <Piece key={piece.id} piece={piece} />)}
       {order.status === 'done' && order.result && !order.waiting?.length ? (
-        <p className="clamp" style={{ fontSize: 13, lineHeight: 1.45 }}>
-          {order.result}
-        </p>
+        <Summary text={order.result} />
       ) : null}
       {order.status === 'failed' && order.error ? (
         <p style={{ fontSize: 13, color: 'var(--verm)' }}>{order.error}</p>
+      ) : null}
+    </div>
+  );
+}
+
+const PIECE_WORDS: Record<string, string> = {
+  draft: 'Written, not checked yet',
+  blocked: 'Stopped by a check',
+  ready: 'Ready for your yes',
+  approved: 'Approved',
+  rejected: 'Rejected',
+  published: 'Published',
+};
+
+/** What the work made, in full: the owner reads the song, not its id. */
+function Piece({ piece }: { piece: OrderPiece }) {
+  return (
+    <div className="order-q piece">
+      <span className="faint" style={{ fontSize: 12 }}>
+        {PIECE_WORDS[piece.status] ?? piece.status}
+        {piece.channel && piece.channel !== 'other' ? ` · ${piece.channel}` : ''}
+      </span>
+      {piece.title ? <span style={{ fontWeight: 500 }}>{piece.title}</span> : null}
+      {/* Drafts carry light markdown ("**Verse 1**"); the stars are dropped. */}
+      <div className="piece-body">{piece.body.replace(/\*\*(.+?)\*\*/g, '$1')}</div>
+      {piece.stopped.length ? (
+        <div style={{ display: 'grid', gap: 4 }}>
+          {piece.stopped.map((line) => (
+            <span key={line.sentence + line.reason} style={{ fontSize: 12, color: 'var(--verm)' }}>
+              “{line.sentence}”: {line.reason.toLowerCase()}
+            </span>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** The report, three lines until the owner opens it. */
+function Summary({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const long = text.length > 180;
+  return (
+    <div style={{ display: 'grid', gap: 2, justifyItems: 'start' }}>
+      <p className={open ? undefined : 'clamp'} style={{ fontSize: 13, lineHeight: 1.45, whiteSpace: 'pre-wrap' }}>
+        {text}
+      </p>
+      {long ? (
+        <button type="button" className="text-link" aria-expanded={open} onClick={() => setOpen(!open)}>
+          {open ? 'Show less' : 'Read all'}
+        </button>
       ) : null}
     </div>
   );

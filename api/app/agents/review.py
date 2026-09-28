@@ -21,12 +21,12 @@ never stops the work.
 """
 
 import json
-from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
 import psycopg
 
+from app.clock import today_line
 from app.db import as_service_role
 from app.gateway import GatewayError
 from app.gateway.systemone import PROVIDER as SYSTEMONE_PROVIDER
@@ -80,7 +80,7 @@ def check(
     # What the agent was given counts as evidence too: today's date (every
     # agent is told it) and its own task, whose names it may repeat. The
     # first live check (2026-09-27) flagged a result for stating the date.
-    given = f"[given to the agent]\nToday (UTC): {datetime.now(UTC):%A %d %B %Y}\nTask: {task}"
+    given = f"[given to the agent]\n{today_line()}\nTask: {task}"
     tools = _evidence(connection, run_id, int(policy.setting("evidence_chars", 24000)))
     state = {"task": task, "result": _text(result), "evidence": f"{given}\n\n{tools}"}
     # Escaping can grow the evidence: trim it until the state fits the gate.

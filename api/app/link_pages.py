@@ -209,3 +209,89 @@ def _event(connection: psycopg.Connection, link: dict[str, Any], decision: str) 
                 ),
             ),
         )
+
+
+# --- The topic form (app.mail.requests) ---------------------------------------------
+
+REQUEST_GONE = (
+    "This form has expired or has sent all its topics. The next brief brings a new one; "
+    'meanwhile: scripts.department ask research "your question".'
+)
+
+
+def _themed(body: str, code: int = 200) -> HTMLResponse:
+    """A page in Pantheon's look, for the form a person reaches from an email."""
+    from app.mail import theme as t
+
+    return HTMLResponse(
+        "<!doctype html><html><head><meta charset=utf-8>"
+        '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        '<meta name="color-scheme" content="dark">'
+        "<title>Pantheon: ask for tomorrow</title></head>"
+        f'<body style="margin:0;background:{t.BG};color:{t.INK};font:16px/1.55 {t.FONT}">'
+        f'<main style="max-width:560px;margin:0 auto;padding:32px 16px">'
+        f'<p style="margin:0 0 6px;color:{t.GOLD};font-size:11px;letter-spacing:3px;'
+        'text-transform:uppercase">&#9678;&nbsp; Pantheon</p>'
+        f"{body}</main></body></html>",
+        status_code=code,
+        headers=HEADERS,
+    )
+
+
+def _request_form(token: str, link: dict[str, Any], said: str = "") -> HTMLResponse:
+    from app.mail import requests
+    from app.mail import theme as t
+
+    left = link["max_uses"] - link["uses"]
+    return _themed(
+        f'<h1 style="margin:0 0 8px;font:400 26px/1.25 {t.SERIF}">Ask for tomorrow</h1>'
+        f"{said}"
+        f'<p style="margin:0 0 18px;color:{t.INK2};font-size:14px">A topic for the next '
+        f"morning run. {left} more can be sent from this form, until "
+        f"{link['expires_at']:%d %b %H:%M} UTC.</p>"
+        f'<div style="{t.CARD};margin:0">'
+        f"{requests.form_html(f'/r/{token}', list(link['routines']))}</div>"
+    )
+
+
+@router.get("/r/{token}")
+def request_page(token: str, connection: Connection) -> HTMLResponse:
+    from app.mail import requests
+
+    link = requests.lookup(connection, token)
+    if link is None:
+        return _themed(f"<p>{html.escape(REQUEST_GONE)}</p>", 410)
+    return _request_form(token, link)
+
+
+@router.post("/r/{token}")
+async def request_by_link(token: str, request: Request, connection: Connection) -> HTMLResponse:
+    """Add the topic: from the form in the email, or from the page."""
+    from app.mail import requests
+    from app.mail import theme as t
+
+    form = parse_qs((await request.body()).decode("utf-8", "replace"), max_num_fields=4)
+    routine = (form.get("routine") or [""])[0].strip()
+    asked = " ".join((form.get("request") or [""])[0].split())[:1000]
+    if len(asked) < 3:
+        return _themed("<p>Write the topic first: go back and add a few words.</p>", 400)
+    link = requests.lookup(connection, token)
+    if link is None:
+        return _themed(f"<p>{html.escape(REQUEST_GONE)}</p>", 410)
+    if routine not in link["routines"]:
+        routine = link["routines"][0]
+    if requests.use(connection, token, routine, asked) is None:
+        return _themed(f"<p>{html.escape(REQUEST_GONE)}</p>", 410)
+    said = (
+        f'<p style="margin:0 0 14px;padding:12px 14px;border-radius:10px;'
+        f'background:{t.PANEL};border-left:3px solid {t.GOLD}">'
+        f"Added for {html.escape(requests.label(routine))}&#8217;s next morning run:<br>"
+        f"<b>{html.escape(asked)}</b></p>"
+    )
+    link = requests.lookup(connection, token)
+    if link is None:
+        return _themed(
+            f'<h1 style="margin:0 0 8px;font:400 26px/1.25 {t.SERIF}">Got it</h1>{said}'
+            f'<p style="color:{t.INK2};font-size:14px">That was the last topic this form takes.</p>'
+        )
+    return _request_form(token, link, said)

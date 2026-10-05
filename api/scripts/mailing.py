@@ -9,6 +9,9 @@
     uv run python -m scripts.mailing set morning-brief --no-auto   # each email waits for you
     uv run python -m scripts.mailing set morning-brief --links https://api.example.com
     uv run python -m scripts.mailing set morning-brief --no-links  # no approval links
+    uv run python -m scripts.mailing set morning-brief \
+        --requests research:morning-brief,marketing:morning-draft  # the topic form
+    uv run python -m scripts.mailing set morning-brief --no-requests  # no topic form
     uv run python -m scripts.mailing emails                        # the last emails
     uv run python -m scripts.mailing send <email id>               # retry a failed one
 
@@ -43,6 +46,10 @@ def main(argv: list[str]) -> int:
     change.add_argument("--links", dest="links", help="the API's https address: approval links")
     change.add_argument("--no-links", dest="links", action="store_const", const="")
     change.add_argument("--link-hours", type=int, help="how long a link works (1-168)")
+    change.add_argument(
+        "--requests", help="comma-separated routines the topic form offers (needs --links)"
+    )
+    change.add_argument("--no-requests", dest="requests", action="store_const", const="")
     commands.add_parser("emails")
     retry = commands.add_parser("send")
     retry.add_argument("email_id")
@@ -62,6 +69,8 @@ def main(argv: list[str]) -> int:
                 links = row["approval_links_url"]
                 hours = row["approval_link_hours"]
                 print(f"  approval links: {f'{links} ({hours}h)' if links else 'off'}")
+                asks = ", ".join(row["request_routines"])
+                print(f"  topic form: {asks if asks and links else 'off'}")
             return 0
         if args.command == "set":
             row = set_list(
@@ -79,6 +88,11 @@ def main(argv: list[str]) -> int:
                     enabled=args.enabled,
                     approval_links_url=args.links,
                     approval_link_hours=args.link_hours,
+                    request_routines=(
+                        [r.strip() for r in args.requests.split(",") if r.strip()]
+                        if args.requests is not None
+                        else None
+                    ),
                 ),
             )
             print(f"{row['key']}: from {row['from_address']} to {', '.join(row['recipients'])}")

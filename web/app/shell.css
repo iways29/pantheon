@@ -837,14 +837,16 @@
 }
 
 /* An order being followed: its threads stay until the owner stops. Each
-   fades in on its turn (--delay), then a bead keeps flowing along it. */
+   fades in on its turn (--delay) and a bead runs along it once; then the
+   path holds still ("Play again" draws it once more). */
 .thread.still {
   opacity: 0;
   animation: follow-in 0.9s ease-out var(--delay, 0ms) forwards;
 }
 
 .thread.still .thread-bead {
-  animation: flow 4s ease-in-out var(--delay, 0ms) infinite;
+  opacity: 0;
+  animation: flow 2.4s ease-in-out var(--delay, 0ms) 1 forwards;
 }
 
 @keyframes follow-in {

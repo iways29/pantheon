@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 
 import { FollowButton } from '@/components/FollowButton';
 import { Icon } from '@/components/Icon';
@@ -618,6 +618,27 @@ function Piece({ piece }: { piece: OrderPiece }) {
   );
 }
 
+/** A report's **bold** as bold and its web addresses as links; the rest as
+ * text (React escapes it). */
+function rich(text: string): ReactNode[] {
+  return text.split(/(\*\*[^*\n]+\*\*|https?:\/\/[^\s<>"')\]]+)/g).map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**') && part.length > 4)
+      return <strong key={i}>{part.slice(2, -2)}</strong>;
+    if (/^https?:\/\//.test(part)) {
+      const url = part.replace(/[.,;:]+$/, '');
+      return (
+        <span key={i}>
+          <a href={url} target="_blank" rel="noopener noreferrer" className="inline-link">
+            {url}
+          </a>
+          {part.slice(url.length)}
+        </span>
+      );
+    }
+    return part;
+  });
+}
+
 /** The report, three lines until the owner opens it. */
 function Summary({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
@@ -625,7 +646,7 @@ function Summary({ text }: { text: string }) {
   return (
     <div style={{ display: 'grid', gap: 2, justifyItems: 'start' }}>
       <p className={open ? undefined : 'clamp'} style={{ fontSize: 13, lineHeight: 1.45, whiteSpace: 'pre-wrap' }}>
-        {text}
+        {rich(text)}
       </p>
       {long ? (
         <button type="button" className="text-link" aria-expanded={open} onClick={() => setOpen(!open)}>

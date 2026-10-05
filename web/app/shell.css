@@ -373,6 +373,9 @@
 .order-card {
   align-self: flex-start;
   width: 88%;
+  min-width: 0;
+  /* A long link or word wraps inside the card instead of running out of it. */
+  overflow-wrap: anywhere;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -415,6 +418,14 @@
   font-size: 12px;
   line-height: 1.45;
   color: var(--ink2);
+}
+
+/* A web address inside a report. */
+.inline-link {
+  color: var(--ice);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--ice) 40%, transparent);
+  text-underline-offset: 2px;
 }
 
 .text-link {

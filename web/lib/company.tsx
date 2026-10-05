@@ -37,8 +37,6 @@ import type {
 /** Events the screen does not react to one by one (as the API's QUIET). */
 export const QUIET_EVENTS = new Set(['model_call', 'judgment_made', 'run_step', 'run_invoked']);
 const STATUS_EVENTS = new Set(['paused', 'unpaused', 'killed']);
-/** How many recent events are kept for motion and replay. */
-const BUFFER = 500;
 const PULSE_EVERY_MS = 60_000;
 const SETTLE_MS = 1_200;
 
@@ -52,7 +50,6 @@ interface CompanyState {
   departments: Department[];
   approvals: Approval[];
   changedTools: McpTool[];
-  events: PantheonEvent[];
   live: Live;
   error: string | null;
 }
@@ -86,7 +83,6 @@ function initial(preview: PreviewState | null): CompanyState {
     departments: [],
     approvals: [],
     changedTools: [],
-    events: [],
     live: 'connecting',
     error: null,
   };
@@ -116,8 +112,16 @@ export function CompanyProvider({
   const listeners = useRef(new Set<(event: PantheonEvent) => void>());
   const settle = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // A refresh that brings back what is already shown changes nothing, so the
+  // screen is not drawn again: most refreshes after an event are like that.
   const patch = useCallback((next: Partial<CompanyState>) => {
-    setState((prev) => ({ ...prev, ...next }));
+    setState((prev) => {
+      const changed = (Object.keys(next) as (keyof CompanyState)[]).filter(
+        (key) => JSON.stringify(prev[key]) !== JSON.stringify(next[key]),
+      );
+      if (!changed.length) return prev;
+      return { ...prev, ...Object.fromEntries(changed.map((key) => [key, next[key]])) };
+    });
   }, []);
 
   const loadAll = useCallback(async () => {
@@ -181,7 +185,8 @@ export function CompanyProvider({
         (message) => {
           const event = message.new as PantheonEvent;
           if (QUIET_EVENTS.has(event.type)) return;
-          setState((prev) => ({ ...prev, events: [...prev.events, event].slice(-BUFFER) }));
+          // Events go to the listeners (motion, the chat, the dial), not into
+          // the shared state: that would draw the whole screen again for each.
           for (const listener of listeners.current) listener(event);
           settleSoon(STATUS_EVENTS.has(event.type));
         },

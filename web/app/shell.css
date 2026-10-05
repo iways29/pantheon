@@ -665,6 +665,16 @@
   bottom: 64px;
 }
 
+/* With the chat folded, its button takes the bottom-right corner: the
+   player (and a follow banner above it) sit higher, clear of it. */
+.body.no-chat .replay-bar {
+  bottom: 68px;
+}
+
+.body.no-chat .replay-bar ~ .follow-banner {
+  bottom: 116px;
+}
+
 .follow-btn {
   align-self: flex-start;
   height: 26px;
@@ -826,9 +836,48 @@
   }
 }
 
-/* An order being followed: its threads stay until the owner stops. */
+/* An order being followed: its threads stay until the owner stops. Each
+   fades in on its turn (--delay), then a bead keeps flowing along it. */
 .thread.still {
+  opacity: 0;
+  animation: follow-in 0.9s ease-out var(--delay, 0ms) forwards;
+}
+
+.thread.still .thread-bead {
+  animation: flow 4s ease-in-out var(--delay, 0ms) infinite;
+}
+
+@keyframes follow-in {
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes flow {
+  0% {
+    stroke-dashoffset: 108;
+    opacity: 1;
+  }
+  65% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+
+:root.rm .thread.still {
+  opacity: 1;
   animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thread.still {
+    opacity: 1;
+    animation: none;
+  }
 }
 
 .thread.still .thread-path {

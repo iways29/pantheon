@@ -235,7 +235,9 @@ export function previewThread(who: string, state: PreviewState): ChatMessage[] {
     status: state === 'rest' ? 'done' : state === 'killed' ? 'cancelled' : 'blocked',
     result:
       state === 'rest'
-        ? 'Vireo, Ashline and Tern Labs each raised this year; the brief has the rounds.'
+        ? 'Vireo, Ashline and Tern Labs each raised this year; the brief has the rounds.\n\n' +
+          '- **Vireo:** a $6M seed in March. https://techcrunch.com/2026/03/12/vireo-raises-seed-to-build-ai-claims-triage-for-insurers-and-brokers/\n' +
+          '- **Ashline:** a $4M pre-seed in June, led by a former Ashvas engineer.'
         : null,
     error: null,
     at: at('14:02'),

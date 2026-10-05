@@ -373,6 +373,9 @@
 .order-card {
   align-self: flex-start;
   width: 88%;
+  min-width: 0;
+  /* A long link or word wraps inside the card instead of running out of it. */
+  overflow-wrap: anywhere;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -415,6 +418,14 @@
   font-size: 12px;
   line-height: 1.45;
   color: var(--ink2);
+}
+
+/* A web address inside a report. */
+.inline-link {
+  color: var(--ice);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--ice) 40%, transparent);
+  text-underline-offset: 2px;
 }
 
 .text-link {
@@ -837,14 +848,16 @@
 }
 
 /* An order being followed: its threads stay until the owner stops. Each
-   fades in on its turn (--delay), then a bead keeps flowing along it. */
+   fades in on its turn (--delay) and a bead runs along it once; then the
+   path holds still ("Play again" draws it once more). */
 .thread.still {
   opacity: 0;
   animation: follow-in 0.9s ease-out var(--delay, 0ms) forwards;
 }
 
 .thread.still .thread-bead {
-  animation: flow 4s ease-in-out var(--delay, 0ms) infinite;
+  opacity: 0;
+  animation: flow 2.4s ease-in-out var(--delay, 0ms) 1 forwards;
 }
 
 @keyframes follow-in {

@@ -59,8 +59,11 @@ const KIND_WORDS: Record<string, string> = {
   style: 'How you work',
 };
 
+/** Events after which an open panel reads its detail again. */
+const DETAIL_EVENTS = /^(task_|fact_write_decided$|approval_)/;
+
 function useDetail<T>(path: string | null): { data: T | null; error: string | null } {
-  const { preview } = useCompany();
+  const { preview, onEvent } = useCompany();
   const [state, setState] = useState<{ data: T | null; error: string | null }>({ data: null, error: null });
   useEffect(() => {
     if (!path) return;
@@ -70,14 +73,26 @@ function useDetail<T>(path: string | null): { data: T | null; error: string | nu
       return;
     }
     let live = true;
-    api
-      .get<T>(path)
-      .then((data) => live && setState({ data, error: null }))
-      .catch((err: unknown) => live && setState({ data: null, error: err instanceof Error ? err.message : String(err) }));
+    const load = () =>
+      api
+        .get<T>(path)
+        .then((data) => live && setState({ data, error: null }))
+        .catch((err: unknown) => live && setState((prev) => (prev.data ? prev : { data: null, error: err instanceof Error ? err.message : String(err) })));
+    void load();
+    // An open panel keeps up: when work starts or ends, it is read again
+    // (without blanking), so it never shows a finished task as still working.
+    let soon: ReturnType<typeof setTimeout> | undefined;
+    const stop = onEvent((event) => {
+      if (!DETAIL_EVENTS.test(event.type)) return;
+      clearTimeout(soon);
+      soon = setTimeout(() => void load(), 800);
+    });
     return () => {
       live = false;
+      clearTimeout(soon);
+      stop();
     };
-  }, [path, preview]);
+  }, [path, preview, onEvent]);
   return state;
 }
 
@@ -287,7 +302,7 @@ export function AgentPanel({ name, onClose, onTalk }: { name: string; onClose: (
           {data?.last_results.length ? (
             <div style={{ display: 'grid', gap: 8 }}>
               <span className="faint" style={{ fontSize: 12 }}>
-                Last results
+                {agent.current_task ? 'Earlier results' : 'Last results'}
               </span>
               {data.last_results.slice(0, 3).map((r) => (
                 <div key={r.task_id} className="rel">

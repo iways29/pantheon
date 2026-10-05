@@ -204,6 +204,8 @@ export function BrainStage({ filter = NO_FILTER }: { filter?: BrainFilter }) {
   // "Follow this order": its hand-offs and the facts it touched stay drawn,
   // and the view turns to them once, because the owner asked (ScaleNotes).
   const [following, setFollowing] = useState<Following | null>(null);
+  /** "Play again" draws the followed path from the start once more. */
+  const [round, setRound] = useState(0);
   // When each path thread is drawn: fixed the first time it is seen, so a
   // redraw as the order moves on never restarts what is already there.
   const drawAt = useRef<{ started: number; at: Map<string, number> }>({ started: 0, at: new Map() });
@@ -248,7 +250,7 @@ export function BrainStage({ filter = NO_FILTER }: { filter?: BrainFilter }) {
     const handoffs = following.steps
       .filter((st) => st.parent_id && st.agent_id && agentOf.get(st.parent_id))
       .map((st) => ({
-        key: `follow:${st.id}`,
+        key: `follow:${round}:${st.id}`,
         agentId: agentOf.get(st.parent_id!)!,
         toAgentId: st.agent_id!,
         way: 'out' as const,
@@ -257,14 +259,19 @@ export function BrainStage({ filter = NO_FILTER }: { filter?: BrainFilter }) {
     const touched = following.facts
       .filter((f) => f.agent_id)
       .slice(0, FOLLOW_FACTS)
-      .map((f) => ({ key: `follow:${f.fact_id}`, agentId: f.agent_id!, factId: f.fact_id, way: f.way, still: true }));
+      .map((f) => ({ key: `follow:${round}:${f.fact_id}`, agentId: f.agent_id!, factId: f.fact_id, way: f.way, still: true }));
     const { started, at } = drawAt.current;
     const now = performance.now();
     return [...handoffs, ...touched].map((t, i) => {
       if (!at.has(t.key)) at.set(t.key, Math.max(started + i * FOLLOW_STEP_MS, now));
       return { ...t, delay: Math.max(0, at.get(t.key)! - now) };
     });
-  }, [following]);
+  }, [following, round]);
+
+  function playPathAgain() {
+    drawAt.current = { started: performance.now(), at: new Map() };
+    setRound((n) => n + 1);
+  }
 
   const moments = useMemo(
     () => day.filter((e) => !replaying || Date.parse(e.created_at) <= replay.at!).map((e) => e.created_at),
@@ -322,7 +329,22 @@ export function BrainStage({ filter = NO_FILTER }: { filter?: BrainFilter }) {
     );
   }, [filter, facts, agents, pulse?.day_starts_at, replayMinute, focus?.join()]);
 
-  const onView = useCallback((next: View) => viewTo.current?.(next), []);
+  // Threads and rim markers sit where their facts are on screen: while any
+  // is drawn, the stage follows the view, once per frame. With none drawn,
+  // turning the globe redraws only the minimap.
+  const [, setViewTick] = useState(0);
+  const located = useRef(false);
+  located.current = threads.length > 0 || marks.length > 0 || pathThreads.length > 0;
+  const tickFrame = useRef(0);
+  const onView = useCallback((next: View) => {
+    viewTo.current?.(next);
+    if (!located.current || tickFrame.current) return;
+    tickFrame.current = requestAnimationFrame(() => {
+      tickFrame.current = 0;
+      setViewTick((n) => n + 1);
+    });
+  }, []);
+  useEffect(() => () => cancelAnimationFrame(tickFrame.current), []);
 
   async function resume() {
     setBusy(true);
@@ -459,6 +481,15 @@ export function BrainStage({ filter = NO_FILTER }: { filter?: BrainFilter }) {
           <span className="faint num">
             {count(following.steps.length, 'step')} · {count(following.facts.length, 'fact')}
           </span>
+          <button
+            type="button"
+            className="btn sm glass ibtn"
+            onClick={playPathAgain}
+            aria-label="Play the path again"
+            title="Play again"
+          >
+            <Icon name="play" size={12} />
+          </button>
           <button type="button" className="btn sm glass" onClick={() => setFollowing(null)}>
             Stop following
           </button>

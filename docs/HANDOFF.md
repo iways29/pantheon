@@ -182,8 +182,11 @@ apply from scratch on plain Postgres (guard anything needing `pg_cron`,
    clears the folded chat; the chat opens fresh. The brief and the evening
    question have Pantheon's look and a topic form (ADR 038): migration
    applied live, `morning-brief` offers `research:morning-brief` and
-   `marketing:morning-draft` (set by SQL with the owner's go). Next: the
-   OpenAPI tool (an agent tool like MCP), then Step 11.
+   `marketing:morning-draft` (set by SQL with the owner's go). Parked by the
+   owner (2026-10-05), for later: the OpenAPI tool (an API's operations as
+   agent tools, like MCP: off until approved, GET low risk, writes R4, keys
+   in Vault), and loading the app's code behind the login screen (prefetch
+   `/`, start the first data read as sign-in succeeds). Next: Step 11.
 4. After five unattended mornings: the Step 8.1 Milestone report. Stop.
 
 ## Switching on Step 9 (done 2026-09-27; kept for reference)

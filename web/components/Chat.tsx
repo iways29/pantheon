@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
 import { FollowButton } from '@/components/FollowButton';
 import { Icon } from '@/components/Icon';
@@ -261,6 +262,7 @@ export function Chat({ mode = 'open', onMode }: { mode?: PanelMode; onMode?: (mo
 
   return (
     <aside className="glass panel chat" aria-label="Chat">
+      <HintLayer />
       <div className="chat-head" ref={picker}>
         {agent ? <Mark kind={AGENT_MARK[agent.state]} size={12} /> : null}
         <div style={{ display: 'grid', gap: 2, flexGrow: 1, minWidth: 0 }}>
@@ -580,7 +582,11 @@ function Piece({ piece }: { piece: OrderPiece }) {
   const body = piece.body.replace(/\*\*(.+?)\*\*/g, '$1');
   const stopped = piece.stopped.filter((line) => line.sentence);
   const reasons = [...new Set(stopped.map((line) => why(line.reason)))];
-  const marked = (line: string) => stopped.some((s) => line.includes(s.sentence.replace(/[.!?]+$/, '')));
+  /** Why the fact check held this line back, or null when it did not. */
+  const heldFor = (line: string) => {
+    const hit = stopped.find((s) => line.includes(s.sentence.replace(/[.!?]+$/, '')));
+    return hit ? `Held back by the fact check: ${why(hit.reason)}. Not published.` : null;
+  };
   return (
     <div className="order-q piece">
       <span className="faint" style={{ fontSize: 12 }}>
@@ -589,15 +595,21 @@ function Piece({ piece }: { piece: OrderPiece }) {
       </span>
       {piece.title ? <span style={{ fontWeight: 500 }}>{piece.title}</span> : null}
       {stopped.length ? (
-        <p className="piece-note">
-          The fact check held back {stopped.length === 1 ? 'one line' : `${stopped.length} lines`} (marked below):{' '}
-          {reasons.join('; ')}. Nothing was published.
-        </p>
+        // The why lives in a bubble, not in the text (owner, 2026-10-05).
+        <span
+          className="hint-chip"
+          tabIndex={0}
+          data-hint={`The fact check held back ${stopped.length === 1 ? 'one line' : `${stopped.length} lines`}: ${reasons.join('; ')}. Nothing was published. Hover a marked line to see why.`}
+        >
+          <span className="hint-dot verm" aria-hidden="true" />
+          {stopped.length === 1 ? '1 line held back' : `${stopped.length} lines held back`}
+        </span>
       ) : null}
       <div className={`piece-body${open ? ' open' : ''}`}>
-        {body.split('\n').map((line, i) =>
-          line.trim() && marked(line) ? (
-            <mark key={i} className="stopped" title="Held back by the fact check">
+        {body.split('\n').map((line, i) => {
+          const held = line.trim() ? heldFor(line) : null;
+          return held ? (
+            <mark key={i} className="stopped" tabIndex={0} data-hint={held}>
               {line}
               {'\n'}
             </mark>
@@ -606,8 +618,8 @@ function Piece({ piece }: { piece: OrderPiece }) {
               {line}
               {'\n'}
             </span>
-          ),
-        )}
+          );
+        })}
       </div>
       {body.length > 600 || body.split('\n').length > 10 ? (
         <button type="button" className="text-link" aria-expanded={open} onClick={() => setOpen(!open)}>
@@ -621,7 +633,15 @@ function Piece({ piece }: { piece: OrderPiece }) {
 /** A report's **bold** as bold and its web addresses as links; the rest as
  * text (React escapes it). */
 function rich(text: string): ReactNode[] {
-  return text.split(/(\*\*[^*\n]+\*\*|https?:\/\/[^\s<>"')\]]+)/g).map((part, i) => {
+  return text.split(/(\[(?:unverified|note):[^\]\n]+\]|\*\*[^*\n]+\*\*|https?:\/\/[^\s<>"')\]]+)/gi).map((part, i) => {
+    // A caveat on a point ("[Unverified: the time]"): a small i, read on hover.
+    const caveat = /^\[(unverified|note):\s*([^\]]+)\]$/i.exec(part);
+    if (caveat)
+      return (
+        <span key={i} className="hint-i" tabIndex={0} data-hint={`${caveat[1]![0]!.toUpperCase()}${caveat[1]!.slice(1).toLowerCase()}: ${caveat[2]!.trim()}`}>
+          i
+        </span>
+      );
     if (part.startsWith('**') && part.endsWith('**') && part.length > 4)
       return <strong key={i}>{part.slice(2, -2)}</strong>;
     if (/^https?:\/\//.test(part)) {
@@ -642,18 +662,90 @@ function rich(text: string): ReactNode[] {
 /** The report, three lines until the owner opens it. */
 function Summary({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
-  const long = text.length > 180;
+  // The team's housekeeping (facts added, checks run, sub-tasks) is a line the
+  // lead starts with "Team notes:"; it goes in a bubble, not the answer.
+  const lines = text.split('\n');
+  const notes = lines.filter((l) => TEAM_NOTES.test(l)).map((l) => l.replace(TEAM_NOTES, '').trim());
+  const answer = lines
+    .filter((l) => !TEAM_NOTES.test(l))
+    .join('\n')
+    .trim();
+  const long = answer.length > 180;
   return (
-    <div style={{ display: 'grid', gap: 2, justifyItems: 'start' }}>
+    <div style={{ display: 'grid', gap: 4, justifyItems: 'start' }}>
       <p className={open ? undefined : 'clamp'} style={{ fontSize: 13, lineHeight: 1.45, whiteSpace: 'pre-wrap' }}>
-        {rich(text)}
+        {rich(answer)}
       </p>
-      {long ? (
-        <button type="button" className="text-link" aria-expanded={open} onClick={() => setOpen(!open)}>
-          {open ? 'Show less' : 'Read all'}
-        </button>
-      ) : null}
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        {long ? (
+          <button type="button" className="text-link" aria-expanded={open} onClick={() => setOpen(!open)}>
+            {open ? 'Show less' : 'Read all'}
+          </button>
+        ) : null}
+        {notes.length ? (
+          <span className="hint-chip" tabIndex={0} data-hint={notes.join(' ')}>
+            <span className="hint-i" aria-hidden="true">i</span>
+            Team notes
+          </span>
+        ) : null}
+      </div>
     </div>
+  );
+}
+
+const TEAM_NOTES = /^\s*[-*]?\s*\**team notes:?\**:?\s*/i;
+
+/**
+ * One bubble for every [data-hint] in the chat: shown on hover, or on focus
+ * (a tap, or the keyboard), placed by the page so a card's edges never cut it.
+ */
+function HintLayer() {
+  const [hint, setHint] = useState<{ text: string; x: number; y: number; below: boolean } | null>(null);
+  useEffect(() => {
+    const target = (event: Event) =>
+      event.target instanceof Element ? (event.target.closest('[data-hint]') as HTMLElement | null) : null;
+    const show = (event: Event) => {
+      const el = target(event);
+      if (!el?.dataset.hint) return;
+      const box = el.getBoundingClientRect();
+      const pointer = event instanceof PointerEvent ? event.clientX : box.left + Math.min(box.width, 240) / 2;
+      const below = box.top < 140;
+      setHint({
+        text: el.dataset.hint,
+        x: Math.min(Math.max(pointer, 150), window.innerWidth - 150),
+        y: below ? box.bottom + 8 : box.top - 8,
+        below,
+      });
+    };
+    const hide = (event: Event) => {
+      if (target(event)) setHint(null);
+    };
+    const clear = () => setHint(null);
+    document.addEventListener('pointerover', show);
+    document.addEventListener('pointerout', hide);
+    document.addEventListener('focusin', show);
+    document.addEventListener('focusout', hide);
+    window.addEventListener('scroll', clear, true);
+    return () => {
+      document.removeEventListener('pointerover', show);
+      document.removeEventListener('pointerout', hide);
+      document.removeEventListener('focusin', show);
+      document.removeEventListener('focusout', hide);
+      window.removeEventListener('scroll', clear, true);
+    };
+  }, []);
+  if (!hint) return null;
+  // On the page itself: inside the chat's glass (a backdrop filter) a fixed
+  // bubble would be placed and clipped by the panel.
+  return createPortal(
+    <div
+      className="hint-bubble"
+      role="tooltip"
+      style={{ left: hint.x, top: hint.y, transform: hint.below ? 'translate(-50%, 0)' : 'translate(-50%, -100%)' }}
+    >
+      {hint.text}
+    </div>,
+    document.body,
   );
 }
 

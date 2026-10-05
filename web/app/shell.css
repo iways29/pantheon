@@ -405,20 +405,91 @@
   mask-image: none;
 }
 
-/* A line the fact check held back: marked in place, not listed in red. */
+/* A line the fact check held back: marked in place; why is in a bubble. */
 .piece-body mark.stopped {
   background: none;
   color: inherit;
   text-decoration: underline wavy var(--verm);
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
+  cursor: help;
+  outline: none;
 }
 
-.piece-note {
+.piece-body mark.stopped:hover,
+.piece-body mark.stopped:focus-visible {
+  background: color-mix(in srgb, var(--verm) 12%, transparent);
+  border-radius: 3px;
+}
+
+/* What a reply keeps out of the way: a chip or a small i, read on hover. */
+.hint-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
-  line-height: 1.45;
+  color: var(--ink3);
+  cursor: help;
+  outline: none;
+  border-radius: 999px;
+}
+
+.hint-chip:hover,
+.hint-chip:focus-visible {
   color: var(--ink2);
 }
+
+.hint-chip:focus-visible,
+.hint-i:focus-visible {
+  box-shadow: 0 0 0 2px var(--ice);
+}
+
+.hint-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ink3);
+}
+
+.hint-dot.verm {
+  background: var(--verm);
+}
+
+.hint-i {
+  display: inline-grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  margin: 0 2px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  font: italic 600 10px/1 Georgia, serif;
+  color: var(--ink3);
+  vertical-align: 1px;
+  cursor: help;
+  outline: none;
+}
+
+.hint-chip .hint-i {
+  margin: 0;
+}
+
+.hint-bubble {
+  position: fixed;
+  z-index: 60;
+  max-width: 280px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink);
+  /* Solid, so the text under it never shows through. */
+  background: color-mix(in srgb, var(--bg) 90%, var(--ink) 10%);
+  border: 1px solid var(--edge);
+  box-shadow: var(--shadow);
+  pointer-events: none;
+}
+
 
 /* A web address inside a report. */
 .inline-link {

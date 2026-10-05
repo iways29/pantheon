@@ -638,10 +638,12 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
     };
   }, []);
 
-  // The points, rebuilt when the facts change.
+  // The points, rebuilt when the facts change. What a filter dims is set
+  // apart, below: a replay changes it every replayed minute.
   useEffect(() => {
     const w = world.current;
     if (!w) return;
+    const wasLit = new Map([...w.lit].map(([index, at]) => [w.ids[index], at]));
     const placed = facts.filter((f) => f.x !== null && f.y !== null);
     const n = placed.length + held.length;
     const position = new Float32Array(n * 3);
@@ -654,7 +656,6 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
     placed.forEach((f, i) => {
       position.set([f.x!, f.y!, f.z ?? 0], i * 3);
       status[i] = STATUS[f.status] ?? 0;
-      dim[i] = bright && !bright.has(f.id) ? 1 : 0;
       ids.push(f.id);
       claims.push(f.claim);
     });
@@ -692,9 +693,28 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
     g.computeBoundingSphere();
     w.ids = ids;
     w.claims = claims;
+    // A fact that arrives must not put out the glow of what was lit before it.
     w.lit.clear();
+    ids.forEach((id, i) => {
+      const at = wasLit.get(id);
+      if (at !== undefined) w.lit.set(i, at);
+    });
     w.request();
-  }, [facts, held, neighbourhoods, bright]);
+  }, [facts, held, neighbourhoods]);
+
+  // What a filter (or a replay) keeps bright: only the dim flags change.
+  useEffect(() => {
+    const w = world.current;
+    if (!w) return;
+    const attr = w.points.geometry.getAttribute('dim') as THREE.BufferAttribute | undefined;
+    if (!attr) return;
+    for (let i = 0; i < attr.count; i++) {
+      const id = w.ids[i];
+      attr.setX(i, bright && id && !id.startsWith('held:') && !bright.has(id) ? 1 : 0);
+    }
+    attr.needsUpdate = true;
+    w.request();
+  }, [bright, facts, held, neighbourhoods]);
 
   // The selected fact wears a ring.
   useEffect(() => {
@@ -761,8 +781,9 @@ export const Globe = forwardRef<GlobeHandle, Props>(function Globe(
         if (prefersStill()) return done();
         const t0 = performance.now();
         const step = () => {
-          const t = Math.min(1, (performance.now() - t0) / 900);
-          const e = 1 - Math.pow(1 - t, 3);
+          // A slow turn, easing in and out, so the eye can follow it.
+          const t = Math.min(1, (performance.now() - t0) / 1800);
+          const e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
           const q = new THREE.Quaternion().slerp(turn, e);
           w.camera.position.copy(from).applyQuaternion(q).multiplyScalar(distance);
           w.controls.update();

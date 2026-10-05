@@ -84,7 +84,7 @@ an AI).
 | --- | --- |
 | GitHub | `iways29/pantheon` |
 | Supabase project | `epelwbiehczkkgqtgkqt` (us-west-2), reachable through the Supabase MCP |
-| Migrations applied live | all of `supabase/migrations/` through `20260928170000_chat_conversations.sql` (applied 2026-09-27, each before its PR merged) |
+| Migrations applied live | all of `supabase/migrations/` through `20261005100000_request_links.sql` (applied 2026-10-05, each before its PR merged) |
 | Vercel team | `team_6UC1DSN83JcGLrVJC3P8aXE6` |
 | API project | `pantheon-api` (`prj_XHno72KOypj7fapEIXze9XtZZJMR`), `https://api-xi-opal-67.vercel.app`, deploys from `main` |
 | Web project | `pantheon-web` (`prj_XdV67seWTQSsmSDvBUH2NIg9AZNX`) |
@@ -174,6 +174,16 @@ apply from scratch on plain Postgres (guard anything needing `pg_cron`,
    markers, an accessibility pass and the design check
    (`docs/reports/step10-design-check.md`). Step 10 is then done; Step 11 (the
    Control Center) is next.
+3e. **Step 10 upgrades (2026-10-05, owner's list).** Speed: the API and web
+   run in `pdx1` next to the database (they ran in `iad1`; chat replies took
+   ~4.7 s for a ~1.2 s model call), fewer round trips per transaction, lazy
+   agent imports, no Supabase Auth call per API request, a splash while it
+   wakes. Replay and "Follow this order" play slowly; the replay player
+   clears the folded chat; the chat opens fresh. The brief and the evening
+   question have Pantheon's look and a topic form (ADR 038): migration
+   applied live, `morning-brief` offers `research:morning-brief` and
+   `marketing:morning-draft` (set by SQL with the owner's go). Next: the
+   OpenAPI tool (an agent tool like MCP), then Step 11.
 4. After five unattended mornings: the Step 8.1 Milestone report. Stop.
 
 ## Switching on Step 9 (done 2026-09-27; kept for reference)

@@ -55,12 +55,15 @@ def acting_as(
 
     with connection.transaction():
         with connection.cursor() as cursor:
-            cursor.execute(f"set local role {role}")
+            # One statement, not three: each is a round trip to the database,
+            # and every request opens several of these transactions.
+            # set_config('role', ..., true) is SET LOCAL ROLE.
             claims = json.dumps({"sub": user_id, "role": role}) if user_id else ""
-            cursor.execute("select set_config('request.jwt.claims', %s, true)", (claims,))
             cursor.execute(
-                "select set_config('pantheon.agent_id', %s, true)",
-                (str(agent_id) if agent_id else "",),
+                "select set_config('role', %s, true), "
+                "set_config('request.jwt.claims', %s, true), "
+                "set_config('pantheon.agent_id', %s, true)",
+                (role, claims, str(agent_id) if agent_id else ""),
             )
         yield connection
 

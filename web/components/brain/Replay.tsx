@@ -18,7 +18,11 @@ export const SPEEDS = [1, 10, 60] as const;
 /** A gap longer than this (in seconds of playback) is skipped. */
 const SKIP_AFTER_S = 2;
 /** How often the replay moves on, and the screen with it. */
-const TICK_MS = 100;
+const TICK_MS = 50;
+/** At least this long between two replayed events, in playback: a busy
+ * minute plays out one thread at a time instead of all at once (owner,
+ * 2026-10-05: "slow and smooth"). The clock waits while a burst plays. */
+const EVENT_GAP_MS = 600;
 
 export interface Replay {
   /** The moment being replayed (ms since epoch), or null when live. */
@@ -43,7 +47,7 @@ export function useReplay(
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<number>(SPEEDS[1]);
   // The loop reads these without restarting on every change.
-  const state = useRef({ at: 0, next: 0, speed: SPEEDS[1] as number, events, play });
+  const state = useRef({ at: 0, next: 0, hold: 0, speed: SPEEDS[1] as number, events, play });
   state.current.events = events;
   state.current.play = play;
   state.current.speed = speed;
@@ -53,6 +57,7 @@ export function useReplay(
   const seek = useCallback((when: number) => {
     const s = state.current;
     s.at = Math.max(dayStart, Math.min(when, Date.now()));
+    s.hold = 0;
     // Seeking never fires what lies between: it only moves the cursor.
     s.next = s.events.findIndex((e) => Date.parse(e.created_at) > s.at);
     if (s.next < 0) s.next = s.events.length;
@@ -81,24 +86,31 @@ export function useReplay(
       const s = state.current;
       const dt = Math.min(now - last, 1000);
       last = now;
-      s.at += dt * s.speed * 60;
-      // Skip a quiet stretch: jump to just before the next event.
-      const upcoming = s.events[s.next];
-      if (upcoming) {
-        const gap = Date.parse(upcoming.created_at) - s.at;
-        if (gap > SKIP_AFTER_S * 1000 * s.speed * 60) s.at = Date.parse(upcoming.created_at) - 500 * s.speed * 60;
+      const due = (i: number) => i < s.events.length && Date.parse(s.events[i]!.created_at) <= s.at;
+      if (now >= s.hold) {
+        // The clock moves only when the last event has had its moment.
+        if (!due(s.next)) s.at += dt * s.speed * 60;
+        // Skip a quiet stretch: jump to just before the next event.
+        const upcoming = s.events[s.next];
+        if (upcoming) {
+          const gap = Date.parse(upcoming.created_at) - s.at;
+          if (gap > SKIP_AFTER_S * 1000 * s.speed * 60) s.at = Date.parse(upcoming.created_at) - 500 * s.speed * 60;
+        }
+        if (due(s.next)) {
+          s.play(s.events[s.next]!);
+          s.next += 1;
+          s.hold = now + EVENT_GAP_MS;
+        }
       }
-      while (s.next < s.events.length && Date.parse(s.events[s.next]!.created_at) <= s.at) {
-        s.play(s.events[s.next]!);
-        s.next += 1;
-      }
-      if (s.at >= Date.now() || s.next >= s.events.length) {
+      if (s.at >= Date.now() || (s.next >= s.events.length && now >= s.hold)) {
         s.at = Math.min(s.at, Date.now());
         setAt(s.at);
         setPlaying(false);
         return;
       }
-      setAt(s.at);
+      // The screen shows whole minutes: it is drawn again only when the
+      // replayed minute changes, not on every tick.
+      setAt((shown) => (shown !== null && Math.floor(shown / 60000) === Math.floor(s.at / 60000) ? shown : s.at));
       timer = setTimeout(tick, TICK_MS);
     }, TICK_MS);
     return () => clearTimeout(timer);

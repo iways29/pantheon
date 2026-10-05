@@ -47,8 +47,10 @@ export function Chat({ mode = 'open', onMode }: { mode?: PanelMode; onMode?: (mo
   const [menu, setMenu] = useState(false);
   /** The conversation on screen: null for the latest. */
   const [conversation, setConversation] = useState<string | null>(null);
-  /** "New chat": an empty view; the conversation is made by the first message. */
-  const [fresh, setFresh] = useState(false);
+  /** "New chat": an empty view; the conversation is made by the first message.
+   * The chat opens fresh (owner, 2026-10-05); past chats are in the history.
+   * The preview opens on its sample thread, to compare with the designs. */
+  const [fresh, setFresh] = useState(!preview);
   const [history, setHistory] = useState<Conversation[] | null>(null);
   const [latestId, setLatestId] = useState<string | null>(null);
   const box = useRef<HTMLTextAreaElement>(null);
@@ -89,13 +91,13 @@ export function Chat({ mode = 'open', onMode }: { mode?: PanelMode; onMode?: (mo
       .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
   }, [preview]);
 
-  // "Talk" on an agent's panel opens its conversation here.
+  // "Talk" on an agent's panel opens a fresh chat with it here.
   useEffect(() => {
     const onTalk = (event: Event) => {
       const name = (event as CustomEvent<string>).detail;
       setWho(name);
       setConversation(null);
-      setFresh(false);
+      setFresh(true);
       setMenu(false);
       box.current?.focus();
     };
@@ -325,7 +327,7 @@ export function Chat({ mode = 'open', onMode }: { mode?: PanelMode; onMode?: (mo
                       setWho(t.name);
                       setMenu(false);
                       setConversation(null);
-                      setFresh(false);
+                      setFresh(true);
                       setHistory(null);
                     }}
                   >

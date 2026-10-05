@@ -24,6 +24,7 @@ from zoneinfo import ZoneInfo
 import psycopg
 
 from app.db import as_service_role
+from app.mail import theme
 from app.mail.resend import Mailer, MailError, Outgoing
 
 MAX_ATTEMPTS = 3
@@ -50,12 +51,15 @@ def compose(
     now: datetime | None = None,
     subject: str | None = None,
     approval_links: bool = False,
+    request_form: bool = False,
 ) -> Composed:
     """Write an email for `list_key`. Writing it twice changes nothing.
 
     `subject` replaces the list's own subject (both may use `{date}`).
     `approval_links`: when sent, the email ends with one-tap links to the
-    approvals then pending, if its list has them switched on."""
+    approvals then pending, if its list has them switched on.
+    `request_form`: and with the form that asks for tomorrow's topics, if the
+    list offers any routines."""
     cursor.execute(
         "select * from public.mailing_lists where org_id = %s and key = %s",
         (str(org_id), list_key),
@@ -116,8 +120,8 @@ def compose(
         insert into public.emails
             (org_id, list_key, task_id, run_id, agent_id, approval_id, status,
              from_address, recipients, subject, body_text, body_html, idempotency_key,
-             approval_links)
-        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+             approval_links, request_form)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         returning id
         """,
         (
@@ -135,6 +139,7 @@ def compose(
             render_html(subject, body),
             idempotency_key,
             approval_links,
+            request_form,
         ),
     )
     return Composed(cursor.fetchone()["id"], status, approval_id=approval_id)
@@ -159,13 +164,14 @@ def send(connection: psycopg.Connection, mailer: Mailer | None, email_id: UUID |
         return _record(connection, email_id, "failed", error="RESEND_API_KEY is not configured")
     with as_service_role(connection) as conn:
         row = conn.execute(
-            "select reply_to, approval_links_url, approval_link_hours from public.mailing_lists "
+            "select reply_to, approval_links_url, approval_link_hours, request_routines "
+            "from public.mailing_lists "
             "where org_id = %s and key = %s",
             (str(email["org_id"]), email["list_key"]),
         ).fetchone()
     reply_to = row["reply_to"] if row else None
     text, body_html = email["body_text"], email["body_html"]
-    if email["approval_links"] and row and row["approval_links_url"]:
+    if (email["approval_links"] or email["request_form"]) and row and row["approval_links_url"]:
         text, body_html = _with_links(connection, email, row, text, body_html)
     try:
         provider_id = mailer.send(
@@ -191,29 +197,48 @@ def _with_links(
     text: str,
     body_html: str,
 ) -> tuple[str, str]:
-    """The email with its approval links added. Minted now, never stored in
-    the email row, so no agent can read a token."""
+    """The email with its approval links and its topic form added, each as
+    asked. Minted now, never stored in the email row, so no agent can read a
+    token."""
     from app.approvals.links import mint, section_html, section_text
+    from app.mail import requests
 
-    minted = mint(
-        connection,
-        email=email,
-        base_url=mailing_list["approval_links_url"],
-        hours=mailing_list["approval_link_hours"],
-    )
-    if not minted.links:
+    texts: list[str] = []
+    htmls: list[str] = []
+    if email["approval_links"]:
+        minted = mint(
+            connection,
+            email=email,
+            base_url=mailing_list["approval_links_url"],
+            hours=mailing_list["approval_link_hours"],
+        )
+        if minted.links:
+            texts.append(section_text(minted))
+            htmls.append(section_html(minted))
+    if email["request_form"]:
+        form = requests.mint(
+            connection,
+            email=email,
+            base_url=mailing_list["approval_links_url"],
+            hours=mailing_list["approval_link_hours"],
+            routines=list(mailing_list.get("request_routines") or []),
+        )
+        if form is not None:
+            texts.append(requests.section_text(form))
+            htmls.append(requests.section_html(form))
+    if not texts:
         return text, body_html
-    section = section_html(minted)
+    section = "".join(htmls)
     # Above the footer, else before </body>, else at the end.
     at = body_html.find(_FOOTER)
     if at < 0:
         at = body_html.rfind("</body>")
     if at < 0:
         at = len(body_html)
-    return f"{text}\n\n{section_text(minted)}", body_html[:at] + section + body_html[at:]
+    return "\n\n".join([text, *texts]), body_html[:at] + section + body_html[at:]
 
 
-_FOOTER = '<p style="color:#777;font-size:12px;margin-top:24px">'
+_FOOTER = f'<p style="color:{theme.INK2};font-size:12px;margin:28px 0 0">'
 _BOLD = re.compile(r"\*\*(.+?)\*\*")
 
 
@@ -226,19 +251,36 @@ def render_html(subject: str, body: str) -> str:
     """The brief as simple HTML: paragraphs, line breaks and **bold**, all escaped."""
     paragraphs = [p.strip() for p in body.strip().split("\n\n") if p.strip()]
     inner = "\n".join(
-        "<p>"
+        f'<p style="margin:0 0 14px;color:{theme.INK}">'
         + "<br>".join(
             _BOLD.sub(r"<strong>\1</strong>", html.escape(line)) for line in p.splitlines()
         )
         + "</p>"
         for p in paragraphs
     )
+    # Pantheon's look (deep navy, gold), in tables and inline styles: what
+    # mail clients keep. Dark by design, so a client's dark mode leaves it be.
+    t = theme
     return (
-        '<!doctype html><html><body style="font-family:-apple-system,Segoe UI,Helvetica,'
-        "Arial,sans-serif;font-size:15px;line-height:1.5;color:#1a1a1a;max-width:620px;"
-        f'margin:0 auto;padding:16px"><h2 style="font-size:18px">{html.escape(subject)}</h2>'
+        '<!doctype html><html><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        '<meta name="color-scheme" content="dark">'
+        '<meta name="supported-color-schemes" content="dark"></head>'
+        f'<body style="margin:0;padding:0;background:{t.BG}">'
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        f'bgcolor="{t.BG}" style="background:{t.BG}">'
+        '<tr><td align="center" style="padding:24px 12px">'
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        f'bgcolor="{t.SURFACE}" style="max-width:620px;background:{t.SURFACE};'
+        f'border:1px solid {t.LINE};border-radius:18px">'
+        f'<tr><td style="padding:26px 24px 24px;font-family:{t.FONT};font-size:15px;'
+        f'line-height:1.55;color:{t.INK}">'
+        f'<p style="margin:0 0 6px;color:{t.GOLD};font-size:11px;letter-spacing:3px;'
+        'text-transform:uppercase">&#9678;&nbsp; Pantheon</p>'
+        f'<h1 style="margin:0 0 18px;font:400 24px/1.25 {t.SERIF};color:{t.INK}">'
+        f"{html.escape(subject)}</h1>"
         f"{inner}{_FOOTER}Written by Pantheon.</p>"
-        "</body></html>"
+        "</td></tr></table></td></tr></table></body></html>"
     )
 
 
@@ -281,6 +323,7 @@ def list_view(row: dict[str, Any]) -> dict[str, Any]:
         "enabled",
         "approval_links_url",
         "approval_link_hours",
+        "request_routines",
         "updated_at",
     )
     return {k: row[k] for k in keys}

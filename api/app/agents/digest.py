@@ -124,6 +124,7 @@ def run(session: "Session", run: "_Run") -> dict[str, Any]:
             run_id=run.id,
             agent_id=run.agent_id,
             approval_links=True,
+            request_form=True,
         )
         output["email"] = {
             "list": list_key,
@@ -215,15 +216,26 @@ def _evening(cursor: psycopg.Cursor, run: "_Run") -> dict[str, Any]:
     lines += ["These run anyway:"] + [f"- {t}" for t in topics] + [""]
     if asked:
         lines += ["Already asked for tomorrow:"] + [f"- {a}" for a in asked] + [""]
+    list_key = task.get("mailing_list")
+    form = False
+    if list_key:
+        cursor.execute(
+            "select approval_links_url is not null and %s = any(request_routines) as form "
+            "from public.mailing_lists where org_id = %s and key = %s",
+            (routine, str(run.org_id), list_key),
+        )
+        form = bool((cursor.fetchone() or {}).get("form"))
+    if form:
+        lines += ["To add something, use the form below, or run:"]
+    else:
+        lines += ["To add something, run:"]
     lines += [
-        "To add something, run:",
         f'uv run python -m scripts.department ask {department} "your question"',
         "",
         "No answer is fine: the standing topics run as usual.",
     ]
     body = "\n".join(lines)
     output: dict[str, Any] = {"summary": body, "routine": routine, "pending": len(asked)}
-    list_key = task.get("mailing_list")
     if list_key:
         email = compose(
             cursor,
@@ -235,6 +247,7 @@ def _evening(cursor: psycopg.Cursor, run: "_Run") -> dict[str, Any]:
             task_id=run.task_id,
             run_id=run.id,
             agent_id=run.agent_id,
+            request_form=True,
         )
         output["email"] = {
             "list": list_key,

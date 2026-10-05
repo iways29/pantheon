@@ -6,17 +6,13 @@ import { createClient } from '@/lib/supabase/server';
 /**
  * The browser's only way to the Pantheon API: `/api/p/<path>` is forwarded to
  * `<API>/<path>` with the signed-in owner's Supabase token. Same origin, so no
- * cross-site setup; the API still checks the token and applies RLS, so this
- * relay grants nothing by itself.
+ * cross-site setup; the API checks the token and applies RLS, so this relay
+ * grants nothing by itself.
  */
 async function relay(request: NextRequest, path: string[]): Promise<NextResponse> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ detail: 'Not signed in' }, { status: 401 });
-  }
+  // The session from the cookie (refreshed here when it has expired), with no
+  // trip to Supabase Auth: the API verifies the token itself on every call.
   const {
     data: { session },
   } = await supabase.auth.getSession();

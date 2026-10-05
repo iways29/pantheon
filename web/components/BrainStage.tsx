@@ -40,6 +40,9 @@ function startOfDay(): string {
 
 /** Facts drawn for a followed order; the rest of its facts stay bright. */
 const FOLLOW_FACTS = 12;
+/** A followed order is drawn one step at a time, this far apart (ms): the
+ * hand-offs in order, then the facts (owner, 2026-10-05: slow and smooth). */
+const FOLLOW_STEP_MS = 700;
 
 interface Following {
   id: string;
@@ -74,8 +77,9 @@ export function BrainStage({ filter = NO_FILTER }: { filter?: BrainFilter }) {
   const [marks, setMarks] = useState<RimMark[]>([]);
   const [arrived, setArrived] = useState<MapFact[]>([]);
   const [busy, setBusy] = useState(false);
-  const [view, setView] = useState<View>({ azimuth: 0, zoom: 1 });
-  const lastView = useRef(0);
+  // The view goes straight to the minimap: turning the globe must not draw
+  // the whole stage (the dial, the ring) again many times a second.
+  const viewTo = useRef<((view: View) => void) | null>(null);
   const [opened, setOpened] = useState<Set<string>>(new Set());
   const [key, setKey] = useState(false);
 
@@ -200,8 +204,12 @@ export function BrainStage({ filter = NO_FILTER }: { filter?: BrainFilter }) {
   // "Follow this order": its hand-offs and the facts it touched stay drawn,
   // and the view turns to them once, because the owner asked (ScaleNotes).
   const [following, setFollowing] = useState<Following | null>(null);
+  // When each path thread is drawn: fixed the first time it is seen, so a
+  // redraw as the order moves on never restarts what is already there.
+  const drawAt = useRef<{ started: number; at: Map<string, number> }>({ started: 0, at: new Map() });
   const follow = useCallback(
     async (id: string, title: string, turn: boolean) => {
+      if (turn) drawAt.current = { started: performance.now(), at: new Map() };
       try {
         const path = preview
           ? previewPath(id, snapshot?.facts ?? [], snapshot?.agents ?? [])
@@ -250,7 +258,12 @@ export function BrainStage({ filter = NO_FILTER }: { filter?: BrainFilter }) {
       .filter((f) => f.agent_id)
       .slice(0, FOLLOW_FACTS)
       .map((f) => ({ key: `follow:${f.fact_id}`, agentId: f.agent_id!, factId: f.fact_id, way: f.way, still: true }));
-    return [...handoffs, ...touched];
+    const { started, at } = drawAt.current;
+    const now = performance.now();
+    return [...handoffs, ...touched].map((t, i) => {
+      if (!at.has(t.key)) at.set(t.key, Math.max(started + i * FOLLOW_STEP_MS, now));
+      return { ...t, delay: Math.max(0, at.get(t.key)! - now) };
+    });
   }, [following]);
 
   const moments = useMemo(
@@ -309,12 +322,7 @@ export function BrainStage({ filter = NO_FILTER }: { filter?: BrainFilter }) {
     );
   }, [filter, facts, agents, pulse?.day_starts_at, replayMinute, focus?.join()]);
 
-  const onView = useCallback((next: View) => {
-    const now = performance.now();
-    if (now - lastView.current < 120) return;
-    lastView.current = now;
-    setView(next);
-  }, []);
+  const onView = useCallback((next: View) => viewTo.current?.(next), []);
 
   async function resume() {
     setBusy(true);
@@ -396,7 +404,7 @@ export function BrainStage({ filter = NO_FILTER }: { filter?: BrainFilter }) {
         </button>
       </div>
 
-      <Minimap facts={facts} azimuth={view.azimuth} zoom={view.zoom} onFit={() => globe.current?.fitAll()} />
+      <LiveMinimap facts={facts} listen={viewTo} onFit={() => globe.current?.fitAll()} />
 
       <div className="key">
         <button className="btn sm glass" aria-expanded={key} onClick={() => setKey((v) => !v)}>
@@ -504,4 +512,37 @@ export function BrainStage({ filter = NO_FILTER }: { filter?: BrainFilter }) {
       ) : null}
     </main>
   );
+}
+
+/** The minimap, following the view itself (at most about eight times a second). */
+function LiveMinimap({
+  facts,
+  listen,
+  onFit,
+}: {
+  facts: MapFact[];
+  listen: React.MutableRefObject<((view: View) => void) | null>;
+  onFit: () => void;
+}) {
+  const [view, setView] = useState<View>({ azimuth: 0, zoom: 1 });
+  const last = useRef(0);
+  useEffect(() => {
+    let trailing: ReturnType<typeof setTimeout> | undefined;
+    listen.current = (next) => {
+      const now = performance.now();
+      clearTimeout(trailing);
+      if (now - last.current < 120) {
+        // Where a drag ends is always shown.
+        trailing = setTimeout(() => setView(next), 140);
+        return;
+      }
+      last.current = now;
+      setView(next);
+    };
+    return () => {
+      clearTimeout(trailing);
+      listen.current = null;
+    };
+  }, [listen]);
+  return <Minimap facts={facts} azimuth={view.azimuth} zoom={view.zoom} onFit={onFit} />;
 }

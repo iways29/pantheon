@@ -5,11 +5,11 @@ is an event. The owner API and `python -m scripts.mailing` use this; the
 recipients form in the Control Center will too.
 """
 
-from typing import Any
+from typing import Annotated, Any
 from uuid import UUID
 
 import psycopg
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
 
 from app.db import acting_as
 from app.mail.outbox import list_view
@@ -30,6 +30,12 @@ class MailingListChange(BaseModel):
     #: one-tap approval links. "" switches the links off.
     approval_links_url: str | None = None
     approval_link_hours: int | None = Field(default=None, ge=1, le=168)
+    #: Routines (triggers.routine_key) the topic form at the end of the
+    #: list's emails offers; [] removes the form. Needs approval_links_url.
+    request_routines: (
+        list[Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_-]*:[a-z][a-z0-9_-]*$")]]
+        | None
+    ) = Field(default=None, max_length=10)
 
 
 def get_lists(connection: psycopg.Connection, *, user_id: UUID | str) -> list[dict[str, Any]]:
@@ -50,6 +56,8 @@ def set_list(
     fields = change.model_dump(exclude_none=True)
     if "recipients" in fields:
         fields["recipients"] = [r.strip().lower() for r in fields["recipients"] if r.strip()]
+    if "request_routines" in fields:
+        fields["request_routines"] = [r.strip() for r in fields["request_routines"]]
     if "approval_links_url" in fields:
         fields["approval_links_url"] = fields["approval_links_url"].strip().rstrip("/") or None
     with acting_as(connection, user_id=str(user_id)) as conn, conn.cursor() as cursor:

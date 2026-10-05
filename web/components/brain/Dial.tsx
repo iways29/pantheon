@@ -29,6 +29,9 @@ export interface Thread {
   toAgentId?: string;
   /** Part of an order being followed: stays drawn, does not fade. */
   still?: boolean;
+  /** Wait this long (ms) before drawing it: a followed order's path is drawn
+   * one step after another. */
+  delay?: number;
 }
 
 export type Locate = (factId: string) => { x: number; y: number; front: boolean } | null;
@@ -82,6 +85,10 @@ const minutesOf = new Intl.DateTimeFormat('en-GB', {
 function minutes(date: Date): number {
   const [h, m] = minutesOf.format(date).split(':').map(Number);
   return (h ?? 0) * 60 + (m ?? 0);
+}
+
+function delayed(t: Thread): React.CSSProperties | undefined {
+  return t.delay ? ({ '--delay': `${Math.round(t.delay)}ms` } as React.CSSProperties) : undefined;
 }
 
 /** 00:00 at the top, clockwise. */
@@ -377,7 +384,7 @@ export function Dial({
           const ky = cy + ((y1 + y2) / 2 - cy) * 0.45;
           const d = `M ${x1.toFixed(1)} ${y1.toFixed(1)} Q ${kx.toFixed(1)} ${ky.toFixed(1)} ${x2.toFixed(1)} ${y2.toFixed(1)}`;
           return (
-            <g key={t.key} className={`thread handoff${still}`}>
+            <g key={t.key} className={`thread handoff${still}`} style={delayed(t)}>
               <path d={d} className="thread-path" />
               <path d={d} pathLength={100} className="thread-bead" />
             </g>
@@ -386,7 +393,7 @@ export function Dial({
         const spot = t.factId && locate ? locate(t.factId) : null;
         const d = orbit(cx, cy, at(cx, cy, ringR, angle), spot ?? rimSpot(cx, cy, radius, angle), t.way);
         return (
-          <g key={t.key} className={`thread ${t.way}${spot && !spot.front ? ' behind' : ''}${still}`}>
+          <g key={t.key} className={`thread ${t.way}${spot && !spot.front ? ' behind' : ''}${still}`} style={delayed(t)}>
             <path d={d} className="thread-path" />
             <path d={d} pathLength={100} className="thread-bead" />
             {spot ? <circle cx={spot.x} cy={spot.y} r={5} className="thread-end" /> : null}

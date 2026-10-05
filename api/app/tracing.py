@@ -35,7 +35,6 @@ from contextlib import AbstractContextManager, contextmanager, nullcontext
 from typing import Any, Protocol
 
 from langfuse import Langfuse, LangfuseGeneration, LangfuseSpan, propagate_attributes
-from langfuse.langchain import CallbackHandler
 from opentelemetry import trace
 
 from app.config import Settings
@@ -245,6 +244,9 @@ class LangfuseTracer:
             yield _RunObservationRecorder(observation)
 
     def callbacks(self) -> list[Any]:
+        # Imported here: it loads LangChain, which only agent runs need.
+        from langfuse.langchain import CallbackHandler
+
         return [CallbackHandler(public_key=self._public_key)]
 
     def flush(self) -> None:

@@ -44,7 +44,6 @@ from uuid import UUID
 
 import psycopg
 
-from app.agents import deep
 from app.agents.checkpointer import checkpointer
 from app.agents.prompts import PromptMissing, resolve_for_run
 from app.agents.research import PROMPT_SLOTS, RunScope, Session, build_graph
@@ -312,6 +311,10 @@ def _execute(runtime: Runtime, connection: psycopg.Connection, run: _Run, deadli
         return _decide(runtime, connection, run)
     if run.runner not in ("pipeline", "deep"):
         return _Stop("failed", "runner_not_built", error=f"No {run.runner!r} runner")
+    # Imported here: deepagents (and the Anthropic SDK under it) takes about a
+    # second to load, and a cold start for the screen or the chat never needs it.
+    from app.agents import deep
+
     slots = deep.PROMPT_SLOTS if run.runner == "deep" else PROMPT_SLOTS
     try:
         prompts = resolve_for_run(

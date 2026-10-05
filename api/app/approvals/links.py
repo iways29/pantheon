@@ -134,19 +134,22 @@ def section_text(minted: Minted) -> str:
 
 
 def section_html(minted: Minted) -> str:
+    from app.mail.theme import CARD, GOLD, INK, INK2
+
     items = "".join(
-        f'<li style="margin-bottom:6px">{html.escape(link.title)}<br>'
-        f'<a href="{html.escape(link.url)}">Open to decide</a></li>'
+        f'<li style="margin-bottom:8px;color:{INK}">{html.escape(link.title)}<br>'
+        f'<a href="{html.escape(link.url)}" style="color:{GOLD}">Open to decide</a></li>'
         for link in minted.links
     )
     more = (
         f"<p>And {minted.more} more: <code>scripts.approvals list</code></p>" if minted.more else ""
     )
     return (
-        '<h3 style="font-size:16px;margin-top:24px">Decide from here</h3>'
-        f'<p style="color:#555;font-size:13px">Each link works once, for {minted.hours} hours. '
-        "Opening it decides nothing; the buttons on the page do.</p>"
-        f"<ul>{items}</ul>{more}"
+        f'<div style="{CARD}">'
+        f'<h3 style="margin:0 0 4px;font-size:16px;color:{INK}">Decide from here</h3>'
+        f'<p style="margin:0 0 10px;color:{INK2};font-size:13px">Each link works once, '
+        f"for {minted.hours} hours. Opening it decides nothing; the buttons on the page do.</p>"
+        f'<ul style="margin:0;padding-left:20px">{items}</ul>{more}</div>'
     )
 
 

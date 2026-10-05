@@ -1,9 +1,10 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 
 import { Logo } from '@/components/Icon';
+import { apiBaseUrl } from '@/lib/env';
 import { createClient } from '@/lib/supabase/client';
 
 export default function LoginPage() {
@@ -12,6 +13,13 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+
+  // Wake the API while the owner signs in: its cold start (a few seconds)
+  // then overlaps the typing instead of the first screen. The health check
+  // needs no sign-in and costs nothing; its answer is not read.
+  useEffect(() => {
+    void fetch(`${apiBaseUrl()}/health`, { mode: 'no-cors', cache: 'no-store' }).catch(() => undefined);
+  }, []);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

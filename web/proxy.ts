@@ -6,7 +6,8 @@ import { supabaseAnonKey, supabaseUrl } from '@/lib/env';
 /**
  * Refreshes the Supabase session on every navigation so Server Components see
  * a valid token. Without this, an expired access token would only be noticed
- * on the client.
+ * on the client. `getClaims` checks the token against the project's published
+ * keys (cached) instead of asking Supabase Auth on every page.
  */
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -28,12 +29,14 @@ export async function proxy(request: NextRequest) {
     },
   });
 
-  await supabase.auth.getUser();
+  await supabase.auth.getClaims();
 
   return response;
 }
 
 export const config = {
-  // The local preview (development only) runs without a session.
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|preview).*)'],
+  // The local preview (development only) runs without a session. The API
+  // relay (/api/p) reads and refreshes the session itself: running this as
+  // well cost every API call an extra trip to Supabase Auth.
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|preview|api/p/).*)'],
 };

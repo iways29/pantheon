@@ -20,8 +20,8 @@ loop)**. Step 11 (Control Center) comes after.
 
 | When | Who | What |
 | --- | --- | --- |
-| 06:30 Mon-Sat | Research (charter v13) | Lead splits 6 sources across two web-researchers (L3, 150k-token run caps); keeps only the last 30 days; names up to 3 startups or founders |
-| 06:45 Mon-Fri | Marketing (charter v4) | Content Lead, topic researcher, editor (cheap tier), writer (standard). Goals: founder applications and Mumba sign-ups. Drafts only |
+| 06:30 Mon-Sat | Research (charter v14) | Lead splits 6 sources across two web-researchers (L3, 150k-token run caps); keeps only the last 30 days; names up to 3 startups or founders |
+| 06:45 Mon-Fri | Marketing (charter v5) | Content Lead, topic researcher, editor (cheap tier), writer (standard). Goals: founder applications and Mumba sign-ups. Drafts only |
 | 07:15 Mon-Sat | Executive (charter v5) | The brief by email: findings first, problems grouped, held facts listed, a credit alert, a plain fallback with no model |
 | 21:00 Sun-Fri | Executive | The evening question. The owner answers with `scripts.department ask research "..."`; used once the next morning |
 
@@ -189,7 +189,9 @@ apply from scratch on plain Postgres (guard anything needing `pg_cron`,
    `/`, start the first data read as sign-in succeeds). Research charter v13
    (owner's go, 2026-10-05, by SQL as the owner): a one-off order goes to a
    web-researcher; the lead had answered "nothing found" from the brain
-   alone. Next: Step 11.
+   alone. Charters research v14 and marketing v5 (owner's go, 2026-10-05):
+   the leads end with a "Team notes:" line and mark caveats "[Unverified:
+   ...]", which the chat shows as hover bubbles (#57). Next: Step 11.
 4. After five unattended mornings: the Step 8.1 Milestone report. Stop.
 
 ## Switching on Step 9 (done 2026-09-27; kept for reference)

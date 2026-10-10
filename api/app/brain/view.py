@@ -26,6 +26,7 @@ def facts_on_the_map(cursor: psycopg.Cursor) -> list[dict[str, Any]]:
           from public.facts f
           left join public.fact_positions p on p.fact_id = f.id
           left join public.runs r on r.id = f.created_by_run_id
+         where f.status <> 'retired'
          order by f.created_at, f.id
         """
     )

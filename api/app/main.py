@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from app.auth import OwnerPrincipal
 from app.chat import router as chat_router
 from app.config import Settings, get_settings
+from app.control import router as control_router
 from app.internal import router as internal_router
 from app.link_pages import router as link_router
 from app.owner_api import router as owner_router
@@ -42,6 +43,7 @@ app.include_router(owner_router)
 app.include_router(link_router)
 app.include_router(screen_router)
 app.include_router(chat_router)
+app.include_router(control_router)
 
 
 class Health(BaseModel):

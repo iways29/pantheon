@@ -24,6 +24,39 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   const text = await response.text();
   const data: unknown = text ? JSON.parse(text) : null;
   if (!response.ok) {
+    throw new ApiError(response.status, detailOf(data, response.statusText));
+  }
+  return data as T;
+}
+
+/** The API's reason, in words: FastAPI sends a string, or a list of problems. */
+export function detailOf(data: unknown, fallback: string): string {
+  if (!data || typeof data !== 'object' || !('detail' in data)) return fallback;
+  const detail = (data as { detail: unknown }).detail;
+  if (Array.isArray(detail)) {
+    const first = detail[0] as { msg?: unknown; loc?: unknown[] } | undefined;
+    if (first?.msg) return `${String(first.msg)}${first.loc ? ` (${first.loc.slice(1).join('.')})` : ''}`;
+  }
+  return typeof detail === 'string' ? detail : JSON.stringify(detail);
+}
+
+export const api = {
+  get: <T>(path: string) => call<T>('GET', path),
+  post: <T>(path: string, body?: unknown) => call<T>('POST', path, body ?? {}),
+  put: <T>(path: string, body?: unknown) => call<T>('PUT', path, body ?? {}),
+};
+
+/** Send a file as the raw request body (a document upload). */
+export async function upload<T>(path: string, file: File): Promise<T> {
+  const response = await fetch(`/api/p/${path.replace(/^\//, '')}`, {
+    method: 'POST',
+    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    body: file,
+    cache: 'no-store',
+  });
+  const text = await response.text();
+  const data: unknown = text ? JSON.parse(text) : null;
+  if (!response.ok) {
     const detail =
       data && typeof data === 'object' && 'detail' in data
         ? String((data as { detail: unknown }).detail)
@@ -32,11 +65,6 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   }
   return data as T;
 }
-
-export const api = {
-  get: <T>(path: string) => call<T>('GET', path),
-  post: <T>(path: string, body?: unknown) => call<T>('POST', path, body ?? {}),
-};
 
 /**
  * POST and read a server-sent event stream (the chat, ADR 037): `onEvent` is

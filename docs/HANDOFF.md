@@ -1,6 +1,6 @@
 # Handoff: where Pantheon stands and what to do next
 
-Refreshed 2026-09-26 (PRs up to #34 merged, all live). Read this after
+Refreshed 2026-10-10 (PRs up to #58 merged, all live). Read this after
 `CLAUDE.md`, then `docs/BUILD_PLAN.md` (Step 8 onward), `docs/glossary.md` and
 `docs/business/the-unreal-lab.md`. This file records what the repo cannot:
 what is deployed, what was applied to live services, and how the owner works.
@@ -115,7 +115,7 @@ apply from scratch on plain Postgres (guard anything needing `pg_cron`,
 - `api/scripts/` the owner's CLIs (`department`, `draft`, `brain`,
   `approvals`, `order`, `judge`, `mailing`, `knowledge`, `mcp`, `agent`).
 - `supabase/migrations/` versioned SQL, RLS on every table. `docs/adr/` 0001
-  to 0035.
+  to 0039. `api/app/control.py` and `web/components/control/` the Control Center.
 
 ## What to do next
 
@@ -192,6 +192,16 @@ apply from scratch on plain Postgres (guard anything needing `pg_cron`,
    alone. Charters research v14 and marketing v5 (owner's go, 2026-10-05):
    the leads end with a "Team notes:" line and mark caveats "[Unverified:
    ...]", which the chat shows as hover bubbles (#57). Next: Step 11.
+3f. **Step 11, the Control Center (2026-10-10, owner's full go).** ADR 039.
+   A `Control Center` tab with thirteen screens (departments, agents, prompts,
+   morning routine, knowledge, models and spend, tools and MCP, autonomy and
+   limits, judge, standing rules, newsletter and email, tasks, change log),
+   over one router `api/app/control.py`. Anything a charter owns is changed
+   by a new charter version plus apply, with a rolled-back preview first.
+   Migration `20261010100000_control_center.sql` (department audit events,
+   fact status `retired`). Still by script: Jev's question wording
+   (`scripts.judge`). Open for the owner: try each section from the browser
+   and report what feels wrong.
 4. After five unattended mornings: the Step 8.1 Milestone report. Stop.
 
 ## Switching on Step 9 (done 2026-09-27; kept for reference)

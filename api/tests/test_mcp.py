@@ -636,6 +636,7 @@ def test_a_withheld_reply_keeps_its_ids_and_trusted_links(
 
     assert result.output["screened"] == "quarantined" and "text" not in result.output
     assert result.output["ids"] == [JOB]
+    assert next(iter(result.output)) == "call", "read first: the call itself succeeded"
     assert result.output["media"] == [
         f"https://cdn.images.example/u/hf_{JOB}.png",
         f"https://cdn.images.example/u/hf_{JOB}_min.webp",

@@ -341,12 +341,24 @@ def call(ctx: Any, config: dict[str, Any], payload: dict[str, Any]) -> dict[str,
     )
     admitted = screening.admitted_text()
     if admitted is None:
-        withheld = {"screened": screening.label, "reasons": list(screening.reasons)}
         if "ids" in output or "media" in output:
-            withheld["note"] = (
-                "The text was withheld; only ids and links on hosts the owner trusts were kept"
+            # Read first, so the agent does not take the screen's verdict on
+            # the service's words for a failure of its request (2026-10-10).
+            return (
+                {
+                    "call": "succeeded",
+                    "note": (
+                        "The tool ran and your request went through. Only the service's reply "
+                        "text was withheld (it addressed an AI). Use the ids below: a job id "
+                        "means the work is still running, so wait on it with the service's "
+                        "wait or status tool to get the result. Links below are on hosts the "
+                        "owner trusts."
+                    ),
+                }
+                | output
+                | {"screened": screening.label}
             )
-        return output | withheld
+        return output | {"screened": screening.label, "reasons": list(screening.reasons)}
     return output | {"screened": "clean", "text": admitted}
 
 

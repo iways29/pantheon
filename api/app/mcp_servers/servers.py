@@ -7,8 +7,10 @@ check the runtime makes for any tool.
 """
 
 import json
+import re
 from dataclasses import dataclass, field
 from typing import Any, Literal
+from urllib.parse import urlsplit
 from uuid import UUID
 
 import psycopg
@@ -97,7 +99,7 @@ def list_servers(connection: psycopg.Connection, *, user_id: UUID | str) -> list
             dict(r)
             for r in conn.execute(
                 "select s.id, s.name, s.url, s.auth, s.status, s.last_error, s.enabled, "
-                "s.last_listed_at, count(t.id) as tools, "
+                "s.last_listed_at, s.media_hosts, count(t.id) as tools, "
                 "count(t.id) filter (where t.enabled) as tools_on "
                 "from public.mcp_servers s left join public.tools t on t.mcp_server_id = s.id "
                 "group by s.id order by s.name"
@@ -256,6 +258,29 @@ def approve_tool(
         return dict(cursor.fetchone())
 
 
+HOST = re.compile(r"^(?=.{4,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
+
+
+def set_media_hosts(
+    connection: psycopg.Connection, *, user_id: UUID | str, name: str, hosts: list[str]
+) -> list[str]:
+    """The hosts whose links in this server's replies reach the owner even
+    when the text is withheld (ADR 040). Audited by the table's trigger."""
+    clean = sorted({h.strip().lower() for h in hosts if h.strip()})
+    bad = [h for h in clean if not HOST.match(h)]
+    if bad:
+        raise McpError(f"Not a host name: {', '.join(bad)}")
+    if len(clean) > 10:
+        raise McpError("At most 10 hosts")
+    with acting_as(connection, user_id=str(user_id)) as conn:
+        cursor = conn.execute(
+            "update public.mcp_servers set media_hosts = %s where name = %s", (clean, name)
+        )
+        if cursor.rowcount == 0:
+            raise McpNotFound(f"No MCP server {name!r}")
+    return clean
+
+
 def switch_off(connection: psycopg.Connection, *, user_id: UUID | str, name: str) -> None:
     with acting_as(connection, user_id=str(user_id)) as conn:
         cursor = conn.execute(
@@ -295,6 +320,7 @@ def call(ctx: Any, config: dict[str, Any], payload: dict[str, Any]) -> dict[str,
         output["images"] = result.images
     if result.links:
         output["links"] = result.links
+    output |= kept(text, result.structured, result.links, server.get("media_hosts") or [])
     if not text:
         return output | {"screened": "clean"}
     if ctx.judge is None:
@@ -315,8 +341,46 @@ def call(ctx: Any, config: dict[str, Any], payload: dict[str, Any]) -> dict[str,
     )
     admitted = screening.admitted_text()
     if admitted is None:
-        return output | {"screened": screening.label, "reasons": list(screening.reasons)}
+        withheld = {"screened": screening.label, "reasons": list(screening.reasons)}
+        if "ids" in output or "media" in output:
+            withheld["note"] = (
+                "The text was withheld; only ids and links on hosts the owner trusts were kept"
+            )
+        return output | withheld
     return output | {"screened": "clean", "text": admitted}
+
+
+UUID_RE = re.compile(r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", re.I)
+URL_RE = re.compile(r"https://[^\s\"'<>\\)\]`]+")
+
+
+def kept(
+    text: str,
+    structured: Any,  # noqa: ANN401 - whatever the server sent
+    links: list[dict[str, Any]],
+    hosts: list[str],
+) -> dict[str, list[str]]:
+    """What may pass whatever the screen says of the text (ADR 040): ids, which
+    are not words, and https links on hosts the owner trusts for this server
+    (an image service's results). Twenty of each at most."""
+    blob = text
+    if structured is not None:
+        blob += "\n" + json.dumps(structured, ensure_ascii=False, default=str)
+    ids = list(dict.fromkeys(m.lower() for m in UUID_RE.findall(blob)))[:20]
+    trusted = {h.lower() for h in hosts}
+    candidates = [u.rstrip(".,;:!?") for u in URL_RE.findall(blob)]
+    candidates += [str(link.get("uri") or "") for link in links]
+    media = [
+        u
+        for u in dict.fromkeys(candidates)
+        if u.startswith("https://") and (urlsplit(u).hostname or "").lower() in trusted
+    ][:20]
+    found: dict[str, list[str]] = {}
+    if ids:
+        found["ids"] = ids
+    if media:
+        found["media"] = media
+    return found
 
 
 def _status(

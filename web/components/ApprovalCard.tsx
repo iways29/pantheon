@@ -67,6 +67,8 @@ export function ApprovalCard({ approval, onClose }: { approval: Approval; onClos
     try {
       if (preview) throw new Error('The preview does not decide.');
       await api.post(`approvals/${approval.id}/${path}`, payload);
+      // The chat's card for this work shows the decision at once.
+      window.dispatchEvent(new Event('pantheon:decided'));
       await refresh();
       onClose();
     } catch (err) {

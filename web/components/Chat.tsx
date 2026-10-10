@@ -24,6 +24,9 @@ const THREAD_EVENTS = new Set([
   'killed',
 ]);
 
+/** An order in one of these is not looked at again on a timer. */
+const FINISHED = new Set(['done', 'failed', 'cancelled']);
+
 function title(talker: Talker): string {
   return talker.role === 'chief_of_staff'
     ? 'Chief of Staff'
@@ -135,6 +138,27 @@ export function Chat({ mode = 'open', onMode }: { mode?: PanelMode; onMode?: (mo
       if (THREAD_EVENTS.has(event.type)) void load();
     });
   }, [load, onEvent]);
+
+  // The live stream can miss an event (a dropped socket, a sleeping tab):
+  // while a card is still working, look again every few seconds, and on
+  // coming back to the tab (2026-10-10: a finished order showed only after
+  // the chat was opened again).
+  const working = (thread ?? []).some((m) => m.order && !FINISHED.has(m.order.status));
+  useEffect(() => {
+    if (preview) return;
+    const onBack = () => {
+      if (document.visibilityState === 'visible') void load();
+    };
+    document.addEventListener('visibilitychange', onBack);
+    // A decision made in Needs you shows on its card at once.
+    window.addEventListener('pantheon:decided', onBack);
+    const timer = working ? setInterval(() => void load(), 8000) : null;
+    return () => {
+      document.removeEventListener('visibilitychange', onBack);
+      window.removeEventListener('pantheon:decided', onBack);
+      if (timer) clearInterval(timer);
+    };
+  }, [working, load, preview]);
 
   const count = (thread?.length ?? 0) + (waiting ? 2 : 0);
   useEffect(() => {

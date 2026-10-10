@@ -591,6 +591,8 @@ def _check_draft(ctx: ToolContext, args: CheckDraftArgs) -> dict[str, Any]:
         output["for_the_owner"] = result.flags
     if result.status == "ready":
         output["next"] = "It waits for the owner's approval."
+    if result.status == "duplicate":
+        output["next"] = "The same text already waits for the owner's approval; nothing more to do."
     return output
 
 

@@ -166,6 +166,11 @@ def check(
         raise ValueError(f"No draft {draft_id}")
     if draft["status"] not in ("draft", "blocked"):
         return CheckResult(draft["id"], draft["status"], [], [], approval_id=draft["approval_id"])
+    waiting = _same_card(cursor, draft)
+    if waiting is not None:
+        # The same text already waits for the owner: one card, not two
+        # (2026-10-10: an editor's two branches ended on identical text).
+        return CheckResult(draft["id"], "duplicate", [], [], approval_id=waiting)
     text = f"{draft['title']}\n\n{draft['body']}"
     blocking: list[dict[str, Any]] = []
     flags: list[dict[str, Any]] = []
@@ -273,6 +278,22 @@ def check(
         (json.dumps(checks), str(approval_id), str(draft["id"])),
     )
     return CheckResult(draft["id"], "ready", [], flags, score, approval_id)
+
+
+def _same_card(cursor: psycopg.Cursor, draft: dict[str, Any]) -> UUID | None:
+    """A card already waiting for the owner with exactly this title and text."""
+    cursor.execute(
+        """
+        select id from public.approvals
+         where org_id = %s and action_type = 'draft_review' and status = 'pending'
+           and payload ->> 'channel' = %s and payload ->> 'title' = %s
+           and payload ->> 'body' = %s
+         order by created_at limit 1
+        """,
+        (str(draft["org_id"]), draft["channel"], draft["title"], draft["body"]),
+    )
+    row = cursor.fetchone()
+    return row["id"] if row else None
 
 
 def _relied_on(cursor: psycopg.Cursor, draft_id: UUID) -> dict[str, str]:

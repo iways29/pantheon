@@ -469,30 +469,43 @@ def activate_prompt(
 class AgentSettings(BaseModel):
     tier: Literal["cheap", "standard", "frontier"] | None = None
     daily_budget_usd: Decimal | None = Field(default=None, ge=0, le=100)
+    #: The whole list of tools the agent may use.
+    tools: list[str] | None = Field(default=None, max_length=100)
 
 
 @router.post("/agents/{name}/settings")
 def agent_settings(
     name: str, body: AgentSettings, principal: OwnerPrincipal, connection: Connection
 ) -> dict[str, Any]:
-    """An agent's tier and budget; through its charter when it has one."""
+    """An agent's tier, budget and tools; through its charter when it has one,
+    so applying the charter later keeps them."""
     org_id = owner_org(connection, principal.user_id)
     fields = body.model_dump(exclude_none=True)
     if not fields:
         raise _bad("Nothing to change")
+    if "tools" in fields:
+        fields["tools"] = sorted(set(fields["tools"]))
     with acting_as(connection, user_id=principal.user_id) as conn, conn.cursor() as cursor:
         _agent_row(cursor, name)
+        if "tools" in fields:
+            cursor.execute("select name from public.tools where name = any(%s)", (fields["tools"],))
+            unknown = set(fields["tools"]) - {r["name"] for r in cursor.fetchall()}
+            if unknown:
+                raise _bad(f"No such tools: {', '.join(sorted(unknown))}", 422)
         found = _charter_of(cursor, name)
+    plan_fields: dict[str, Any] = {}
+    if "tier" in fields:
+        plan_fields["tier"] = fields["tier"]
+    if "daily_budget_usd" in fields:
+        plan_fields["daily_budget_usd"] = str(fields["daily_budget_usd"])
+    if "tools" in fields:
+        plan_fields["allowed_tools"] = fields["tools"]
+    said = ", ".join(f"{k} {', '.join(v) if isinstance(v, list) else v}" for k, v in fields.items())
     if found is not None:
-        plan_fields = {"tier": fields.get("tier")}
-        if "daily_budget_usd" in fields:
-            plan_fields["daily_budget_usd"] = str(fields["daily_budget_usd"])
 
         def change(c: dict[str, Any]) -> dict[str, Any]:
             def fix(p: dict[str, Any]) -> dict[str, Any]:
-                if p["name"] != name:
-                    return p
-                return {**p, **{k: v for k, v in plan_fields.items() if v is not None}}
+                return {**p, **plan_fields} if p["name"] == name else p
 
             return {
                 **c,
@@ -506,9 +519,13 @@ def agent_settings(
             org_id,
             found[0],
             change,
-            f"{name}: {', '.join(f'{k} {v}' for k, v in fields.items())} (Control Center)",
+            f"{name}: {said} (Control Center)"[:300],
         )
-    columns = {"model_tier": fields.get("tier"), "daily_budget_usd": fields.get("daily_budget_usd")}
+    columns = {
+        "model_tier": fields.get("tier"),
+        "daily_budget_usd": fields.get("daily_budget_usd"),
+        "allowed_tools": fields.get("tools"),
+    }
     columns = {k: v for k, v in columns.items() if v is not None}
     with acting_as(connection, user_id=principal.user_id) as conn:
         conn.execute(
@@ -516,7 +533,7 @@ def agent_settings(
             "where org_id = %s and name = %s",
             (*columns.values(), org_id, name),
         )
-    return {"agent": name, **{k: str(v) for k, v in fields.items()}}
+    return {"agent": name, "changed": sorted(fields)}
 
 
 # --- The morning routine ---------------------------------------------------------
@@ -658,6 +675,58 @@ def edit_routine(
             (*columns.values(), str(routine_id)),
         )
     return {"routine": str(routine_id), "changed": sorted(fields)}
+
+
+class NewRoutine(BaseModel):
+    department: str
+    agent: str
+    title: str = Field(min_length=3, max_length=200)
+    instructions: str = Field(default="", max_length=8000)
+    input: dict[str, Any] = Field(default_factory=dict)
+    time: str = "07:00"
+    days: list[int] = Field(default_factory=lambda: [1, 2, 3, 4, 5])
+    timezone: str = "America/New_York"
+
+
+@router.post("/routines", status_code=status.HTTP_201_CREATED)
+def add_routine(body: NewRoutine, principal: OwnerPrincipal, connection: Connection) -> dict:
+    """A new routine, written into its department's charter and applied. It
+    starts switched off, like everything new."""
+    import re
+
+    org_id = owner_org(connection, principal.user_id)
+    key = re.sub(r"[^a-z0-9]+", "-", body.title.lower()).strip("-")[:50] or "routine"
+    if not key[0].isalpha():
+        key = f"r-{key}"
+
+    def change(c: dict[str, Any]) -> dict[str, Any]:
+        names = {c["head"]["name"], *(w["name"] for w in c.get("workers", []))}
+        if body.agent not in names:
+            raise _bad(f"{body.agent!r} is not in the {body.department} charter", 422)
+        taken = {r["key"] for r in c.get("routine", [])}
+        final, n = key, 2
+        while final in taken:
+            final, n = f"{key}-{n}", n + 1
+        item = {
+            "key": final,
+            "agent": body.agent,
+            "title": body.title,
+            "instructions": body.instructions,
+            "input": body.input,
+            "time": body.time,
+            "days": body.days,
+            "timezone": body.timezone,
+        }
+        return {**c, "routine": [*c.get("routine", []), item]}
+
+    return _charter_patch(
+        connection,
+        principal.user_id,
+        org_id,
+        body.department,
+        change,
+        f"New routine: {body.title} (Control Center)",
+    )
 
 
 class SwitchBody(BaseModel):
@@ -893,7 +962,7 @@ def tools(principal: OwnerPrincipal, connection: Connection) -> list[dict[str, A
             select t.name, t.description, t.risk_class, t.approval, t.enabled,
                    t.timeout_seconds, t.max_output_chars, t.max_calls_per_day, t.settings,
                    t.source, t.suggested_risk, s.name as server,
-                   t.approved_sha is distinct from t.definition_sha as changed,
+                   (t.approved_sha is not null and t.approved_sha <> t.definition_sha) as changed,
                    (select count(*) from public.tool_calls c where c.tool = t.name
                      and c.created_at >= now() - interval '1 day') as calls_today,
                    (select array_agg(a.name order by a.name) from public.agents a
@@ -1308,7 +1377,7 @@ def agent_reads(name: str, principal: OwnerPrincipal, connection: Connection) ->
         conn.cursor() as cursor,
     ):
         cursor.execute(
-            "select d.title, d.scope from public.documents d where d.status = 'ready' "
+            "select d.title, d.scope from public.documents d where d.status = 'clean' "
             "order by d.scope, d.title"
         )
         docs = [dict(r) for r in cursor.fetchall()]

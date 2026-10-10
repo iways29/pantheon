@@ -249,3 +249,42 @@ def test_a_gate_change_is_a_new_version(cc: TestClient) -> None:
     assert versions[0]["enabled"] is False and versions[0]["active"]
     back = cc.post(f"/control/judge/{gate}/activate", json={"version": versions[1]["version"]})
     assert back.status_code == 200
+
+
+def test_an_agents_tools_and_tier_change_through_its_charter(cc: TestClient) -> None:
+    done = cc.post(
+        "/control/agents/web-researcher/settings",
+        json={"tier": "standard", "tools": ["brain_search", "report_result"]},
+    )
+    assert done.status_code == 200, done.text
+    charter = cc.get("/departments/research/charter").json()["charter"]
+    (worker,) = [w for w in charter["workers"] if w["name"] == "web-researcher"]
+    assert worker["tier"] == "standard"
+    assert worker["allowed_tools"] == ["brain_search", "report_result"]
+    (agent,) = [a for a in cc.get("/control/agents").json() if a["name"] == "web-researcher"]
+    assert agent["tier"] == "standard" and agent["tools"] == ["brain_search", "report_result"]
+    bad = cc.post("/control/agents/web-researcher/settings", json={"tools": ["no_such_tool"]})
+    assert bad.status_code == 422
+
+
+def test_a_new_routine_goes_into_the_charter_switched_off(cc: TestClient) -> None:
+    made = cc.post(
+        "/control/routines",
+        json={
+            "department": "research",
+            "agent": "research-lead",
+            "title": "Friday wrap-up",
+            "instructions": "Sum up the week.",
+            "time": "16:30",
+            "days": [5],
+        },
+    )
+    assert made.status_code == 201, made.text
+    (routine,) = [r for r in cc.get("/control/routines").json() if r["name"] == "Friday wrap-up"]
+    assert routine["key"] == "research:friday-wrap-up" and routine["enabled"] is False
+    assert routine["time"] == "16:30" and routine["days"] == [5]
+    wrong = cc.post(
+        "/control/routines",
+        json={"department": "research", "agent": "chief-of-staff", "title": "Nope routine"},
+    )
+    assert wrong.status_code == 422

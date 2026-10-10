@@ -24,7 +24,7 @@ from app.agents.runs import Runtime, advance_run
 from app.approvals import decide
 from app.brain import Brain, HashingEmbedder
 from app.content import check, save
-from app.content.drafts import sentences
+from app.content.drafts import published_text, sentences
 from app.db import acting_as, as_service_role, connect
 from app.departments.apply import apply_charter, enable
 from app.departments.charter import publish
@@ -143,6 +143,22 @@ def draft_row(desk: Desk, draft_id: UUID) -> dict[str, Any]:
 def test_sentences_drop_markup_and_short_fragments() -> None:
     body = "# Heading\n\nOne fort at a time. Mumba has 3 branches!\n- A list item here\nOk."
     assert sentences(body) == ["One fort at a time.", "Mumba has 3 branches!", "A list item here"]
+
+
+def test_how_a_piece_should_look_is_not_fact_checked() -> None:
+    """2026-10-10: "Square 1080 x 1080" in the visual direction blocked an
+    Instagram draft as an unsupported claim."""
+    body = (
+        "IMAGE COPY\n\nA codebase is a field of connections.\n\n"
+        "VISUAL DIRECTION\n\nSquare 1080 x 1080. Warm off-white field with three nodes.\n\n"
+        "Caption:\nASHVAA analyses and visualises GitHub repositories.\n\n"
+        "## Next step\nProduce one feed image from this brief today."
+    )
+    assert sentences(published_text(body)) == [
+        "A codebase is a field of connections.",
+        "ASHVAA analyses and visualises GitHub repositories.",
+    ]
+    assert "Square 1080 x 1080." in sentences(published_text(body, skip="")), "a setting"
 
 
 # --- Saving ----------------------------------------------------------------------------

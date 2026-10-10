@@ -147,6 +147,32 @@ def sentences(body: str) -> list[str]:
     return found
 
 
+#: Sections that tell the maker how the piece should look, not what it says:
+#: not fact-checked (a "Square 1080 x 1080" line was blocked as unsupported,
+#: 2026-10-10). The `draft_claim` gate's `skip_sections` setting overrides it.
+SKIP_SECTIONS = "visual direction, art direction, image direction, design notes, next step"
+_HEADING = re.compile(r"^\s*#*\s*\**([A-Za-z][A-Za-z &/\-—]{1,40}?)\**\s*:?\s*$")
+
+
+def published_text(body: str, skip: str = SKIP_SECTIONS) -> str:
+    """The draft without the sections that only direct how it looks. A
+    heading is a short line on its own: in capitals, `# like this` or
+    ending in a colon."""
+    skipped = {s.strip().lower() for s in skip.split(",") if s.strip()}
+    kept: list[str] = []
+    skipping = False
+    for line in body.splitlines():
+        match = _HEADING.match(line)
+        is_heading = match is not None and (
+            line.strip().startswith("#") or line.strip().endswith(":") or match.group(1).isupper()
+        )
+        if is_heading:
+            skipping = match.group(1).strip().lower() in skipped
+        if not skipping:
+            kept.append(line)
+    return "\n".join(kept)
+
+
 def check(
     cursor: psycopg.Cursor,
     *,
@@ -201,7 +227,8 @@ def check(
     per_sentence = int(settings.setting("facts_per_sentence", 5))
     max_distance = settings.setting("max_distance", 0.9)
     limit = int(settings.setting("max_sentences", 80))
-    found = sentences(draft["body"])
+    skip = settings.text_setting("skip_sections", SKIP_SECTIONS) or ""
+    found = sentences(published_text(draft["body"], skip))
     if len(found) > limit:
         flags.append(
             {

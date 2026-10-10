@@ -180,6 +180,8 @@ export interface OrderCard {
   waiting?: { approval_id: string; kind: string; title: string }[];
   /** What the work made, in full (drafts anywhere in the order). */
   pieces?: OrderPiece[];
+  /** Images the work's tools made, from hosts the owner trusts (ADR 040). */
+  media?: { url: string; thumb: string }[];
   cost_usd: number;
 }
 

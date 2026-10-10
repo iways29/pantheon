@@ -12,7 +12,7 @@ from uuid import UUID
 
 import psycopg
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.agents.admin import (
     AgentAdminError,
@@ -946,6 +946,26 @@ def refresh_mcp_server(
         return refresh(connection, user_id=principal.user_id, name=name, gateway=gateway).summary()
     except (McpError, McpAuthError) as error:
         raise _mcp_refuse(error) from error
+
+
+class MediaHostsRequest(BaseModel):
+    hosts: list[str] = Field(max_length=10)
+
+
+@router.put("/mcp/servers/{name}/media-hosts")
+def put_mcp_media_hosts(
+    name: str, body: MediaHostsRequest, principal: OwnerPrincipal, connection: Connection
+) -> dict[str, Any]:
+    """Hosts whose links in this server's replies reach the owner even when
+    the text is withheld (ADR 040)."""
+    from app.mcp_servers.servers import McpError, set_media_hosts
+
+    owner_org(connection, principal.user_id)
+    try:
+        hosts = set_media_hosts(connection, user_id=principal.user_id, name=name, hosts=body.hosts)
+    except McpError as error:
+        raise _mcp_refuse(error) from error
+    return {"name": name, "media_hosts": hosts}
 
 
 @router.get("/mcp/tools")

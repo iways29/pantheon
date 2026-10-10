@@ -544,6 +544,15 @@ function Card({
         </div>
       ) : null}
       {order.pieces?.map((piece) => <Piece key={piece.id} piece={piece} />)}
+      {order.media?.length ? (
+        <div className="order-media">
+          {order.media.map((m) => (
+            <a key={m.url} href={m.url} target="_blank" rel="noopener noreferrer" title="Open full size">
+              <img src={m.thumb} alt="An image the work made" loading="lazy" referrerPolicy="no-referrer" />
+            </a>
+          ))}
+        </div>
+      ) : null}
       {order.status === 'done' && order.result && !order.waiting?.length ? (
         <Summary text={order.result} />
       ) : null}

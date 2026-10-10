@@ -374,3 +374,35 @@ def test_another_org_sees_nothing(
         e["type"] not in ("order_routed", "tool_called")
         for e in other.get("/screen/events", params={"since": "2000-01-01T00:00:00Z"}).json()
     )
+
+
+def test_an_order_shows_the_images_its_tools_made(
+    db: psycopg.Connection, tenants: Tenants, api: Any, world: World
+) -> None:
+    """ADR 040: the trusted links kept from a tool's reply are the order's
+    images; a `_min` copy is the thumbnail, and other files are left out."""
+    cdn = "https://cdn.example/u/hf_1"
+    with as_service_role(db) as conn, conn.cursor() as cursor:
+        cursor.execute(
+            "select id, agent_id from public.runs where task_id = %s", (str(world.worker_task),)
+        )
+        run = cursor.fetchone()
+        for i, media in enumerate(
+            [[f"{cdn}.png", f"{cdn}_min.webp"], [f"{cdn}.png", "https://cdn.example/u/clip.mp4"]]
+        ):
+            cursor.execute(
+                "insert into public.tool_calls (org_id, agent_id, run_id, tool, idempotency_key, "
+                "arguments, status, result) values (%s, %s, %s, 'mcp_studio_jobs_wait', %s, "
+                "'{}', 'ok', %s)",
+                (
+                    str(tenants.org_a),
+                    str(run["agent_id"]),
+                    str(run["id"]),
+                    f"media-{i}",
+                    psycopg.types.json.Jsonb({"screened": "quarantined", "media": media}),
+                ),
+            )
+
+    (order,) = api().get("/orders").json()
+
+    assert order["media"] == [{"url": f"{cdn}.png", "thumb": f"{cdn}_min.webp"}]

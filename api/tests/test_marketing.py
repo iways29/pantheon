@@ -608,3 +608,20 @@ def drive(dsn: str, rt: Runtime) -> int:
         rounds += 1
         assert rounds < 10
     return rounds
+
+
+def test_the_same_text_twice_waits_on_one_card(desk: Desk) -> None:
+    """2026-10-10: an editor's two branches ended on identical text, and the
+    owner was asked twice. The second copy points at the waiting card."""
+    jev = ScriptedJev(respond=claims_from({"Mumba.ai": "supported"}), scores=GOOD_VOICE)
+    first = write(desk, f"{MUMBA} Think in branches.", facts=[desk.public_fact], key="a")
+    ready = run_checks(desk, first.draft_id, jev)
+    second = write(desk, f"{MUMBA} Think in branches.", facts=[desk.public_fact], key="b")
+    assert second.draft_id != first.draft_id
+
+    again = run_checks(desk, second.draft_id, jev)
+
+    assert again.status == "duplicate" and again.approval_id == ready.approval_id
+    cards = rows(desk.db, "select id from public.approvals where action_type = 'draft_review'")
+    assert len(cards) == 1
+    assert draft_row(desk, second.draft_id)["status"] == "draft"

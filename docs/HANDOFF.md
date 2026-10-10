@@ -84,7 +84,7 @@ an AI).
 | --- | --- |
 | GitHub | `iways29/pantheon` |
 | Supabase project | `epelwbiehczkkgqtgkqt` (us-west-2), reachable through the Supabase MCP |
-| Migrations applied live | all of `supabase/migrations/` through `20261005100000_request_links.sql` (applied 2026-10-05, each before its PR merged) |
+| Migrations applied live | all of `supabase/migrations/` through `20261010120000_mcp_media_hosts.sql` (each applied before its PR merged) |
 | Vercel team | `team_6UC1DSN83JcGLrVJC3P8aXE6` |
 | API project | `pantheon-api` (`prj_XHno72KOypj7fapEIXze9XtZZJMR`), `https://api-xi-opal-67.vercel.app`, deploys from `main` |
 | Web project | `pantheon-web` (`prj_XdV67seWTQSsmSDvBUH2NIg9AZNX`) |
@@ -115,7 +115,7 @@ apply from scratch on plain Postgres (guard anything needing `pg_cron`,
 - `api/scripts/` the owner's CLIs (`department`, `draft`, `brain`,
   `approvals`, `order`, `judge`, `mailing`, `knowledge`, `mcp`, `agent`).
 - `supabase/migrations/` versioned SQL, RLS on every table. `docs/adr/` 0001
-  to 0039. `api/app/control.py` and `web/components/control/` the Control Center.
+  to 0040. `api/app/control.py` and `web/components/control/` the Control Center.
 
 ## What to do next
 
@@ -202,6 +202,12 @@ apply from scratch on plain Postgres (guard anything needing `pg_cron`,
    fact status `retired`). Still by script: Jev's question wording
    (`scripts.judge`). Open for the owner: try each section from the browser
    and report what feels wrong.
+   Follow-up (ADR 040): MCP replies keep their ids and links on hosts the
+   owner trusts (`mcp_servers.media_hosts`) even when the words are
+   quarantined; the chat's order card shows the images. Higgsfield's host is
+   `d8j0ntlcm91z4.cloudfront.net`. Owner to do: set `PUBLIC_API_URL` on
+   `pantheon-api` (Production) to `https://api-xi-opal-67.vercel.app` so
+   MCP sign-in can return.
 4. After five unattended mornings: the Step 8.1 Milestone report. Stop.
 
 ## Switching on Step 9 (done 2026-09-27; kept for reference)

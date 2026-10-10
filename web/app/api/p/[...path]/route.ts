@@ -30,7 +30,8 @@ async function relay(request: NextRequest, path: string[]): Promise<NextResponse
     cache: 'no-store',
   };
   if (request.method !== 'GET' && request.method !== 'HEAD') {
-    init.body = await request.text();
+    // Bytes, not text: a document upload is the raw file.
+    init.body = await request.arrayBuffer();
   }
 
   try {

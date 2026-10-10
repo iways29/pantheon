@@ -1350,7 +1350,9 @@ MEMORY_TRIAGE = StarterGate(
             criteria={
                 "preference": (
                     "How the owner wants to be treated or wants things done, lasting beyond "
-                    "this one request, e.g. 'call me boss', 'keep emails under five lines'."
+                    "this one request, e.g. 'call me boss', 'keep emails under five lines'. "
+                    "Not how to do the request at hand ('do this one yourself', 'make it "
+                    "fast'): that is forget."
                 ),
                 "rule": (
                     "A decision or standing rule, e.g. 'no paid tools this quarter', 'never "
@@ -1370,7 +1372,8 @@ MEMORY_TRIAGE = StarterGate(
                 ),
                 "forget": (
                     "Nothing worth remembering beyond this moment: thanks, 'run it again', "
-                    "'ok', a one-off command with no lasting meaning."
+                    "'ok', a one-off command with no lasting meaning, or how to handle the "
+                    "request at hand ('don't involve the team for this one', 'quickly')."
                 ),
             },
         ),
@@ -1389,6 +1392,9 @@ MEMORY_TRIAGE = StarterGate(
             # Below this probability for its best kind, it is kept as `interest`:
             # the owner's words are never lost to an unsure sort.
             "min_probability": 0.5,
+            # A preference or a rule steers every agent from then on: below this
+            # it is kept as an interest instead.
+            "min_probability_lasting": 0.8,
             # How many active preferences every agent reads.
             "max_preferences": 20,
         },

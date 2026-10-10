@@ -286,3 +286,33 @@ def test_what_is_remembered_is_the_owners_choice() -> None:
             raise AssertionError("nothing should be read")
 
     assert memory.moments(Nothing(), org_id=uuid.uuid4(), since=None, policy=quiet) == []  # type: ignore[arg-type]
+
+
+def test_a_preference_needs_a_higher_bar_than_an_interest() -> None:
+    """2026-10-10: "don't trouble any agents" for one image, sorted as a
+    preference at 0.60, blocked every order after it. A preference or a rule
+    steers every agent, so below `min_probability_lasting` it is an interest."""
+    from types import SimpleNamespace
+
+    from app.brain.memory import Moment, _sort
+    from tests.scripted_jev import choice
+
+    kinds = ["preference", "rule", "interest", "fact", "style", "forget"]
+
+    def judged(kind: str, p: float) -> Any:
+        decision = SimpleNamespace(
+            failed=False, outcome="keep", answers={"kind": choice(kind, kinds, p)}
+        )
+        return SimpleNamespace(run=lambda *a, **k: decision)
+
+    moment = Moment("chat:1", "said", said="don't trouble any agents, do it yourself")
+
+    def sort(kind: str, p: float) -> str | None:
+        return _sort(
+            judged(kind, p), moment, agent_id=uuid.uuid4(), run_id=None, minimum=0.5, lasting=0.8
+        )
+
+    assert sort("preference", 0.6) == "interest"
+    assert sort("rule", 0.79) == "interest"
+    assert sort("preference", 0.9) == "preference"
+    assert sort("fact", 0.6) == "fact", "other kinds keep the ordinary bar"

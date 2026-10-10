@@ -36,6 +36,8 @@ from app.judge.store import load_gate
 #: At most this many moments at a time: a guard, not a quota.
 MAX_MOMENTS = 30
 TRIAGE_GATE = "memory_triage"
+#: Kinds every agent follows from then on: they need `min_probability_lasting`.
+LASTING = ("preference", "rule")
 #: How each kind reads as a statement from the owner.
 LABELS = {
     "preference": "The owner's preference (from {day}): {said}",
@@ -154,10 +156,13 @@ def remember(
     """Keep each moment, sorted where it can be. Returns outcomes counted."""
     counted: dict[str, int] = {}
     minimum = _setting(connection, org_id, "min_probability", 0.5)
+    lasting = _setting(connection, org_id, "min_probability_lasting", 0.8)
     for moment in found:
         kind, statement = "fact", moment.statement
         if moment.said and judge is not None:
-            sorted_as = _sort(judge, moment, agent_id=agent_id, run_id=run_id, minimum=minimum)
+            sorted_as = _sort(
+                judge, moment, agent_id=agent_id, run_id=run_id, minimum=minimum, lasting=lasting
+            )
             if sorted_as == "forget":
                 counted["forgotten"] = counted.get("forgotten", 0) + 1
                 continue
@@ -212,6 +217,7 @@ def _sort(
     agent_id: UUID,
     run_id: UUID | None,
     minimum: float,
+    lasting: float = 0.8,
 ) -> str | None:
     """The kind Jev sorts the owner's words into, or None when it cannot."""
     try:
@@ -229,7 +235,13 @@ def _sort(
     if decision.outcome == "forget":
         return "forget"
     answer = decision.answers["kind"]
-    if answer.probabilities.get(answer.choice, 0.0) < minimum or answer.choice not in LABELS:
+    sure = answer.probabilities.get(answer.choice, 0.0)
+    if answer.choice in LASTING:
+        # A preference or rule steers every agent from then on, so it needs a
+        # higher bar (2026-10-10: "don't trouble any agents" for one image, at
+        # 0.60, blocked every order after it).
+        minimum = max(minimum, lasting)
+    if sure < minimum or answer.choice not in LABELS:
         # Unsure: kept as an interest, so the owner's words are never lost.
         return "interest"
     return answer.choice

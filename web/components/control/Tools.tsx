@@ -51,6 +51,7 @@ interface Server {
   last_error: string | null;
   tools: number;
   tools_on: number;
+  media_hosts: string[];
 }
 
 interface McpTool {
@@ -342,6 +343,134 @@ function ToolCard({
   );
 }
 
+/** One server: sign in, list its tools again, and the hosts whose links
+ * reach you even when its words are withheld (ADR 040). Its own problems
+ * show on its own row. */
+function ServerRow({
+  server: s,
+  onChanged,
+}: {
+  server: Server;
+  onChanged: () => Promise<void>;
+}) {
+  const save = useSave();
+  const [hosts, setHosts] = useState((s.media_hosts ?? []).join(", "));
+  const connected = s.status === "connected";
+  const saved = (s.media_hosts ?? []).join(", ");
+
+  async function connect() {
+    const got = await save.run(() =>
+      api.post<{ authorize_url?: string }>(`mcp/servers/${s.name}/connect`),
+    );
+    if (got?.authorize_url)
+      window.open(got.authorize_url, "_blank", "noopener");
+    await onChanged();
+  }
+
+  async function refresh() {
+    await save.run(
+      () => api.post(`mcp/servers/${s.name}/refresh`),
+      `${s.name}: tools listed again`,
+    );
+    await onChanged();
+  }
+
+  async function saveHosts() {
+    const done = await save.run(
+      () =>
+        api.put(`mcp/servers/${s.name}/media-hosts`, {
+          hosts: hosts.split(/[\s,]+/).filter(Boolean),
+        }),
+      `${s.name}: trusted hosts saved`,
+    );
+    if (done) await onChanged();
+  }
+
+  return (
+    <div
+      className="row"
+      style={{
+        gridTemplateColumns: "minmax(0,1fr) auto",
+        paddingTop: 8,
+        paddingBottom: 8,
+      }}
+    >
+      <span>
+        {s.name}{" "}
+        <Tag kind={connected ? "ok" : s.status === "error" ? "bad" : "flag"}>
+          {s.status.replace("_", " ")}
+        </Tag>
+        <span className="sub">
+          {s.url} · {s.tools_on} of {s.tools} tools on
+        </span>
+        {s.last_error ? <span className="err">{s.last_error}</span> : null}
+      </span>
+      <span className="cc-actions">
+        <button
+          type="button"
+          className="btn sm glass"
+          disabled={save.busy}
+          title={
+            connected
+              ? "Already connected; only needed if it stops working"
+              : undefined
+          }
+          onClick={() => void connect()}
+        >
+          {s.auth === "oauth"
+            ? connected
+              ? "Sign in again"
+              : "Sign in"
+            : connected
+              ? "Reconnect"
+              : "Connect"}
+        </button>
+        <button
+          type="button"
+          className="btn sm glass"
+          disabled={save.busy || !connected}
+          onClick={() => void refresh()}
+        >
+          Refresh tools
+        </button>
+      </span>
+      <div
+        style={{
+          gridColumn: "1 / -1",
+          display: "flex",
+          gap: 8,
+          alignItems: "end",
+          flexWrap: "wrap",
+        }}
+      >
+        <Field
+          label="Trusted image hosts"
+          hint="Links on these hosts reach you even when the tool's words are withheld"
+        >
+          <input
+            className="inp code"
+            style={{ minWidth: 260 }}
+            placeholder="e.g. cdn.example.com"
+            value={hosts}
+            onChange={(e) => setHosts(e.target.value)}
+          />
+        </Field>
+        <button
+          type="button"
+          className="btn sm glass"
+          disabled={save.busy || hosts.trim() === saved}
+          onClick={() => void saveHosts()}
+        >
+          Save hosts
+        </button>
+      </div>
+      <div style={{ gridColumn: "1 / -1" }}>
+        <Problem text={save.error} />
+      </div>
+    </div>
+  );
+}
+
 function Mcp({ onChanged }: { onChanged: () => Promise<void> }) {
   const servers = useLoad<Server[]>("mcp/servers", /^mcp_/);
   const tools = useLoad<McpTool[]>("mcp/tools", /^(mcp_|tool_)/);
@@ -375,23 +504,6 @@ function Mcp({ onChanged }: { onChanged: () => Promise<void> }) {
     }
   }
 
-  async function connect(s: Server) {
-    const got = await save.run(() =>
-      api.post<{ authorize_url?: string }>(`mcp/servers/${s.name}/connect`),
-    );
-    if (got?.authorize_url)
-      window.open(got.authorize_url, "_blank", "noopener");
-    await reloadAll();
-  }
-
-  async function refresh(s: Server) {
-    await save.run(
-      () => api.post(`mcp/servers/${s.name}/refresh`),
-      `${s.name}: tools listed again`,
-    );
-    await reloadAll();
-  }
-
   async function approve(t: McpTool, risk: string, cap: string) {
     await save.run(
       () =>
@@ -419,54 +531,7 @@ function Mcp({ onChanged }: { onChanged: () => Promise<void> }) {
         <div className="cc-card">
           <h2>Servers</h2>
           {(servers.data ?? []).map((s) => (
-            <div
-              key={s.name}
-              className="row"
-              style={{
-                gridTemplateColumns: "minmax(0,1fr) auto",
-                paddingTop: 8,
-                paddingBottom: 8,
-              }}
-            >
-              <span>
-                {s.name}{" "}
-                <Tag
-                  kind={
-                    s.status === "connected"
-                      ? "ok"
-                      : s.status === "error"
-                        ? "bad"
-                        : "flag"
-                  }
-                >
-                  {s.status.replace("_", " ")}
-                </Tag>
-                <span className="sub">
-                  {s.url} · {s.tools_on} of {s.tools} tools on
-                </span>
-                {s.last_error ? (
-                  <span className="err">{s.last_error}</span>
-                ) : null}
-              </span>
-              <span className="cc-actions">
-                <button
-                  type="button"
-                  className="btn sm glass"
-                  disabled={save.busy}
-                  onClick={() => void connect(s)}
-                >
-                  {s.auth === "oauth" ? "Sign in" : "Connect"}
-                </button>
-                <button
-                  type="button"
-                  className="btn sm glass"
-                  disabled={save.busy || s.status !== "connected"}
-                  onClick={() => void refresh(s)}
-                >
-                  Refresh tools
-                </button>
-              </span>
-            </div>
+            <ServerRow key={s.name} server={s} onChanged={reloadAll} />
           ))}
           {servers.data && !servers.data.length ? (
             <Empty title="No MCP servers yet">

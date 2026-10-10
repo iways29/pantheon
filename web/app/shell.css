@@ -391,6 +391,32 @@
   border-top: 1px solid var(--line);
 }
 
+.order-media {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.order-media a {
+  display: block;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.order-media img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: auto;
+}
+
+.order-media a:focus-visible {
+  outline: 2px solid var(--gold, currentColor);
+  outline-offset: 2px;
+}
+
 .piece-body {
   max-height: 260px;
   overflow: hidden;

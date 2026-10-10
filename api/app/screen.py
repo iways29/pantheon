@@ -11,6 +11,7 @@ enforces budgets on, so spend and budget always agree.
 
 from datetime import datetime
 from typing import Annotated, Any
+from urllib.parse import urlsplit
 from uuid import UUID
 
 import psycopg
@@ -357,6 +358,7 @@ def _card(cursor: psycopg.Cursor, t: dict[str, Any]) -> dict[str, Any]:
     ]
     return {
         "pieces": _pieces(cursor, t["id"]),
+        "media": _media(cursor, t["id"]),
         "id": str(t["id"]),
         "title": t["title"],
         "text": t["instructions"] or t["title"],
@@ -370,6 +372,44 @@ def _card(cursor: psycopg.Cursor, t: dict[str, Any]) -> dict[str, Any]:
         "questions": questions,
         "cost_usd": _tree_cost(cursor, t["id"]),
     }
+
+
+IMAGE_EXT = (".png", ".jpg", ".jpeg", ".webp", ".gif")
+
+
+def _media(cursor: psycopg.Cursor, root_id: UUID | str) -> list[dict[str, str]]:
+    """Images the work made with an outside tool (ADR 040): the links on hosts
+    the owner trusts, kept from the tools' replies anywhere in the tree. A
+    small copy beside a full one (`x_min.webp` next to `x.png`) is its
+    thumbnail."""
+    cursor.execute(
+        """
+        select c.result -> 'media' as media
+          from public.tool_calls c
+          join public.runs r on r.id = c.run_id
+          join public.tasks tk on tk.id = r.task_id
+         where (tk.id = %s or tk.root_task_id = %s) and c.status = 'ok'
+           and jsonb_typeof(c.result -> 'media') = 'array'
+         order by c.created_at
+        """,
+        (str(root_id), str(root_id)),
+    )
+    rows = cursor.fetchall()
+    urls = list(dict.fromkeys(u for r in rows for u in r["media"] if isinstance(u, str)))
+    images: dict[str, dict[str, str]] = {}
+    for url in urls:
+        path = urlsplit(url).path.lower()
+        if not path.endswith(IMAGE_EXT):
+            continue
+        stem = path.rsplit(".", 1)[0]
+        small = stem.endswith("_min")
+        key = f"{urlsplit(url).hostname}{stem.removesuffix('_min')}"
+        image = images.setdefault(key, {"url": url, "thumb": url})
+        if small:
+            image["thumb"] = url
+        else:
+            image["url"] = url
+    return list(images.values())[:8]
 
 
 def _pieces(cursor: psycopg.Cursor, root_id: UUID | str) -> list[dict[str, Any]]:

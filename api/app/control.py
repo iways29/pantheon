@@ -28,16 +28,36 @@ from app.owner_api import Connection, OwnerPrincipal, owner_org
 
 router = APIRouter(prefix="/control", tags=["control"])
 
-#: Events the change log leaves out: work, not changes.
-_WORK = (
-    "model_call",
-    "judgment_made",
-    "run_step",
-    "run_invoked",
-    "tool_called",
-    "chat_recalled",
-    "chat_said",
-    "fact_write_decided",
+#: What counts as a change, by event type prefix: settings and decisions,
+#: not the work agents do (that is the brain screen's).
+CHANGES = (
+    "agent_",
+    "charter_",
+    "department_",
+    "trigger_created",
+    "trigger_updated",
+    "trigger_deleted",
+    "tool_created",
+    "tool_updated",
+    "mcp_server_",
+    "mcp_tool",
+    "judge_gate_",
+    "judge_question_",
+    "autonomy_",
+    "delegation_limits_",
+    "model_tier_",
+    "model_price_",
+    "mailing_list_",
+    "document_",
+    "rule_",
+    "approval_decided",
+    "paused",
+    "unpaused",
+    "killed",
+    "fact_visibility_changed",
+    "chat_settings_",
+    "brain_cleanup",
+    "routine_request_",
 )
 
 
@@ -1341,22 +1361,28 @@ def change_log(
     connection: Connection,
     limit: Annotated[int, Query(ge=1, le=300)] = 100,
     before: str | None = None,
-    prefix: Annotated[str | None, Query(max_length=40)] = None,
+    prefix: Annotated[str | None, Query(max_length=300)] = None,
 ) -> list[dict[str, Any]]:
-    """What changed, newest first: every audited change, without the work."""
+    """What changed, newest first. `prefix` narrows it to some kinds of change,
+    comma-separated (a screen's history drawer)."""
     owner_org(connection, principal.user_id)
+    wanted = [p.strip() for p in (prefix or "").split(",") if p.strip()] or list(CHANGES)
+    # Each asked-for prefix, narrowed to the kinds of change it covers.
+    chosen = {c for p in wanted for c in CHANGES if c.startswith(p)}
+    chosen |= {p for p in wanted if p.startswith(CHANGES)}
+    patterns = sorted(c.replace("_", "\\_") + "%" for c in chosen)
+    if not patterns:
+        return []
     with acting_as(connection, user_id=principal.user_id) as conn, conn.cursor() as cursor:
         cursor.execute(
             """
             select e.id, e.type, e.payload, e.created_at, a.name as agent
               from public.events e left join public.agents a on a.id = e.agent_id
-             where not (e.type = any(%s))
-               and e.type not like 'task\\_%%' and e.type not like 'run\\_%%'
+             where e.type like any(%s)
                and (%s::timestamptz is null or e.created_at < %s::timestamptz)
-               and (%s::text is null or e.type like %s || '%%')
              order by e.created_at desc limit %s
             """,
-            (list(_WORK), before, before, prefix, prefix, limit),
+            (patterns, before, before, limit),
         )
         return [
             {
